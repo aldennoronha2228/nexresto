@@ -1,0 +1,83 @@
+[dotenv@17.3.1] injecting env (8) from .env -- tip: ≡ƒöÉ prevent building .env in docker: https://dotenvx.com/prebuild
+=== USER PROFILES ===
+[
+  {
+    id: '609044dc-d9dc-43a1-8eda-8251fda84af7',
+    tenant_id: 'hotel-mmeklvkh',
+    role: 'owner',
+    full_name: 'Alden Noronha',
+    created_at: '2026-03-06T07:26:03.520445+00:00'
+  },
+  {
+    id: 'd6600991-a597-4d4f-ad88-e97a5ef74676',
+    tenant_id: null,
+    role: 'super_admin',
+    full_name: 'Alden Noronha',
+    created_at: '2026-03-06T14:14:22.466503+00:00'
+  },
+  {
+    id: 'e56cd4e5-1716-4cad-80aa-de634240dfd4',
+    tenant_id: 'hotel-mmeklvkh',
+    role: 'staff',
+    full_name: 'nnm24ac007',
+    created_at: '2026-03-06T14:55:31.254389+00:00'
+  }
+]
+
+=== RESTAURANTS ===
+[
+  {
+    id: 'oyo-mmeak6nd',
+    name: 'OYO',
+    logo: null,
+    created_at: '2026-03-06T02:44:47.390301+00:00',
+    master_pin: 'admin123',
+    subscription_tier: 'starter',
+    subscription_status: 'active',
+    owner_email: null,
+    monthly_revenue: 0,
+    last_payment_date: null,
+    trial_ends_at: null,
+    last_report_date: null,
+    email_reports_enabled: false,
+    subscription_start_date: '2026-03-06',
+    subscription_end_date: null
+  },
+  {
+    id: 'hotel-mmeklvkh',
+    name: 'Hotel ',
+    logo: null,
+    created_at: '2026-03-06T07:26:02.70454+00:00',
+    master_pin: '1234',
+    subscription_tier: 'pro',
+    subscription_status: 'active',
+    owner_email: null,
+    monthly_revenue: 0,
+    last_payment_date: null,
+    trial_ends_at: null,
+    last_report_date: null,
+    email_reports_enabled: false,
+    subscription_start_date: '2026-03-06',
+    subscription_end_date: '2026-04-06'
+  }
+]
+
+=== ADMIN USERS ===
+[
+  {
+    email: 'nnm24ac007@nmamit.in',
+    full_name: 'nnm24ac007',
+    is_active: true,
+    created_at: '2026-03-06T14:55:31.655961+00:00',
+    last_login: null,
+    role: 'staff'
+  },
+  {
+    email: 'aldenengineeringentranceexam@gmail.com',
+    full_name: 'Alden Noronha',
+    is_active: true,
+    created_at: '2026-03-06T07:26:03.157775+00:00',
+    last_login: '2026-03-06T16:43:54.473+00:00',
+    role: 'owner'
+  }
+]

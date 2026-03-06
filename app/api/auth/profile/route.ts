@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
@@ -31,8 +33,31 @@ export async function GET(request: NextRequest) {
         auth: { persistSession: false },
     });
 
-    // FIRST check user_profiles for regular users (owners, staff)
-    // This takes priority so restaurant owners don't accidentally get super_admin
+    // FIRST check if they are explicitly a super_admin in admin_users
+    // (This overrides their restaurant role so they can manage the platform)
+    const { data: superAdminData } = await serviceClient
+        .from('admin_users')
+        .select('email, full_name, is_active, role')
+        .eq('email', user.email)
+        .eq('is_active', true)
+        .eq('role', 'super_admin')
+        .maybeSingle();
+
+    if (superAdminData) {
+        return NextResponse.json({
+            profile: {
+                tenant_id: null,
+                tenant_name: null,
+                role: 'super_admin',
+                full_name: superAdminData.full_name || user.email,
+                subscription_tier: null,
+                subscription_status: null,
+            },
+        });
+    }
+
+    // THEN check user_profiles for regular users (owners, staff)
+    // This provides their restaurant role
     const { data, error } = await serviceClient
         .from('user_profiles')
         .select('tenant_id, role, full_name, restaurants(name, subscription_tier, subscription_status)')
@@ -53,27 +78,6 @@ export async function GET(request: NextRequest) {
                 full_name: data.full_name,
                 subscription_tier: (data as any).restaurants?.subscription_tier ?? 'starter',
                 subscription_status: (data as any).restaurants?.subscription_status ?? 'active',
-            },
-        });
-    }
-
-    // No user_profiles entry - check if they're a super admin in admin_users
-    const { data: adminUser } = await serviceClient
-        .from('admin_users')
-        .select('email, full_name, is_active')
-        .eq('email', user.email)
-        .eq('is_active', true)
-        .maybeSingle();
-    
-    if (adminUser) {
-        return NextResponse.json({
-            profile: {
-                tenant_id: null,
-                tenant_name: null,
-                role: 'super_admin',
-                full_name: adminUser.full_name || user.email,
-                subscription_tier: null,
-                subscription_status: null,
             },
         });
     }
