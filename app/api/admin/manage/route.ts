@@ -110,34 +110,34 @@ export async function POST(req: NextRequest) {
             // Server-side limit enforcement
             if (tenantId && subscriptionTier) {
                 const limit = TEAM_LIMITS[subscriptionTier as keyof typeof TEAM_LIMITS] || 2;
-                
+
                 // Count current team members for this tenant
                 const { data: currentMembers, error: countError } = await supabaseAdmin
                     .from('user_profiles')
                     .select('id')
                     .eq('tenant_id', tenantId)
                     .in('role', ['owner', 'manager', 'staff', 'admin']);
-                
+
                 if (countError) throw countError;
-                
+
                 const currentCount = currentMembers?.length || 0;
-                
+
                 if (currentCount >= limit) {
                     const tierName = subscriptionTier === 'pro' || subscriptionTier === '2k' ? 'Pro' : 'Starter';
-                    return NextResponse.json({ 
-                        error: `${tierName} tier allows maximum ${limit} team members. ${tierName === 'Starter' ? 'Upgrade to Pro for up to 10 staff accounts.' : 'Contact support if you need more.'}` 
+                    return NextResponse.json({
+                        error: `${tierName} tier allows maximum ${limit} team members. ${tierName === 'Starter' ? 'Upgrade to Pro for up to 10 staff accounts.' : 'Contact support if you need more.'}`
                     }, { status: 403 });
                 }
             }
-            
+
             // Determine final role (Starter tier only gets owner)
             const isStarterTier = ['starter', '1k'].includes(subscriptionTier || '');
             const finalRole = isStarterTier ? 'owner' : (role || 'staff');
-            
+
             // Check if user already exists in auth
             const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
             const existingUser = existingUsers?.users?.find(u => u.email === email);
-            
+
             if (existingUser) {
                 // User already exists - check if they're in user_profiles for this tenant
                 const { data: existingProfile } = await supabaseAdmin
@@ -146,13 +146,13 @@ export async function POST(req: NextRequest) {
                     .eq('id', existingUser.id)
                     .eq('tenant_id', tenantId)
                     .single();
-                
+
                 if (existingProfile) {
-                    return NextResponse.json({ 
-                        error: 'This user is already a member of your restaurant.' 
+                    return NextResponse.json({
+                        error: 'This user is already a member of your restaurant.'
                     }, { status: 400 });
                 }
-                
+
                 // Add existing user to this tenant's user_profiles
                 const { error: profileError } = await supabaseAdmin
                     .from('user_profiles')
@@ -162,15 +162,15 @@ export async function POST(req: NextRequest) {
                         role: finalRole,
                         full_name: existingUser.user_metadata?.full_name || email.split('@')[0],
                     });
-                
+
                 if (profileError) throw profileError;
             } else {
                 // New user - create account directly with temporary password
                 // (Supabase invite requires SMTP configuration which may not be set up)
-                
+
                 // Generate a secure temporary password
                 const tempPassword = `Welcome${Math.random().toString(36).slice(-6).toUpperCase()}!${Math.floor(Math.random() * 90 + 10)}`;
-                
+
                 const { data: createData, error: createError } = await supabaseAdmin.auth.admin.createUser({
                     email: email,
                     password: tempPassword,
@@ -183,12 +183,12 @@ export async function POST(req: NextRequest) {
                         needs_password_change: true,
                     },
                 });
-                
+
                 if (createError) {
                     console.error('[admin-manage] Create user error:', createError.message);
                     throw createError;
                 }
-                
+
                 // Create user_profile for the new user
                 if (createData?.user) {
                     const { error: profileError } = await supabaseAdmin
@@ -199,46 +199,46 @@ export async function POST(req: NextRequest) {
                             role: finalRole,
                             full_name: email.split('@')[0],
                         });
-                    
+
                     if (profileError) {
                         console.error('[admin-manage] Profile creation error:', profileError.message);
                     }
                 }
-                
+
                 // Also add to admin_users for backward compatibility
                 const { error } = await supabaseAdmin
                     .from('admin_users')
-                    .upsert({ 
-                        email, 
-                        is_active: true, 
+                    .upsert({
+                        email,
+                        is_active: true,
                         role: finalRole,
                         full_name: email.split('@')[0],
                     });
                 if (error && !error.message.includes('role')) {
                     console.error('[admin-manage] admin_users upsert error:', error.message);
                 }
-                
-                return NextResponse.json({ 
+
+                return NextResponse.json({
                     message: 'Team member created successfully!',
                     tempPassword: tempPassword,
                     instructions: `Share this temporary password with ${email}. They should change it after first login.`
                 });
             }
-            
+
             // For existing users, also add to admin_users
             const { error } = await supabaseAdmin
                 .from('admin_users')
-                .upsert({ 
-                    email, 
-                    is_active: true, 
+                .upsert({
+                    email,
+                    is_active: true,
                     role: finalRole,
                     full_name: email.split('@')[0],
                 });
             if (error && !error.message.includes('role')) {
                 console.error('[admin-manage] admin_users upsert error:', error.message);
             }
-            
-            return NextResponse.json({ 
+
+            return NextResponse.json({
                 message: 'Team member added successfully! They can now login with their existing credentials.'
             });
         } else if (action === 'remove') {
@@ -256,6 +256,17 @@ export async function POST(req: NextRequest) {
             if (error) throw error;
             return NextResponse.json({ message: 'Admin reactivated' });
         } else if (action === 'delete') {
+            // Fully delete user from auth and profiles to free up the seat
+            const { data: usersData } = await supabaseAdmin.auth.admin.listUsers();
+            const existingUser = usersData?.users?.find(u => u.email === email);
+
+            if (existingUser) {
+                // Delete from user_profiles
+                await supabaseAdmin.from('user_profiles').delete().eq('id', existingUser.id);
+                // Also delete from auth to fully remove the user and prevent future login/add conflicts
+                await supabaseAdmin.auth.admin.deleteUser(existingUser.id);
+            }
+
             const { error } = await supabaseAdmin
                 .from('admin_users')
                 .delete()
