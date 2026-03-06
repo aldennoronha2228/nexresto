@@ -19,7 +19,7 @@ import { RefreshCw } from 'lucide-react';
 import { motion } from 'motion/react';
 
 export function CustomerGuard({ children }: { children: React.ReactNode }) {
-    const { isAdmin, loading: authLoading } = useAuth();
+    const { isAdmin, loading: authLoading, tenantId } = useAuth();
     const [isPublic, setIsPublic] = useState<boolean | null>(null);
     const router = useRouter();
 
@@ -27,7 +27,11 @@ export function CustomerGuard({ children }: { children: React.ReactNode }) {
         const checkAccess = async () => {
             try {
                 // Fetch the site status from the Database
-                const publicStatus = await fetchIsSitePublic();
+                if (!tenantId) {
+                    setIsPublic(true); // If tenantId is missing, default to public
+                    return;
+                }
+                const publicStatus = await fetchIsSitePublic(tenantId);
                 setIsPublic(publicStatus);
 
                 // PERFORMANCE: If not public and user is not an admin, 
