@@ -43,10 +43,10 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
 
     // Redirect if not super admin — only after auth AND role check are both done
     useEffect(() => {
-        if (!loading && !tenantLoading && session && userRole && userRole !== 'super_admin') {
+        if (!loading && session && userRole && userRole !== 'super_admin') {
             router.replace('/unauthorized');
         }
-    }, [loading, tenantLoading, session, userRole, router]);
+    }, [loading, session, userRole, router]);
 
     // Set page title for super admin
     useEffect(() => {
@@ -76,7 +76,7 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
     }
 
     // Still loading role - show brief loading
-    if (tenantLoading && !userRole) {
+    if (loading && !userRole) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-slate-900">
                 <div className="flex flex-col items-center gap-4">

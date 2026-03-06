@@ -122,6 +122,26 @@ export const supabase = createClient(env.supabaseUrl, env.supabaseAnonKey, {
     },
 });
 
+// ─── Super Admin client (authenticated) ───────────────────────────────────────
+// Used by all /super-admin/* pages and auth flows.
+// Session is persisted in localStorage under a separate key.
+export const supabaseSuperAdmin = createClient(env.supabaseUrl, env.supabaseAnonKey, {
+    auth: {
+        storageKey: 'hotel-superadmin-auth-v1',
+        storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: true,
+        flowType: 'pkce',
+    },
+    global: {
+        fetch: customFetch,
+        headers: {
+            'X-Client-Info': 'hotel-superadmin/1.0',
+        },
+    },
+});
+
 // ─── Customer client (fully anonymous) ───────────────────────────────────────
 // Used only by /customer/* pages.
 // NO session is stored, NO tokens are refreshed, NO URL session detection.

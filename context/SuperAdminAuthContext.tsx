@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import { supabase } from '@/lib/supabase';
+import { supabaseSuperAdmin } from '@/lib/supabase';
 import { securityLog } from '@/lib/logger';
 import type { User, Session } from '@/lib/auth';
 
@@ -29,7 +29,7 @@ export function SuperAdminAuthProvider({ children }: { children: ReactNode }) {
 
     useEffect(() => {
         let isActive = true;
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+        const { data: { subscription } } = supabaseSuperAdmin.auth.onAuthStateChange(async (event, session) => {
             if (!session?.user) {
                 if (isActive) {
                     setState({ session: null, user: null, loading: false, error: null, userRole: null });
@@ -38,7 +38,7 @@ export function SuperAdminAuthProvider({ children }: { children: ReactNode }) {
             }
             // Fetch user role from user_profiles
             try {
-                const { data, error } = await supabase.from('user_profiles').select('role').eq('id', session.user.id).maybeSingle();
+                const { data, error } = await supabaseSuperAdmin.from('user_profiles').select('role').eq('id', session.user.id).maybeSingle();
                 setState({
                     session,
                     user: session.user,
@@ -58,7 +58,7 @@ export function SuperAdminAuthProvider({ children }: { children: ReactNode }) {
 
     const signOut = async () => {
         setState({ session: null, user: null, loading: false, error: null, userRole: null });
-        await supabase.auth.signOut();
+        await supabaseSuperAdmin.auth.signOut();
     };
 
     const clearError = () => setState(s => ({ ...s, error: null }));
