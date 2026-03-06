@@ -3,14 +3,20 @@
 /**
  * Super Admin Layout
  * Protected route that only allows users with role: 'super_admin'
+ *
+ * IMPORTANT: Uses useAuth() (main AuthContext) — NOT SuperAdminAuthContext.
+ * The super admin signs in via the main supabase client (hotel-menu-auth-v13).
+ * SuperAdminAuthContext used supabaseSuperAdmin (hotel-superadmin-auth-v1) which
+ * is a completely separate client and NEVER receives the session — causing a
+ * redirect loop: /super-admin → (no session) → /login → (session found) → /super-admin → repeat.
  */
 
-import { SuperAdminAuthProvider, useSuperAdminAuth } from '@/context/SuperAdminAuthContext';
+import { useAuth } from '@/context/AuthContext';
 import { useState, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-    LayoutDashboard, Building2, Users, ScrollText,
+    LayoutDashboard, Building2, ScrollText,
     ChevronLeft, LogOut, Shield, Menu, X
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -21,33 +27,35 @@ const navigation = [
     { name: 'Activity Logs', href: '/super-admin/logs', icon: ScrollText },
 ];
 
-function SuperAdminLayoutInner({ children }: { children: React.ReactNode }) {
+export default function SuperAdminLayout({ children }: { children: React.ReactNode }) {
     const [collapsed, setCollapsed] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const pathname = usePathname();
     const router = useRouter();
-    const { user, session, loading, signOut, userRole } = useSuperAdminAuth();
+
+    // Use the MAIN auth context — this is where the session actually lives.
+    const { session, loading, signOut, userRole, tenantLoading } = useAuth();
 
     const isSuperAdmin = userRole === 'super_admin';
 
-    // Only show loading on initial page load, not on client-side navigation
-    const isInitializing = loading && !session;
+    // Wait for BOTH session AND role to resolve before making any redirect decisions.
+    // Without tenantLoading, the role arrives async and could be null briefly, causing flicker.
+    const isFullyLoaded = !loading && !tenantLoading;
 
     // Redirect if not authenticated (after loading completes)
     useEffect(() => {
-        if (!loading && !session) {
+        if (isFullyLoaded && !session) {
             router.replace('/login');
         }
-    }, [loading, session, router]);
+    }, [isFullyLoaded, session, router]);
 
-    // Redirect if not super admin — only after auth AND role check are both done
+    // Redirect if authenticated but not a super admin
     useEffect(() => {
-        if (!loading && session && userRole && userRole !== 'super_admin') {
+        if (isFullyLoaded && session && userRole && userRole !== 'super_admin') {
             router.replace('/unauthorized');
         }
-    }, [loading, session, userRole, router]);
+    }, [isFullyLoaded, session, userRole, router]);
 
-    // Set page title for super admin
     useEffect(() => {
         document.title = 'Super-Admin Page';
     }, []);
@@ -57,8 +65,8 @@ function SuperAdminLayoutInner({ children }: { children: React.ReactNode }) {
         router.push('/login');
     };
 
-    // Loading state - only show when truly initializing
-    if (isInitializing) {
+    // Show spinner while auth is being resolved, or while we have a session but no role yet
+    if (!isFullyLoaded || (session && !userRole)) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-slate-900">
                 <div className="flex flex-col items-center gap-4">
@@ -69,27 +77,11 @@ function SuperAdminLayoutInner({ children }: { children: React.ReactNode }) {
         );
     }
 
-    // Not authenticated yet - show nothing while redirecting
-    if (!session) {
-        return null;
-    }
+    // No session — redirecting to login
+    if (!session) return null;
 
-    // Still loading role - show brief loading
-    if (loading && !userRole) {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-slate-900">
-                <div className="flex flex-col items-center gap-4">
-                    <div className="w-10 h-10 border-4 border-purple-500/20 border-t-purple-500 rounded-full animate-spin"></div>
-                    <p className="text-slate-400 text-sm font-medium">Loading...</p>
-                </div>
-            </div>
-        );
-    }
-
-    // Not super admin - will redirect via useEffect
-    if (!isSuperAdmin && userRole) {
-        return null;
-    }
+    // Has session but wrong role — redirecting to /unauthorized
+    if (!isSuperAdmin) return null;
 
     return (
         <div className="min-h-screen bg-slate-900 scrollbar-hide">
@@ -259,15 +251,5 @@ function SuperAdminLayoutInner({ children }: { children: React.ReactNode }) {
                 </div>
             </main>
         </div>
-    );
-}
-
-export default function SuperAdminLayout({ children }: { children: React.ReactNode }) {
-    return (
-        <SuperAdminAuthProvider>
-            <SuperAdminLayoutInner>
-                {children}
-            </SuperAdminLayoutInner>
-        </SuperAdminAuthProvider>
     );
 }
