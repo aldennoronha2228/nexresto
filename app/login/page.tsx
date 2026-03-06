@@ -78,15 +78,14 @@ export default function LoginPage() {
     const [enteredOtp, setEnteredOtp] = useState('');
     const [otpExpiry, setOtpExpiry] = useState<string | null>(null);
 
-    // Clear any stale/broken session tokens on the login page
-    // This stops the GoTrue _recoverAndRefresh error from firing on every load
+    // Clear ONLY legacy stale/broken session tokens that are not from this app.
+    // IMPORTANT: Do NOT clear 'hotel-menu-auth-v13' or 'hotel-superadmin-auth-v1' here —
+    // that would log out the user or super admin before the session can be read.
     useEffect(() => {
         if (typeof window !== 'undefined') {
-            // Remove the namespaced session key we set in lib/supabase.ts
-            localStorage.removeItem('hotel-menu-auth-v13');
-            // Also remove any legacy sb-* keys
+            // Remove ONLY truly legacy sb-* keys (not our named app keys)
             Object.keys(localStorage)
-                .filter(k => k.startsWith('sb-') && k.includes('auth'))
+                .filter(k => k.startsWith('sb-') && k.includes('auth-token'))
                 .forEach(k => localStorage.removeItem(k));
         }
     }, []);

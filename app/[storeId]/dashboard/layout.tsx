@@ -44,15 +44,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const { storeId: activeStoreId, isSuperAdmin, subscriptionTier, tenantName } = useRestaurant();
     const urlStoreId = params?.storeId || '';
 
-    // Check Multi-Tab Isolation: If the URL's storeId does not match the session's tenantId once loaded.
-    // Super admins are strictly exempted from this check.
+    // Super admin should NEVER be on the tenant dashboard — redirect back to /super-admin.
+    // This was intentionally removed before but caused the page-switching bug.
     useEffect(() => {
-        if (!loading && !isSuperAdmin && urlStoreId && activeStoreId && urlStoreId !== activeStoreId) {
+        if (!loading && userRole === 'super_admin') {
+            router.replace('/super-admin');
+        }
+    }, [loading, userRole, router]);
+
+    // Check Multi-Tab Isolation: If the URL's storeId does not match the session's tenantId once loaded.
+    useEffect(() => {
+        if (!loading && userRole && userRole !== 'super_admin' && urlStoreId && activeStoreId && urlStoreId !== activeStoreId) {
             // "Different Session Detected" warning / isolation mechanism
             toast.error('Session mismatch detected! You are currently logged into a different restaurant.', { duration: 5000 });
             router.replace(`/${activeStoreId}/dashboard/orders`);
         }
-    }, [activeStoreId, urlStoreId, loading, router, isSuperAdmin]);
+    }, [activeStoreId, urlStoreId, loading, router, userRole]);
 
     // Check if user has Pro tier
     const isPro = subscriptionTier === 'pro' || subscriptionTier === '2k' || subscriptionTier === '2.5k';
