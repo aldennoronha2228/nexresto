@@ -1,3 +1,4 @@
+'use client';
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { supabaseSuperAdmin } from '@/lib/supabase';
 import { securityLog } from '@/lib/logger';
