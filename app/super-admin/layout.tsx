@@ -14,7 +14,6 @@ import {
     ChevronLeft, LogOut, Shield, Menu, X
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useAuth } from '@/context/AuthContext';
 
 const navigation = [
     { name: 'Overview', href: '/super-admin', icon: LayoutDashboard },
@@ -22,7 +21,7 @@ const navigation = [
     { name: 'Activity Logs', href: '/super-admin/logs', icon: ScrollText },
 ];
 
-export default function SuperAdminLayout({ children }: { children: React.ReactNode }) { 
+function SuperAdminLayoutInner({ children }: { children: React.ReactNode }) {
     const [collapsed, setCollapsed] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const pathname = usePathname();
@@ -30,7 +29,7 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
     const { user, session, loading, signOut, userRole } = useSuperAdminAuth();
 
     const isSuperAdmin = userRole === 'super_admin';
-    
+
     // Only show loading on initial page load, not on client-side navigation
     const isInitializing = loading && !session;
 
@@ -119,11 +118,11 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
                     {/* Navigation */}
                     <nav className="flex-1 px-3 py-4 space-y-1">
                         {navigation.map((item) => {
-                            const isActive = pathname === item.href || 
+                            const isActive = pathname === item.href ||
                                 (item.href !== '/super-admin' && pathname.startsWith(item.href));
                             return (
-                                <button 
-                                    key={item.name} 
+                                <button
+                                    key={item.name}
                                     onClick={() => router.push(item.href)}
                                     className="w-full text-left"
                                 >
@@ -131,8 +130,8 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
                                         whileHover={{ x: 4 }}
                                         className={cn(
                                             "flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200",
-                                            isActive 
-                                                ? "bg-gradient-to-r from-purple-600/20 to-pink-600/20 text-purple-400 border border-purple-500/30" 
+                                            isActive
+                                                ? "bg-gradient-to-r from-purple-600/20 to-pink-600/20 text-purple-400 border border-purple-500/30"
                                                 : "text-slate-400 hover:bg-slate-700/50 hover:text-white"
                                         )}
                                     >
@@ -260,5 +259,15 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
                 </div>
             </main>
         </div>
+    );
+}
+
+export default function SuperAdminLayout({ children }: { children: React.ReactNode }) {
+    return (
+        <SuperAdminAuthProvider>
+            <SuperAdminLayoutInner>
+                {children}
+            </SuperAdminLayoutInner>
+        </SuperAdminAuthProvider>
     );
 }

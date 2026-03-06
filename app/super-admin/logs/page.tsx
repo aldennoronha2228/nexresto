@@ -1,4 +1,3 @@
-'export const dynamic = "force-dynamic";'
 'use client';
 
 /**
@@ -8,7 +7,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
+import {
     ScrollText, RefreshCw, Filter, Clock,
     Info, AlertTriangle, XCircle, CheckCircle,
     Building2, User, ChevronDown
@@ -141,14 +140,14 @@ export default function ActivityLogs() {
                     <h1 className="text-2xl font-bold text-white">Activity Logs</h1>
                     <p className="text-slate-400 mt-1">Real-time platform events and activities</p>
                 </div>
-                
+
                 <div className="flex items-center gap-3">
                     {/* Auto-refresh toggle */}
                     <button
                         onClick={() => setAutoRefresh(!autoRefresh)}
                         className={cn(
                             "flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors",
-                            autoRefresh 
+                            autoRefresh
                                 ? "bg-green-500/20 border-green-500/30 text-green-400"
                                 : "bg-slate-700 border-slate-600 text-slate-400"
                         )}
@@ -159,13 +158,13 @@ export default function ActivityLogs() {
                         )} />
                         <span className="text-sm">Live</span>
                     </button>
-                    
+
                     {/* Filter button */}
                     <button
                         onClick={() => setShowFilters(!showFilters)}
                         className={cn(
                             "flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors",
-                            eventFilter 
+                            eventFilter
                                 ? "bg-purple-500/20 border-purple-500/30 text-purple-400"
                                 : "bg-slate-700 border-slate-600 text-slate-400 hover:bg-slate-600"
                         )}
@@ -173,7 +172,7 @@ export default function ActivityLogs() {
                         <Filter className="w-4 h-4" />
                         <span className="text-sm">Filter</span>
                     </button>
-                    
+
                     {/* Refresh button */}
                     <motion.button
                         whileHover={{ scale: 1.05 }}
@@ -321,7 +320,7 @@ export default function ActivityLogs() {
                                                                 </span>
                                                             )}
                                                         </div>
-                                                        
+
                                                         {Object.keys(log.metadata).length > 0 && (
                                                             <div>
                                                                 <p className="text-slate-400 text-xs mb-2">Metadata:</p>
