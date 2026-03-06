@@ -103,12 +103,14 @@ const customFetch = async (input: RequestInfo | URL, init?: RequestInit): Promis
 };
 
 // ─── Dashboard client (authenticated) ────────────────────────────────────────
-// Used by all /dashboard/* pages and auth flows.
-// Session is persisted in localStorage under a namespaced key.
+// Uses sessionStorage so each browser TAB has its own isolated session.
+// This prevents cross-tab contamination: logging in as User B in Tab 2
+// does NOT overwrite User A's session in Tab 1.
+// Trade-off: closing the browser requires re-login (good for security on shared devices).
 export const supabase = createClient(env.supabaseUrl, env.supabaseAnonKey, {
     auth: {
         storageKey: 'hotel-menu-auth-v13',
-        storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+        storage: typeof window !== 'undefined' ? window.sessionStorage : undefined,
         autoRefreshToken: true,
         persistSession: true,
         detectSessionInUrl: true,
