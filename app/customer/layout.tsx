@@ -1,6 +1,7 @@
 import { Metadata } from 'next';
 import { CartProvider } from '@/context/CartContext';
 import { CustomerGuard } from '@/components/customer/CustomerGuard';
+import { AuthProvider } from '@/context/AuthContext';
 
 export const metadata: Metadata = {
     title: 'MENU',
@@ -15,10 +16,12 @@ export const metadata: Metadata = {
  */
 export default function CustomerLayout({ children }: { children: React.ReactNode }) {
     return (
-        <CartProvider>
-            <CustomerGuard>
-                {children}
-            </CustomerGuard>
-        </CartProvider>
+        <AuthProvider>
+            <CartProvider>
+                <CustomerGuard>
+                    {children}
+                </CustomerGuard>
+            </CartProvider>
+        </AuthProvider>
     );
 }
