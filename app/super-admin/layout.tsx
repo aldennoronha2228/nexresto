@@ -59,7 +59,7 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
 
     // Redirect if authenticated but not a super admin
     useEffect(() => {
-        if (isFullyLoaded && session && userRole && userRole !== 'super_admin') {
+        if (isFullyLoaded && session && userRole !== 'super_admin') {
             router.replace('/unauthorized');
         }
     }, [isFullyLoaded, session, userRole, router]);
@@ -75,8 +75,8 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
     };
 
 
-    // Show spinner while auth is being resolved, or while we have a session but no role yet
-    if (!isFullyLoaded || (session && !userRole)) {
+    // Show spinner while auth is being resolved
+    if (!isFullyLoaded) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-slate-900">
                 <div className="flex flex-col items-center gap-4">

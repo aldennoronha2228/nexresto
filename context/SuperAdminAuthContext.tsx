@@ -99,25 +99,28 @@ export function SuperAdminAuthProvider({ children }: { children: ReactNode }) {
                     clearTimeout(safetyTimer);
                 }
 
-                // Fetch role from user_profiles
+                // Fetch profile via API (which handles admin_users & user_profiles correctly)
+                // Super admins are in the admin_users table, which the API safely checks first.
                 try {
-                    const { data, error } = await supabaseSuperAdmin
-                        .from('user_profiles')
-                        .select('role')
-                        .eq('id', session.user.id)
-                        .maybeSingle();
+                    const res = await fetch('/api/auth/profile', {
+                        headers: { Authorization: `Bearer ${session.access_token}` },
+                    });
+
+                    if (!res.ok) throw new Error('Failed to fetch profile');
+
+                    const { profile } = await res.json();
 
                     if (isActive) {
                         setState(prev => ({
                             ...prev,
                             roleLoading: false,
-                            userRole: data?.role ?? null,
-                            error: error ? error.message : null,
+                            userRole: profile?.role ?? null,
+                            error: null,
                         }));
 
                         securityLog.info('SUPER_ADMIN_AUTH_RESOLVED', {
                             userId: session.user.id,
-                            role: data?.role,
+                            role: profile?.role,
                         });
                     }
                 } catch (err: any) {
