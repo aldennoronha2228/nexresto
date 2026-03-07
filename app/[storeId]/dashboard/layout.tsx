@@ -74,7 +74,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         ) {
             // Navigate to the dedicated Session Conflict page so the user can
             // make an informed choice (go to their restaurant or re-authenticate).
-            router.replace(`/session-conflict?attempted=${encodeURIComponent(urlStoreId)}`);
+            router.replace(`/session-conflict/${encodeURIComponent(urlStoreId)}`);
         }
     }, [activeStoreId, urlStoreId, loading, router, userRole]);
 

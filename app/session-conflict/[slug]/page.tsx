@@ -3,40 +3,35 @@
 /**
  * Session Conflict Page
  * ─────────────────────
- * Shown when a user navigates to /[restaurant-a]/dashboard but their
- * active session token belongs to Restaurant B.
+ * Route: /session-conflict/[slug]
  *
- * NOTE: useSearchParams() requires a <Suspense> boundary in Next.js App Router.
- * The actual UI is in <SessionConflictContent> wrapped in <Suspense> below.
+ * Uses useParams() (NOT useSearchParams) so no <Suspense> boundary is
+ * needed and static prerendering at build time never fails.
+ *
+ * Shown when a non-super-admin user navigates to /[restaurant-slug]/dashboard
+ * while their active session belongs to a different restaurant.
  */
 
-import { Suspense, useEffect } from 'react';
-import { useRouter, useParams, useSearchParams } from 'next/navigation';
+import { useEffect } from 'react';
+import { useRouter, useParams } from 'next/navigation';
 import { motion } from 'motion/react';
 import { AlertTriangle, LogIn, ArrowLeft, Shield } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
-// ─── Inner component (uses useSearchParams — must be inside <Suspense>) ────────
-
-function SessionConflictContent() {
+export default function SessionConflictPage() {
     const router = useRouter();
-    const params = useParams<{ storeId: string }>();
-    const searchParams = useSearchParams();
+    // slug = the restaurant the user TRIED to access (from the URL path)
+    const { slug } = useParams<{ slug: string }>();
     const { tenantId, tenantName, signOut, loading } = useAuth();
 
-    // The slug from the URL that was attempted
-    const attemptedSlug = params?.storeId || searchParams.get('attempted') || 'unknown';
+    const attemptedSlug = slug || 'unknown';
 
     useEffect(() => {
         document.title = 'Session Conflict – HotelPro';
     }, []);
 
     const handleGoToMyRestaurant = () => {
-        if (tenantId) {
-            router.replace(`/${tenantId}/dashboard/orders`);
-        } else {
-            router.replace('/login');
-        }
+        router.replace(tenantId ? `/${tenantId}/dashboard/orders` : '/login');
     };
 
     const handleSignInAsAnother = async () => {
@@ -45,7 +40,7 @@ function SessionConflictContent() {
     };
 
     const handleGoBack = () => {
-        if (window.history.length > 1) {
+        if (typeof window !== 'undefined' && window.history.length > 1) {
             router.back();
         } else {
             router.replace('/login');
@@ -62,7 +57,7 @@ function SessionConflictContent() {
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-slate-950 relative overflow-hidden">
-            {/* Animated background */}
+            {/* Background orbs */}
             <div className="absolute inset-0">
                 <div className="absolute inset-0 bg-slate-950" />
                 {[
@@ -75,10 +70,8 @@ function SessionConflictContent() {
                         transition={{ duration: 10, delay: i * 3, repeat: Infinity, ease: 'easeInOut' }}
                         style={{
                             position: 'absolute',
-                            left: orb.cx,
-                            top: orb.cy,
-                            width: orb.r * 2,
-                            height: orb.r * 2,
+                            left: orb.cx, top: orb.cy,
+                            width: orb.r * 2, height: orb.r * 2,
                             transform: 'translate(-50%, -50%)',
                             borderRadius: '50%',
                             background: `radial-gradient(circle, ${orb.color}44 0%, transparent 70%)`,
@@ -95,7 +88,6 @@ function SessionConflictContent() {
                     transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
                     className="bg-slate-900/90 backdrop-blur-2xl border border-slate-700/50 rounded-3xl shadow-2xl overflow-hidden"
                 >
-                    {/* Warning stripe */}
                     <div className="h-1 w-full bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500" />
 
                     <div className="p-8">
@@ -148,8 +140,7 @@ function SessionConflictContent() {
                         <div className="space-y-3">
                             {tenantId && (
                                 <motion.button
-                                    whileHover={{ scale: 1.02 }}
-                                    whileTap={{ scale: 0.98 }}
+                                    whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
                                     onClick={handleGoToMyRestaurant}
                                     className="w-full h-12 flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold text-sm shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 transition-all"
                                 >
@@ -157,20 +148,16 @@ function SessionConflictContent() {
                                     Go to My Restaurant ({tenantName ?? tenantId})
                                 </motion.button>
                             )}
-
                             <motion.button
-                                whileHover={{ scale: 1.02 }}
-                                whileTap={{ scale: 0.98 }}
+                                whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
                                 onClick={handleSignInAsAnother}
                                 className="w-full h-12 flex items-center justify-center gap-2 bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/50 text-white rounded-xl font-medium text-sm transition-all"
                             >
                                 <LogIn className="w-4 h-4" />
                                 Sign in as a Different Account
                             </motion.button>
-
                             <motion.button
-                                whileHover={{ scale: 1.02 }}
-                                whileTap={{ scale: 0.98 }}
+                                whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
                                 onClick={handleGoBack}
                                 className="w-full h-10 flex items-center justify-center gap-2 text-slate-500 hover:text-slate-300 text-sm transition-colors"
                             >
@@ -179,7 +166,6 @@ function SessionConflictContent() {
                             </motion.button>
                         </div>
 
-                        {/* Footer note */}
                         <p className="text-center text-xs text-slate-600 mt-6 leading-relaxed">
                             Each browser tab maintains an isolated session.
                             This prevents accidental cross-restaurant data access.
@@ -188,27 +174,5 @@ function SessionConflictContent() {
                 </motion.div>
             </div>
         </div>
-    );
-}
-
-// ─── Fallback shown while Suspense resolves ────────────────────────────────────
-
-function ConflictFallback() {
-    return (
-        <div className="min-h-screen flex items-center justify-center bg-slate-950">
-            <div className="w-8 h-8 border-4 border-amber-500/20 border-t-amber-500 rounded-full animate-spin" />
-        </div>
-    );
-}
-
-// ─── Page export — wraps content in Suspense (required by Next.js App Router) ─
-// useSearchParams() inside a 'use client' component requires a Suspense boundary
-// to allow the rest of the page to be statically rendered at build time.
-
-export default function SessionConflictPage() {
-    return (
-        <Suspense fallback={<ConflictFallback />}>
-            <SessionConflictContent />
-        </Suspense>
     );
 }
