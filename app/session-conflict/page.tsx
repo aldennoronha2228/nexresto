@@ -1,27 +1,24 @@
 'use client';
 
-// This page reads live auth state and URL search params — must never be statically prerendered.
-export const dynamic = 'force-dynamic';
-
 /**
  * Session Conflict Page
  * ─────────────────────
  * Shown when a user navigates to /[restaurant-a]/dashboard but their
  * active session token belongs to Restaurant B.
  *
- * Options presented:
- *   1. Go to MY Restaurant  — redirect to the correct slug
- *   2. Sign in as another   — sign out and redirect to /login
- *   3. Cancel               — go back
+ * NOTE: useSearchParams() requires a <Suspense> boundary in Next.js App Router.
+ * The actual UI is in <SessionConflictContent> wrapped in <Suspense> below.
  */
 
-import { useEffect } from 'react';
+import { Suspense, useEffect } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { motion } from 'motion/react';
 import { AlertTriangle, LogIn, ArrowLeft, Shield } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
-export default function SessionConflictPage() {
+// ─── Inner component (uses useSearchParams — must be inside <Suspense>) ────────
+
+function SessionConflictContent() {
     const router = useRouter();
     const params = useParams<{ storeId: string }>();
     const searchParams = useSearchParams();
@@ -191,5 +188,27 @@ export default function SessionConflictPage() {
                 </motion.div>
             </div>
         </div>
+    );
+}
+
+// ─── Fallback shown while Suspense resolves ────────────────────────────────────
+
+function ConflictFallback() {
+    return (
+        <div className="min-h-screen flex items-center justify-center bg-slate-950">
+            <div className="w-8 h-8 border-4 border-amber-500/20 border-t-amber-500 rounded-full animate-spin" />
+        </div>
+    );
+}
+
+// ─── Page export — wraps content in Suspense (required by Next.js App Router) ─
+// useSearchParams() inside a 'use client' component requires a Suspense boundary
+// to allow the rest of the page to be statically rendered at build time.
+
+export default function SessionConflictPage() {
+    return (
+        <Suspense fallback={<ConflictFallback />}>
+            <SessionConflictContent />
+        </Suspense>
     );
 }
