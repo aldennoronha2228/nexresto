@@ -55,6 +55,8 @@ export function SuperAdminAuthProvider({ children }: { children: ReactNode }) {
     });
 
     const hasInitialized = useRef(false);
+    const hasRoleRef = useRef(false);
+    const pendingAuthRef = useRef<NodeJS.Timeout | null>(null);
 
     useEffect(() => {
         let isActive = true;
@@ -74,6 +76,7 @@ export function SuperAdminAuthProvider({ children }: { children: ReactNode }) {
 
                 if (!session?.user) {
                     if (isActive) {
+                        hasRoleRef.current = false;
                         setState({
                             session: null, user: null,
                             loading: false, roleLoading: false,
@@ -92,12 +95,30 @@ export function SuperAdminAuthProvider({ children }: { children: ReactNode }) {
                         session,
                         user: session.user,
                         loading: false,
-                        roleLoading: true,
+                        roleLoading: hasRoleRef.current ? false : true,
                         error: null,
                     }));
                     hasInitialized.current = true;
                     clearTimeout(safetyTimer);
                 }
+
+                // Skip re-fetching role if we already have it and this is just a session refresh (e.g., from tab focus)
+                if (hasRoleRef.current && event !== 'SIGNED_IN') {
+                    console.log('[SuperAdminAuth] Skipping profile re-fetch - role data exists');
+                    setState(prev => ({ ...prev, roleLoading: false }));
+                    return;
+                }
+
+                // Debounce rapid auth events
+                if (pendingAuthRef.current) {
+                    clearTimeout(pendingAuthRef.current);
+                }
+
+                await new Promise<void>(resolve => {
+                    pendingAuthRef.current = setTimeout(resolve, 100);
+                });
+
+                if (!isActive) return;
 
                 // Fetch profile via API (which handles admin_users & user_profiles correctly)
                 // Super admins are in the admin_users table, which the API safely checks first.
@@ -111,6 +132,10 @@ export function SuperAdminAuthProvider({ children }: { children: ReactNode }) {
                     const { profile } = await res.json();
 
                     if (isActive) {
+                        if (profile?.role) {
+                            hasRoleRef.current = true;
+                        }
+
                         setState(prev => ({
                             ...prev,
                             roleLoading: false,
