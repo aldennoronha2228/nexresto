@@ -7,14 +7,14 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
+import {
     Search, MoreVertical, Building2, User, CreditCard,
     ChevronLeft, ChevronRight, LogIn, KeyRound, Settings,
     Trash2, AlertTriangle, Check, X, Copy, ExternalLink, FileText, Calendar,
     Eye, EyeOff, RefreshCw, Shield, Users
 } from 'lucide-react';
-import { 
-    getAllRestaurants, 
+import {
+    getAllRestaurants,
     updateRestaurantSubscription,
     updateRestaurantStatus,
     deleteRestaurant,
@@ -23,7 +23,7 @@ import {
     getImpersonationToken,
     getRestaurantUsers,
     updateSubscriptionDates,
-    type RestaurantWithOwner 
+    type RestaurantWithOwner
 } from '@/lib/super-admin-actions';
 import { cn } from '@/lib/utils';
 
@@ -59,25 +59,25 @@ export default function RestaurantManager() {
     const [search, setSearch] = useState('');
     const [loading, setLoading] = useState(true);
     const [activeMenu, setActiveMenu] = useState<string | null>(null);
-    
+
     // Modal states
     const [showDeleteModal, setShowDeleteModal] = useState<string | null>(null);
     const [showTierModal, setShowTierModal] = useState<string | null>(null);
     const [showPasswordModal, setShowPasswordModal] = useState<{ restaurantId: string; users: any[] } | null>(null);
     const [showImpersonateModal, setShowImpersonateModal] = useState<{ restaurantId: string; users: any[] } | null>(null);
     const [showDatesModal, setShowDatesModal] = useState<RestaurantWithOwner | null>(null);
-    
+
     // Subscription dates state
     const [subStartDate, setSubStartDate] = useState<string>('');
     const [subEndDate, setSubEndDate] = useState<string>('');
     const [savingDates, setSavingDates] = useState(false);
-    
+
     // Action states
     const [deleting, setDeleting] = useState(false);
     const [tempPassword, setTempPassword] = useState<string | null>(null);
     const [impersonationLink, setImpersonationLink] = useState<string | null>(null);
     const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-    
+
     // Password reset states
     const [customPassword, setCustomPassword] = useState<string>('');
     const [showPassword, setShowPassword] = useState(false);
@@ -214,15 +214,15 @@ export default function RestaurantManager() {
 
     const handleSetCustomPassword = async () => {
         if (!selectedUser || !customPassword) return;
-        
+
         if (customPassword.length < 8) {
             setActionMessage({ type: 'error', text: 'Password must be at least 8 characters' });
             return;
         }
-        
+
         setResettingPassword(true);
         const result = await resetUserPassword(selectedUser.id, customPassword);
-        
+
         if (result.success) {
             setActionMessage({ type: 'success', text: `Password updated successfully for ${selectedUser.email}` });
             setTempPassword(customPassword);
@@ -263,7 +263,7 @@ export default function RestaurantManager() {
                     <h1 className="text-2xl font-bold text-white">Restaurant Manager</h1>
                     <p className="text-slate-400 mt-1">{total} restaurants in total</p>
                 </div>
-                
+
                 {/* Search */}
                 <div className="relative w-full sm:w-72">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -286,7 +286,7 @@ export default function RestaurantManager() {
                         exit={{ opacity: 0, y: -20 }}
                         className={cn(
                             "fixed top-4 right-4 z-50 flex items-center gap-2 px-4 py-3 rounded-xl border shadow-lg",
-                            actionMessage.type === 'success' 
+                            actionMessage.type === 'success'
                                 ? "bg-green-500/20 text-green-400 border-green-500/30"
                                 : "bg-red-500/20 text-red-400 border-red-500/30"
                         )}
@@ -324,8 +324,8 @@ export default function RestaurantManager() {
                             </thead>
                             <tbody>
                                 {restaurants.map((restaurant) => (
-                                    <tr 
-                                        key={restaurant.id} 
+                                    <tr
+                                        key={restaurant.id}
                                         className="border-b border-slate-700/50 hover:bg-slate-700/30 transition-colors"
                                     >
                                         <td className="px-6 py-4">
@@ -357,9 +357,9 @@ export default function RestaurantManager() {
                                                                 <span key={i} className={cn(
                                                                     "text-[10px] px-1.5 py-0.5 rounded",
                                                                     r.role === 'owner' ? 'bg-amber-500/20 text-amber-400' :
-                                                                    r.role === 'manager' ? 'bg-blue-500/20 text-blue-400' :
-                                                                    r.role === 'staff' ? 'bg-slate-500/20 text-slate-400' :
-                                                                    'bg-purple-500/20 text-purple-400'
+                                                                        r.role === 'manager' ? 'bg-blue-500/20 text-blue-400' :
+                                                                            r.role === 'staff' ? 'bg-slate-500/20 text-slate-400' :
+                                                                                'bg-purple-500/20 text-purple-400'
                                                                 )}>
                                                                     {r.count} {r.role}
                                                                 </span>
@@ -403,9 +403,9 @@ export default function RestaurantManager() {
                                                 <div className="flex items-center gap-2">
                                                     <FileText className="w-4 h-4 text-emerald-400" />
                                                     <span className="text-slate-300 text-sm">
-                                                        {new Date(restaurant.last_report_date).toLocaleDateString('en-IN', { 
-                                                            month: 'short', 
-                                                            day: 'numeric' 
+                                                        {new Date(restaurant.last_report_date).toLocaleDateString('en-IN', {
+                                                            month: 'short',
+                                                            day: 'numeric'
                                                         })}
                                                     </span>
                                                 </div>
@@ -421,7 +421,7 @@ export default function RestaurantManager() {
                                                 >
                                                     <MoreVertical className="w-5 h-5 text-slate-400" />
                                                 </button>
-                                                
+
                                                 <AnimatePresence>
                                                     {activeMenu === restaurant.id && (
                                                         <motion.div
@@ -430,6 +430,16 @@ export default function RestaurantManager() {
                                                             exit={{ opacity: 0, scale: 0.95 }}
                                                             className="absolute right-0 top-full mt-1 w-48 bg-slate-700 rounded-xl border border-slate-600 shadow-xl z-20 overflow-hidden"
                                                         >
+                                                            <button
+                                                                onClick={() => {
+                                                                    setActiveMenu(null);
+                                                                    window.open(`/${restaurant.id}/dashboard/orders`, '_blank');
+                                                                }}
+                                                                className="w-full flex items-center gap-3 px-4 py-3 text-sm text-emerald-400 hover:bg-emerald-500/10 transition-colors"
+                                                            >
+                                                                <ExternalLink className="w-4 h-4" />
+                                                                Enter Dashboard ↗
+                                                            </button>
                                                             <button
                                                                 onClick={() => openImpersonateModal(restaurant.id)}
                                                                 className="w-full flex items-center gap-3 px-4 py-3 text-sm text-slate-300 hover:bg-slate-600 transition-colors"
@@ -697,7 +707,7 @@ export default function RestaurantManager() {
                                     <p className="text-slate-400 text-sm">{showDatesModal.name}</p>
                                 </div>
                             </div>
-                            
+
                             <div className="space-y-4">
                                 <div>
                                     <label className="block text-sm font-medium text-slate-300 mb-2">
@@ -711,7 +721,7 @@ export default function RestaurantManager() {
                                     />
                                     <p className="text-xs text-slate-500 mt-1">When the subscription becomes active</p>
                                 </div>
-                                
+
                                 <div>
                                     <label className="block text-sm font-medium text-slate-300 mb-2">
                                         End Date
@@ -791,7 +801,7 @@ export default function RestaurantManager() {
                                     <p className="text-slate-400 text-sm">Super Admin Password Reset</p>
                                 </div>
                             </div>
-                            
+
                             {tempPassword ? (
                                 <div className="space-y-4">
                                     <div className="p-4 bg-green-500/20 border border-green-500/30 rounded-xl">
@@ -834,7 +844,7 @@ export default function RestaurantManager() {
                                         <p className="text-slate-400 text-xs">Setting password for:</p>
                                         <p className="text-white font-medium">{selectedUser.email}</p>
                                     </div>
-                                    
+
                                     <div>
                                         <label className="block text-sm font-medium text-slate-300 mb-2">
                                             New Password
@@ -959,7 +969,7 @@ export default function RestaurantManager() {
                             className="bg-slate-800 rounded-2xl border border-slate-700 p-6 w-full max-w-md"
                         >
                             <h3 className="text-lg font-semibold text-white mb-4">Login As User</h3>
-                            
+
                             {impersonationLink ? (
                                 <div className="space-y-4">
                                     <div className="p-4 bg-yellow-500/20 border border-yellow-500/30 rounded-xl">
@@ -1031,9 +1041,9 @@ export default function RestaurantManager() {
 
             {/* Click outside to close menu */}
             {activeMenu && (
-                <div 
-                    className="fixed inset-0 z-10" 
-                    onClick={() => setActiveMenu(null)} 
+                <div
+                    className="fixed inset-0 z-10"
+                    onClick={() => setActiveMenu(null)}
                 />
             )}
         </div>

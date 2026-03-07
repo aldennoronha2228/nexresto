@@ -19,7 +19,8 @@ import { hasPermission, type PermissionType } from '@/components/dashboard/RoleG
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 
-// Base navigation structure
+
+// Base navigation structure — paths are relative to /[storeId]
 const baseNavigation = [
     { name: 'Live Orders', basePath: '/dashboard/orders', icon: ShoppingBag, shortName: 'Orders', proOnly: false, permission: 'can_view_orders' as PermissionType },
     { name: 'Order History', basePath: '/dashboard/history', icon: History, shortName: 'History', proOnly: false, permission: 'can_view_history' as PermissionType },
@@ -30,6 +31,12 @@ const baseNavigation = [
     { name: 'Branding', basePath: '/dashboard/branding', icon: Palette, shortName: 'Brand', proOnly: true, permission: 'can_view_branding' as PermissionType },
     { name: 'Account Settings', basePath: '/dashboard/account', icon: UserCircle, shortName: 'Account', proOnly: false, permission: 'can_view_account' as PermissionType },
 ];
+
+// Helper: build full nav href always scoped to the URL slug (not the session restId)
+// This guarantees each tab stays in its own /[storeId]/ namespace.
+function buildNavHref(urlSlug: string, basePath: string): string {
+    return `/${urlSlug}${basePath}`;
+}
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
     const [collapsed, setCollapsed] = useState(false);
@@ -52,22 +59,37 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         }
     }, [loading, userRole, router]);
 
-    // Check Multi-Tab Isolation: If the URL's storeId does not match the session's tenantId once loaded.
+    // ── Session Guard ──────────────────────────────────────────────────
+    // If a non-super-admin user navigates to /restaurant-a/dashboard
+    // while their session belongs to restaurant-b, show the conflict page
+    // instead of silently switching data. Super-admins bypass this check.
     useEffect(() => {
-        if (!loading && userRole && userRole !== 'super_admin' && urlStoreId && activeStoreId && urlStoreId !== activeStoreId) {
-            // "Different Session Detected" warning / isolation mechanism
-            toast.error('Session mismatch detected! You are currently logged into a different restaurant.', { duration: 5000 });
-            router.replace(`/${activeStoreId}/dashboard/orders`);
+        if (
+            !loading &&
+            userRole &&
+            userRole !== 'super_admin' &&
+            urlStoreId &&
+            activeStoreId &&
+            urlStoreId !== activeStoreId
+        ) {
+            // Navigate to the dedicated Session Conflict page so the user can
+            // make an informed choice (go to their restaurant or re-authenticate).
+            router.replace(`/session-conflict?attempted=${encodeURIComponent(urlStoreId)}`);
         }
     }, [activeStoreId, urlStoreId, loading, router, userRole]);
 
     // Check if user has Pro tier
     const isPro = subscriptionTier === 'pro' || subscriptionTier === '2k' || subscriptionTier === '2.5k';
 
-    // Map base navigation to dynamic URLs with storeId
+    // ── Navigation scoped to URL slug ───────────────────────────────────
+    // Always build hrefs from `urlStoreId` (the slug in the address bar),
+    // NOT from the session's tenantId. This ensures:
+    //   • Each browser tab stays in its own /<slug>/ namespace.
+    //   • Super-admins can have multiple tabs open for different restaurants.
+    //   • Clicking a nav item never jumps you to a different restaurant.
     const navigation = baseNavigation.map(item => ({
         ...item,
-        href: `/${activeStoreId || urlStoreId}${item.basePath}`
+        href: buildNavHref(urlStoreId, item.basePath),
     }));
 
     // Filter navigation based on user role permissions
@@ -159,7 +181,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         {/* Navigation */}
                         <nav className="flex-1 px-3 py-4 space-y-1">
                             {filteredNavigation.map((item) => {
-                                const isActive = pathname === item.href || (pathname === `/${activeStoreId || urlStoreId}/dashboard` && item.href === `/${activeStoreId || urlStoreId}/dashboard/orders`);
+                                const isActive = pathname === item.href || (pathname === `/${urlStoreId}/dashboard` && item.href === `/${urlStoreId}/dashboard/orders`);
                                 const isLocked = item.proOnly && !isPro;
                                 return (
                                     <button
@@ -326,7 +348,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                             <div className="flex items-center justify-center gap-2 text-xs text-slate-500">
                                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                                 <span>Database Connected: <span className="font-medium text-slate-700">{tenantName || 'Loading...'}</span></span>
-                                {activeStoreId && <span className="text-slate-400">({activeStoreId})</span>}
+                                {urlStoreId && <span className="text-slate-400">({urlStoreId})</span>}
                             </div>
                         </div>
                     </div>
