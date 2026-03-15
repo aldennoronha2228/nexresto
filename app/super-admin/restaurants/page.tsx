@@ -13,6 +13,8 @@ import {
     Trash2, AlertTriangle, Check, X, Copy, ExternalLink, FileText, Calendar,
     Eye, EyeOff, RefreshCw, Shield, Users
 } from 'lucide-react';
+import { DayPicker } from 'react-day-picker';
+import { format } from 'date-fns';
 import {
     getAllRestaurants,
     updateRestaurantSubscription,
@@ -24,7 +26,7 @@ import {
     getRestaurantUsers,
     updateSubscriptionDates,
     type RestaurantWithOwner
-} from '@/lib/super-admin-actions';
+} from '@/lib/firebase-super-admin-actions';
 import { cn } from '@/lib/utils';
 
 const ITEMS_PER_PAGE = 10;
@@ -52,6 +54,20 @@ const tierLabels: Record<string, string> = {
     '2.5k': 'Elite ₹2.5k',
 };
 
+function parseDateInput(value: string): Date | undefined {
+    if (!value) return undefined;
+    const [y, m, d] = value.split('-').map(Number);
+    if (!y || !m || !d) return undefined;
+    const dt = new Date(y, m - 1, d);
+    if (Number.isNaN(dt.getTime())) return undefined;
+    return dt;
+}
+
+function formatDateInput(value?: Date): string {
+    if (!value) return '';
+    return format(value, 'yyyy-MM-dd');
+}
+
 export default function RestaurantManager() {
     const [restaurants, setRestaurants] = useState<RestaurantWithOwner[]>([]);
     const [total, setTotal] = useState(0);
@@ -70,6 +86,7 @@ export default function RestaurantManager() {
     // Subscription dates state
     const [subStartDate, setSubStartDate] = useState<string>('');
     const [subEndDate, setSubEndDate] = useState<string>('');
+    const [activeDateField, setActiveDateField] = useState<'start' | 'end'>('end');
     const [savingDates, setSavingDates] = useState(false);
 
     // Action states
@@ -142,6 +159,7 @@ export default function RestaurantManager() {
         setShowDatesModal(restaurant);
         setSubStartDate(restaurant.subscription_start_date || '');
         setSubEndDate(restaurant.subscription_end_date || '');
+        setActiveDateField('end');
         setActiveMenu(null);
     };
 
@@ -318,6 +336,7 @@ export default function RestaurantManager() {
                                     <th className="text-left px-6 py-4 text-sm font-medium text-slate-400">Team</th>
                                     <th className="text-left px-6 py-4 text-sm font-medium text-slate-400">Tier</th>
                                     <th className="text-left px-6 py-4 text-sm font-medium text-slate-400">Status</th>
+                                    <th className="text-left px-6 py-4 text-sm font-medium text-slate-400">Ends On</th>
                                     <th className="text-left px-6 py-4 text-sm font-medium text-slate-400">Last Report</th>
                                     <th className="text-right px-6 py-4 text-sm font-medium text-slate-400">Actions</th>
                                 </tr>
@@ -397,6 +416,31 @@ export default function RestaurantManager() {
                                                 <option value="cancelled" className="bg-slate-800">Cancelled</option>
                                                 <option value="trial" className="bg-slate-800">Trial</option>
                                             </select>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <div className="flex items-center gap-2">
+                                                <div className="min-w-[84px]">
+                                                    {restaurant.subscription_end_date ? (
+                                                        <span className="text-slate-300 text-sm">
+                                                            {new Date(restaurant.subscription_end_date).toLocaleDateString('en-IN', {
+                                                                month: 'short',
+                                                                day: 'numeric',
+                                                                year: 'numeric',
+                                                            })}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-slate-500 text-xs italic">Not set</span>
+                                                    )}
+                                                </div>
+                                                <button
+                                                    onClick={() => openDatesModal(restaurant)}
+                                                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs transition-colors"
+                                                    title="Set subscription/trial dates"
+                                                >
+                                                    <Calendar className="w-3.5 h-3.5" />
+                                                    Set
+                                                </button>
+                                            </div>
                                         </td>
                                         <td className="px-6 py-4">
                                             {restaurant.last_report_date ? (
@@ -696,46 +740,121 @@ export default function RestaurantManager() {
                             animate={{ scale: 1 }}
                             exit={{ scale: 0.95 }}
                             onClick={(e) => e.stopPropagation()}
-                            className="bg-slate-800 rounded-2xl border border-slate-700 p-6 w-full max-w-md"
+                            className="bg-slate-800 rounded-2xl border border-slate-700 w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col"
                         >
-                            <div className="flex items-center gap-3 mb-6">
-                                <div className="p-3 bg-purple-500/20 rounded-xl">
-                                    <Calendar className="w-6 h-6 text-purple-400" />
-                                </div>
-                                <div>
-                                    <h3 className="text-lg font-semibold text-white">Subscription Dates</h3>
-                                    <p className="text-slate-400 text-sm">{showDatesModal.name}</p>
+                            <div className="px-6 py-5 border-b border-slate-700/70">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-3 bg-purple-500/20 rounded-xl">
+                                        <Calendar className="w-6 h-6 text-purple-400" />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-lg font-semibold text-white">Subscription Dates</h3>
+                                        <p className="text-slate-400 text-sm">{showDatesModal.name}</p>
+                                    </div>
                                 </div>
                             </div>
 
-                            <div className="space-y-4">
+                            <div className="px-6 py-5 space-y-4 overflow-y-auto">
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-300 mb-2">
-                                        Start Date
-                                    </label>
-                                    <input
-                                        type="date"
-                                        value={subStartDate}
-                                        onChange={(e) => setSubStartDate(e.target.value)}
-                                        className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
-                                    />
-                                    <p className="text-xs text-slate-500 mt-1">When the subscription becomes active</p>
+                                    <div className="flex items-center justify-between mb-2">
+                                        <label className="block text-sm font-medium text-slate-300">
+                                            Start Date
+                                        </label>
+                                        <button
+                                            type="button"
+                                            onClick={() => setSubStartDate('')}
+                                            className="text-xs text-slate-400 hover:text-slate-200 transition-colors"
+                                        >
+                                            Clear
+                                        </button>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setActiveDateField('start')}
+                                        className={cn(
+                                            "w-full px-4 py-2.5 text-left border rounded-xl transition-colors",
+                                            activeDateField === 'start'
+                                                ? "bg-slate-800 border-purple-500 text-white"
+                                                : "bg-slate-900 border-slate-700 text-slate-200 hover:border-slate-500"
+                                        )}
+                                    >
+                                        {subStartDate
+                                            ? format(parseDateInput(subStartDate) || new Date(subStartDate), 'dd MMM yyyy')
+                                            : 'Select start date'}
+                                    </button>
+                                    <p className="text-xs text-slate-500 mt-1">When the subscription/trial begins</p>
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-300 mb-2">
-                                        End Date
-                                    </label>
-                                    <input
-                                        type="date"
-                                        value={subEndDate}
-                                        onChange={(e) => setSubEndDate(e.target.value)}
-                                        className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
-                                    />
-                                    <p className="text-xs text-slate-500 mt-1">When the subscription expires</p>
+                                    <div className="flex items-center justify-between mb-2">
+                                        <label className="block text-sm font-medium text-slate-300">
+                                            End Date
+                                        </label>
+                                        <button
+                                            type="button"
+                                            onClick={() => setSubEndDate('')}
+                                            className="text-xs text-slate-400 hover:text-slate-200 transition-colors"
+                                        >
+                                            Clear
+                                        </button>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setActiveDateField('end')}
+                                        className={cn(
+                                            "w-full px-4 py-2.5 text-left border rounded-xl transition-colors",
+                                            activeDateField === 'end'
+                                                ? "bg-slate-800 border-purple-500 text-white"
+                                                : "bg-slate-900 border-slate-700 text-slate-200 hover:border-slate-500"
+                                        )}
+                                    >
+                                        {subEndDate
+                                            ? format(parseDateInput(subEndDate) || new Date(subEndDate), 'dd MMM yyyy')
+                                            : 'Select end date'}
+                                    </button>
+                                    <p className="text-xs text-slate-500 mt-1">When the subscription/trial expires</p>
                                 </div>
 
-                                {/* Current Status Preview */}
+                                <div className="p-3 bg-slate-900/50 rounded-xl border border-slate-700 overflow-auto">
+                                    <p className="text-xs text-slate-400 mb-2">
+                                        Picking for: <span className="text-slate-200 font-medium">{activeDateField === 'start' ? 'Start Date' : 'End Date'}</span>
+                                    </p>
+                                    <div className="text-white rounded-xl bg-slate-950/40 border border-slate-800 p-3">
+                                        <DayPicker
+                                            mode="single"
+                                            selected={parseDateInput(activeDateField === 'start' ? subStartDate : subEndDate)}
+                                            onSelect={(date) => {
+                                                const next = formatDateInput(date);
+                                                if (activeDateField === 'start') {
+                                                    setSubStartDate(next);
+                                                } else {
+                                                    setSubEndDate(next);
+                                                }
+                                            }}
+                                            showOutsideDays
+                                            className="w-full"
+                                            classNames={{
+                                                months: 'flex flex-col gap-2',
+                                                month: 'space-y-3',
+                                                caption: 'flex items-center justify-between',
+                                                caption_label: 'text-base font-semibold text-slate-100',
+                                                nav: 'flex items-center gap-1',
+                                                button_previous: 'h-8 w-8 inline-flex items-center justify-center rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-200 transition-colors',
+                                                button_next: 'h-8 w-8 inline-flex items-center justify-center rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-200 transition-colors',
+                                                weekdays: 'grid grid-cols-7 gap-1',
+                                                weekday: 'h-8 flex items-center justify-center text-[11px] font-semibold uppercase tracking-wide text-slate-400',
+                                                week: 'grid grid-cols-7 gap-1 mt-1',
+                                                day: 'h-9 w-9',
+                                                day_button: 'h-9 w-9 rounded-md text-sm text-slate-200 hover:bg-slate-800 transition-colors',
+                                                selected: 'bg-cyan-400 text-slate-950 hover:bg-cyan-300 font-semibold',
+                                                today: 'ring-1 ring-cyan-500/60',
+                                                outside: 'text-slate-500',
+                                                disabled: 'text-slate-600 opacity-50',
+                                            }}
+                                        />
+                                    </div>
+                                </div>
+
                                 <div className="p-3 bg-slate-900/50 rounded-xl border border-slate-700">
                                     <p className="text-xs text-slate-400 mb-1">Current Tier & Status</p>
                                     <div className="flex items-center gap-2">
@@ -755,20 +874,22 @@ export default function RestaurantManager() {
                                 </div>
                             </div>
 
-                            <div className="flex gap-3 mt-6">
-                                <button
-                                    onClick={() => setShowDatesModal(null)}
-                                    className="flex-1 px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-xl transition-colors"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    onClick={handleSaveDates}
-                                    disabled={savingDates}
-                                    className="flex-1 px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl transition-colors disabled:opacity-50"
-                                >
-                                    {savingDates ? 'Saving...' : 'Save Dates'}
-                                </button>
+                            <div className="px-6 py-4 border-t border-slate-700/70 bg-slate-800/95">
+                                <div className="flex gap-3">
+                                    <button
+                                        onClick={() => setShowDatesModal(null)}
+                                        className="flex-1 px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-xl transition-colors"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={handleSaveDates}
+                                        disabled={savingDates}
+                                        className="flex-1 px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl transition-colors disabled:opacity-50"
+                                    >
+                                        {savingDates ? 'Saving...' : 'Save Dates'}
+                                    </button>
+                                </div>
                             </div>
                         </motion.div>
                     </motion.div>

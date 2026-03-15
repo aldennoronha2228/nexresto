@@ -5,7 +5,8 @@ import { useRouter, useParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, ShoppingBag, UtensilsCrossed, QrCode, History, ArrowRight, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { supabase } from '@/lib/supabase';
+import { tenantAuth, adminAuth } from '@/lib/firebase';
+import { useRestaurant } from '@/hooks/useRestaurant';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface SearchResult {
@@ -46,19 +47,36 @@ export function GlobalSearch() {
     const containerRef = useRef<HTMLDivElement>(null);
     const router = useRouter();
     const params = useParams<{ storeId: string }>();
-    const storeId = params?.storeId || '';
+    const urlStoreId = params?.storeId || '';
+    const { storeId: tenantId } = useRestaurant();
+
+    const getActiveToken = useCallback(async (): Promise<string> => {
+        if (adminAuth.currentUser) return adminAuth.currentUser.getIdToken(true);
+        if (tenantAuth.currentUser) return tenantAuth.currentUser.getIdToken(true);
+        throw new Error('Missing active session');
+    }, []);
+
+    const refreshTokens = useCallback(async () => {
+        const jobs: Promise<unknown>[] = [];
+        if (tenantAuth.currentUser) jobs.push(tenantAuth.currentUser.getIdToken(true));
+        if (adminAuth.currentUser) jobs.push(adminAuth.currentUser.getIdToken(true));
+        if (jobs.length > 0) {
+            await Promise.allSettled(jobs);
+        }
+    }, []);
 
     // Dynamically resolved nav links
     const NAV_LINKS: SearchResult[] = NAV_LINKS_BASE.map(n => ({
         ...n,
-        href: `/${storeId}${n.basePath}`
+        href: `/${urlStoreId}${n.basePath}`
     })) as SearchResult[];
 
-    // ── Search Supabase + filter nav links ────────────────────────────────────
+    // ── Search Firestore + filter nav links ──────────────────────────────────
     const runSearch = useCallback(async (q: string) => {
         const trimmed = q.trim();
+        const lowerTrimmed = trimmed.toLowerCase();
 
-        if (!trimmed) {
+        if (!trimmed || !tenantId) {
             setResults([]);
             setSearching(false);
             return;
@@ -66,65 +84,85 @@ export function GlobalSearch() {
 
         setSearching(true);
 
-        try {
-            // Run both queries in parallel
-            const [ordersRes, menuRes] = await Promise.all([
-                supabase
-                    .from('orders')
-                    .select('id, table_number, status, daily_order_number, created_at')
-                    .or(`table_number.ilike.%${trimmed}%,status.ilike.%${trimmed}%`)
-                    .limit(5),
-                supabase
-                    .from('menu_items')
-                    .select('id, name, price, available')
-                    .ilike('name', `%${trimmed}%`)
-                    .limit(5),
-            ]);
+        const executeQuery = async () => {
+            const token = await getActiveToken();
+            const response = await fetch(`/api/search/global?restaurantId=${encodeURIComponent(tenantId)}&q=${encodeURIComponent(trimmed)}`, {
+                headers: { Authorization: `Bearer ${token}` },
+                cache: 'no-store',
+            });
 
-            const orderResults: SearchResult[] = (ordersRes.data ?? []).map((o) => ({
-                id: `order-${o.id}`,
-                type: 'order',
-                title: `Order #${o.daily_order_number ?? o.id.slice(-6).toUpperCase()}`,
-                subtitle: `Table ${o.table_number}`,
-                href: `/${storeId}/dashboard/orders`,
-                icon: <ShoppingBag className="w-4 h-4" />,
-                badge: o.status,
-                badgeColor: STATUS_COLORS[o.status] ?? STATUS_COLORS.new,
-            }));
+            const payload = await response.json();
+            if (!response.ok) {
+                throw new Error(payload?.error || 'Search failed');
+            }
 
-            const menuResults: SearchResult[] = (menuRes.data ?? []).map((m) => ({
-                id: `menu-${m.id}`,
-                type: 'menu',
-                title: m.name,
-                subtitle: `₹${m.price}`,
-                href: `/${storeId}/dashboard/menu`,
-                icon: <UtensilsCrossed className="w-4 h-4" />,
-                badge: m.available ? 'Available' : 'Off menu',
-                badgeColor: m.available ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700',
-            }));
+            const orderRows = Array.isArray(payload?.orders) ? payload.orders : [];
+            const menuRows = Array.isArray(payload?.menuItems) ? payload.menuItems : [];
+
+            const orderResults: SearchResult[] = orderRows
+                .map((o: any) => {
+                    return {
+                        id: `order-${String(o.id)}`,
+                        type: 'order' as const,
+                        title: `Order #${o.daily_order_number ?? String(o.id).slice(-6).toUpperCase()}`,
+                        subtitle: `Table ${o.table_number}`,
+                        href: `/${urlStoreId}/dashboard/orders`,
+                        icon: <ShoppingBag className="w-4 h-4" />,
+                        badge: o.status,
+                        badgeColor: STATUS_COLORS[o.status] ?? STATUS_COLORS.new,
+                    };
+                });
+
+            const menuResults: SearchResult[] = menuRows
+                .map((m: any) => {
+                    return {
+                        id: `menu-${String(m.id)}`,
+                        type: 'menu' as const,
+                        title: m.name,
+                        subtitle: `₹${m.price}`,
+                        href: `/${urlStoreId}/dashboard/menu`,
+                        icon: <UtensilsCrossed className="w-4 h-4" />,
+                        badge: m.available !== false ? 'Available' : 'Off menu',
+                        badgeColor: m.available !== false ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700',
+                    };
+                });
 
             // Filter nav links client-side
             const navResults = NAV_LINKS.filter(
                 (n) =>
-                    n.title.toLowerCase().includes(trimmed.toLowerCase()) ||
-                    n.subtitle.toLowerCase().includes(trimmed.toLowerCase())
+                    n.title.toLowerCase().includes(lowerTrimmed) ||
+                    n.subtitle.toLowerCase().includes(lowerTrimmed)
             );
 
             const combined = [...orderResults, ...menuResults, ...navResults];
             setResults(combined);
             setActiveIndex(0);
-        } catch (err) {
+        };
+
+        try {
+            await executeQuery();
+        } catch (err: any) {
+            const message = String(err?.message || '').toLowerCase();
+            if (message.includes('permission')) {
+                await refreshTokens();
+                try {
+                    await executeQuery();
+                    return;
+                } catch {
+                    // Fall through to final error logging below.
+                }
+            }
             console.error('Search error:', err);
         } finally {
             setSearching(false);
         }
-    }, []);
+    }, [tenantId, urlStoreId, refreshTokens, getActiveToken]);
 
     // ── Debounce ──────────────────────────────────────────────────────────────
     useEffect(() => {
         const t = setTimeout(() => runSearch(query), 250);
         return () => clearTimeout(t);
-    }, [query, runSearch, storeId]);
+    }, [query, runSearch, urlStoreId]);
 
     // ── Close on outside click ────────────────────────────────────────────────
     useEffect(() => {

@@ -4,20 +4,32 @@ import React from 'react';
 import { motion } from 'motion/react';
 import { Receipt, ArrowLeft, ChevronDown, ChevronUp } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense } from 'react';
 
-export default function CustomerOrderHistoryPage() {
+function CustomerOrderHistoryContent() {
     const { orderHistory } = useCart();
     const router = useRouter();
+    const searchParams = useSearchParams();
     const [expandedOrder, setExpandedOrder] = React.useState<string | null>(null);
     const toggleOrder = (orderId: string) => setExpandedOrder(expandedOrder === orderId ? null : orderId);
+
+    const tableId = searchParams.get('table') ?? '';
+    const restaurantId = searchParams.get('restaurant') ?? '';
+    const menuUrl = (() => {
+        const params = new URLSearchParams();
+        if (tableId) params.set('table', tableId);
+        if (restaurantId) params.set('restaurant', restaurantId);
+        const qs = params.toString();
+        return `/customer${qs ? `?${qs}` : ''}`;
+    })();
 
     return (
         <div className="min-h-screen bg-[#FAF8F5]">
             <motion.header initial={{ y: -100 }} animate={{ y: 0 }} className="sticky top-0 z-30 bg-white/80 backdrop-blur-lg border-b border-gray-200/50 shadow-sm">
                 <div className="max-w-4xl mx-auto px-4 md:px-8 py-4">
                     <div className="flex items-center gap-4">
-                        <motion.button onClick={() => router.push('/customer')} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="w-10 h-10 rounded-xl bg-[#1B4332] text-white flex items-center justify-center">
+                        <motion.button onClick={() => router.push(menuUrl)} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="w-10 h-10 rounded-xl bg-[#1B4332] text-white flex items-center justify-center">
                             <ArrowLeft className="w-5 h-5" />
                         </motion.button>
                         <div><h1 className="text-2xl md:text-3xl font-bold text-[#1B4332]">Order History</h1><p className="text-sm text-gray-600">View your previous orders</p></div>
@@ -31,7 +43,7 @@ export default function CustomerOrderHistoryPage() {
                         <Receipt className="w-16 h-16 mx-auto text-gray-300 mb-4" />
                         <h2 className="text-2xl font-bold text-gray-700 mb-2">No Orders Yet</h2>
                         <p className="text-gray-500 mb-6">Your order history will appear here</p>
-                        <motion.button onClick={() => router.push('/customer')} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="bg-gradient-to-r from-[#1B4332] to-[#2D5F4C] text-white px-6 py-3 rounded-2xl font-semibold">Browse Menu</motion.button>
+                        <motion.button onClick={() => router.push(menuUrl)} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="bg-gradient-to-r from-[#1B4332] to-[#2D5F4C] text-white px-6 py-3 rounded-2xl font-semibold">Browse Menu</motion.button>
                     </motion.div>
                 ) : (
                     <div className="space-y-4">
@@ -69,4 +81,8 @@ export default function CustomerOrderHistoryPage() {
             </main>
         </div>
     );
+}
+
+export default function CustomerOrderHistoryPage() {
+    return <Suspense><CustomerOrderHistoryContent /></Suspense>;
 }

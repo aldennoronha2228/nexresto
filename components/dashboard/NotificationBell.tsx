@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Bell, ShoppingBag, Clock, X, Trash2 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { tenantAuth, adminAuth } from '@/lib/firebase';
+import { useRestaurant } from '@/hooks/useRestaurant';
 import { cn } from '@/lib/utils';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -37,8 +38,20 @@ function timeAgo(date: Date): string {
 export function NotificationBell() {
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [open, setOpen] = useState(false);
+    const [retryNonce, setRetryNonce] = useState(0);
     const containerRef = useRef<HTMLDivElement>(null);
     const audioRef = useRef<AudioContext | null>(null);
+    const { storeId, loading } = useRestaurant();
+    const seenOrderIds = useRef(new Set<string>());
+
+    const refreshTokens = useCallback(async () => {
+        const jobs: Promise<unknown>[] = [];
+        if (tenantAuth.currentUser) jobs.push(tenantAuth.currentUser.getIdToken(true));
+        if (adminAuth.currentUser) jobs.push(adminAuth.currentUser.getIdToken(true));
+        if (jobs.length > 0) {
+            await Promise.allSettled(jobs);
+        }
+    }, []);
 
     // ── play a subtle "ding" using Web Audio API ──────────────────────────────
     const playDing = useCallback(() => {
@@ -68,27 +81,76 @@ export function NotificationBell() {
         playDing();
     }, [playDing]);
 
-    // ── Subscribe to Supabase real-time (new orders only) ────────────────────
-    useEffect(() => {
-        const channel = supabase
-            .channel('notifications-rt')
-            .on(
-                'postgres_changes',
-                { event: 'INSERT', schema: 'public', table: 'orders' },
-                (payload) => {
-                    const order = payload.new as any;
-                    addNotification({
-                        type: 'new_order',
-                        title: '🛎️ New Order',
-                        message: `Table ${order.table_number} placed an order`,
-                        orderId: order.id,
-                    });
-                }
-            )
-            .subscribe();
+    const getActiveToken = useCallback(async (): Promise<string> => {
+        if (adminAuth.currentUser) return adminAuth.currentUser.getIdToken(true);
+        if (tenantAuth.currentUser) return tenantAuth.currentUser.getIdToken(true);
+        throw new Error('Missing active session');
+    }, []);
 
-        return () => { channel.unsubscribe(); };
-    }, [addNotification]);
+    // ── Poll server endpoint for newly created "new" orders ─────────────────
+    useEffect(() => {
+        if (!storeId || loading) return;
+
+        let cancelled = false;
+        let seeded = false;
+
+        const poll = async () => {
+            try {
+                const token = await getActiveToken();
+                const res = await fetch(`/api/orders/new?restaurantId=${encodeURIComponent(storeId)}&limit=20`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                    cache: 'no-store',
+                });
+
+                if (!res.ok) {
+                    const data = await res.json().catch(() => ({}));
+                    const message = String(data?.error || 'Failed to load notifications');
+                    if (message.toLowerCase().includes('permission')) {
+                        await refreshTokens();
+                    }
+                    return;
+                }
+
+                const data = await res.json();
+                const rows = Array.isArray(data?.orders) ? data.orders : [];
+
+                if (!seeded) {
+                    rows.forEach((o: any) => seenOrderIds.current.add(String(o.id)));
+                    seeded = true;
+                    return;
+                }
+
+                rows.forEach((o: any) => {
+                    const orderId = String(o.id || '');
+                    if (!orderId || seenOrderIds.current.has(orderId)) return;
+
+                    seenOrderIds.current.add(orderId);
+                    const createdAt = new Date(String(o.created_at || Date.now()));
+                    const ageMs = Date.now() - createdAt.getTime();
+                    if (ageMs > 30000) return;
+
+                    if (!cancelled) {
+                        addNotification({
+                            type: 'new_order',
+                            title: '🛎️ New Order',
+                            message: `Table ${String(o.table_number || '-') } placed an order`,
+                            orderId,
+                        });
+                    }
+                });
+            } catch {
+                // Silent by design: notifications should not break dashboard UX.
+            }
+        };
+
+        poll();
+        const interval = setInterval(poll, 12000);
+
+        return () => {
+            cancelled = true;
+            clearInterval(interval);
+        };
+    }, [storeId, loading, addNotification, refreshTokens, getActiveToken, retryNonce]);
 
     // ── Close on outside click ─────────────────────────────────────────────────
     useEffect(() => {

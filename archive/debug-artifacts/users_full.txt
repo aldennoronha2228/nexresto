@@ -1,0 +1,4 @@
+[dotenv@17.3.1] injecting env (16) from .env -- tip: ⚙️  suppress all logs with { quiet: true }
+--- Current Users in Project ---
+aldenengineeringentranceexam@gmail.com (UID: 4x8hqsZjf4dMIPj6wUBWPuFrqXF3) - Claims: { role: 'super_admin' }
+--- Total Users: 1 ---

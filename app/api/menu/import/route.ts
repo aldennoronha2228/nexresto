@@ -1,28 +1,20 @@
 /**
- * POST /api/menu/import
- * ----------------------
+ * POST /api/menu/import  (Firebase)
+ * -----------------------------------
  * Imports menu items from an uploaded Excel file.
  * 
  * Expected Excel columns:
  * - Name (required)
  * - Price (required)
- * - Category (required - must match existing category name)
+ * - Category (required - must match existing category name or we create one)
  * - Type (optional - 'veg' or 'non-veg', defaults to 'veg')
  * - Image URL (optional)
  */
 
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { adminAuth, adminFirestore } from '@/lib/firebase-admin';
+import { FieldValue } from 'firebase-admin/firestore';
 import * as XLSX from 'xlsx';
-
-function getServiceClient() {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!url || !key) throw new Error('Missing Supabase environment variables');
-    return createClient(url, key, {
-        auth: { persistSession: false, autoRefreshToken: false },
-    });
-}
 
 interface ExcelRow {
     Name?: string;
@@ -44,6 +36,28 @@ export async function POST(request: Request) {
         const file = formData.get('file') as File | null;
         const tenantId = formData.get('tenantId') as string | null;
 
+        // Optionally, require an auth header to verify permission
+        const authHeader = request.headers.get('authorization');
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        const idToken = authHeader.replace('Bearer ', '');
+        let decodedToken;
+        try {
+            decodedToken = await adminAuth.verifyIdToken(idToken);
+        } catch {
+            return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
+        }
+
+        const userRecord = await adminAuth.getUser(decodedToken.uid);
+        const claims = userRecord.customClaims || {};
+
+        const claimRestaurantId = String(claims.restaurant_id || claims.tenant_id || '');
+        if (claims.role !== 'super_admin' && claimRestaurantId !== tenantId) {
+            return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+        }
+
         if (!file) {
             return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
         }
@@ -55,13 +69,13 @@ export async function POST(request: Request) {
         // Read the Excel file
         const arrayBuffer = await file.arrayBuffer();
         const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-        
+
         // Get the first sheet
         const sheetName = workbook.SheetNames[0];
         if (!sheetName) {
             return NextResponse.json({ error: 'Excel file is empty' }, { status: 400 });
         }
-        
+
         const sheet = workbook.Sheets[sheetName];
         const rows: ExcelRow[] = XLSX.utils.sheet_to_json(sheet);
 
@@ -69,19 +83,22 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'No data found in Excel file' }, { status: 400 });
         }
 
-        const supabase = getServiceClient();
-
         // Fetch existing categories for this tenant
-        const { data: categories, error: catError } = await supabase
-            .from('categories')
-            .select('id, name')
-            .eq('tenant_id', tenantId);
-
-        if (catError) throw catError;
+        const categoriesSnap = await adminFirestore
+            .collection(`restaurants/${tenantId}/categories`)
+            .get();
 
         const categoryMap = new Map<string, string>();
-        categories?.forEach(c => {
-            categoryMap.set(c.name.toLowerCase(), c.id);
+        let maxSortOrder = 0;
+
+        categoriesSnap.forEach(doc => {
+            const data = doc.data();
+            if (data.name) {
+                categoryMap.set(data.name.toLowerCase(), doc.id);
+            }
+            if (data.display_order > maxSortOrder) {
+                maxSortOrder = data.display_order;
+            }
         });
 
         const results = {
@@ -90,6 +107,9 @@ export async function POST(request: Request) {
             errors: [] as string[],
             categoriesCreated: [] as string[],
         };
+
+        const batch = adminFirestore.batch();
+        let batchCount = 0;
 
         // Process each row
         for (let i = 0; i < rows.length; i++) {
@@ -124,53 +144,51 @@ export async function POST(request: Request) {
 
             // Find or create category
             let categoryId = categoryMap.get(categoryName.toLowerCase());
-            
+
             if (!categoryId) {
                 // Create new category
-                const { data: newCat, error: newCatError } = await supabase
-                    .from('categories')
-                    .insert([{ 
-                        name: categoryName, 
-                        tenant_id: tenantId, 
-                        sort_order: categoryMap.size + 1 
-                    }])
-                    .select('id')
-                    .single();
+                const newCatRef = adminFirestore.collection(`restaurants/${tenantId}/categories`).doc();
+                maxSortOrder++;
+                batch.set(newCatRef, {
+                    name: categoryName,
+                    display_order: maxSortOrder,
+                    created_at: FieldValue.serverTimestamp(),
+                });
 
-                if (newCatError || !newCat?.id) {
-                    results.errors.push(`Row ${rowNum}: Failed to create category "${categoryName}"`);
-                    results.skipped++;
-                    continue;
-                }
-
-                categoryId = newCat.id;
-                categoryMap.set(categoryName.toLowerCase(), newCat.id);
+                categoryId = newCatRef.id;
+                categoryMap.set(categoryName.toLowerCase(), categoryId);
                 results.categoriesCreated.push(categoryName);
+                batchCount++;
             }
 
             // Normalize type
             const type: 'veg' | 'non-veg' = typeRaw.includes('non') || typeRaw === 'nonveg' ? 'non-veg' : 'veg';
 
             // Insert menu item
-            const { error: insertError } = await supabase
-                .from('menu_items')
-                .insert([{
-                    name,
-                    price,
-                    category_id: categoryId,
-                    type,
-                    image_url: imageUrl || null,
-                    tenant_id: tenantId,
-                    available: true,
-                }]);
+            const newItemRef = adminFirestore.collection(`restaurants/${tenantId}/menu_items`).doc();
+            batch.set(newItemRef, {
+                name,
+                price,
+                category_id: categoryId,
+                type,
+                image_url: imageUrl || null,
+                available: true,
+                created_at: FieldValue.serverTimestamp(),
+            });
+            batchCount++;
 
-            if (insertError) {
-                results.errors.push(`Row ${rowNum}: Failed to import "${name}" - ${insertError.message}`);
-                results.skipped++;
-                continue;
+            // Commit batch if it gets too large (Firestore limit is 500 ops per batch)
+            if (batchCount >= 450) {
+                await batch.commit();
+                batchCount = 0;
             }
 
             results.imported++;
+        }
+
+        // Commit remaining batch
+        if (batchCount > 0) {
+            await batch.commit();
         }
 
         return NextResponse.json({

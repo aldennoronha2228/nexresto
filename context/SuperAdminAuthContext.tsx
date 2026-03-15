@@ -1,31 +1,29 @@
 'use client';
 
 /**
- * context/SuperAdminAuthContext.tsx
- * ──────────────────────────────────
+ * context/SuperAdminAuthContext.tsx  (Firebase)
+ * ──────────────────────────────────────────────
  * Provides auth state for all /super-admin/* pages.
  *
- * Uses the SEPARATE `supabaseSuperAdmin` client which reads from
- * `hotelpro-admin-session` in localStorage.  This client is seeded
- * by the login page after confirming role === 'super_admin' via
- * supabaseSuperAdmin.auth.setSession().
+ * Uses the SEPARATE `adminAuth` from a named Firebase App instance ('admin').
+ * This Auth instance has its own IndexedDB persistence namespace, completely
+ * isolated from the tenant auth.
  *
  * Isolation guarantee:
- *   signOut() here calls supabaseSuperAdmin.auth.signOut({ scope: 'local' })
- *   which removes only `hotelpro-admin-session` from localStorage.
- *   The tenant client's `hotelpro-tenant-session` in sessionStorage is
- *   NEVER touched, so any hotel owner logged in another tab is unaffected.
+ *   signOut(adminAuth)  → clears admin session only
+ *   signOut(tenantAuth) → clears tenant session only
+ *   The two are 100% independent because they use different Firebase App instances.
  */
 
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import { supabaseSuperAdmin, ADMIN_SESSION_KEY } from '@/lib/supabase';
+import { onAuthStateChanged, signOut as firebaseSignOut, type User } from 'firebase/auth';
+import { adminAuth, ADMIN_SESSION_KEY } from '@/lib/firebase';
 import { securityLog } from '@/lib/logger';
-import type { User, Session } from '@/lib/auth';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface SuperAdminAuthState {
-    session: Session | null;
+    session: { user: User; access_token: string } | null;
     user: User | null;
     loading: boolean;
     roleLoading: boolean;
@@ -56,10 +54,25 @@ export function SuperAdminAuthProvider({ children }: { children: ReactNode }) {
 
     const hasInitialized = useRef(false);
     const hasRoleRef = useRef(false);
-    const pendingAuthRef = useRef<NodeJS.Timeout | null>(null);
 
     useEffect(() => {
         let isActive = true;
+
+        // ── Pick up token left by login page ──────────────────────────────────
+        // The login flow stores the custom token in sessionStorage to avoid a
+        // blocking await. We consume it here immediately on mount.
+        const pendingToken = typeof window !== 'undefined'
+            ? sessionStorage.getItem('pending_admin_token')
+            : null;
+
+        if (pendingToken) {
+            sessionStorage.removeItem('pending_admin_token');
+            import('firebase/auth').then(({ signInWithCustomToken }) => {
+                signInWithCustomToken(adminAuth, pendingToken).catch(err => {
+                    console.warn('[SuperAdminAuth] Could not use pending token:', err);
+                });
+            });
+        }
 
         // Safety release: unblock after 3s in case auth hangs
         const safetyTimer = setTimeout(() => {
@@ -70,107 +83,114 @@ export function SuperAdminAuthProvider({ children }: { children: ReactNode }) {
             }
         }, 3000);
 
-        const { data: { subscription } } = supabaseSuperAdmin.auth.onAuthStateChange(
-            async (event, session) => {
-                console.log(`[SuperAdminAuth] event: ${event}`);
+        const unsubscribe = onAuthStateChanged(adminAuth, async (user) => {
+            console.log(`[SuperAdminAuth] Firebase auth state changed: ${user ? 'signed in' : 'signed out'}`);
 
-                if (!session?.user) {
-                    if (isActive) {
-                        hasRoleRef.current = false;
-                        setState({
-                            session: null, user: null,
-                            loading: false, roleLoading: false,
-                            error: null, userRole: null,
-                        });
-                        hasInitialized.current = true;
-                        clearTimeout(safetyTimer);
-                    }
-                    return;
-                }
-
-                // Set session immediately so layout can render
+            if (!user) {
                 if (isActive) {
-                    setState(prev => ({
-                        ...prev,
-                        session,
-                        user: session.user,
-                        loading: false,
-                        roleLoading: hasRoleRef.current ? false : true,
-                        error: null,
-                    }));
+                    hasRoleRef.current = false;
+                    setState({
+                        session: null, user: null,
+                        loading: false, roleLoading: false,
+                        error: null, userRole: null,
+                    });
                     hasInitialized.current = true;
                     clearTimeout(safetyTimer);
                 }
+                return;
+            }
 
-                // Skip re-fetching role if we already have it and this is just a session refresh (e.g., from tab focus)
-                if (hasRoleRef.current && event !== 'SIGNED_IN') {
-                    console.log('[SuperAdminAuth] Skipping profile re-fetch - role data exists');
-                    setState(prev => ({ ...prev, roleLoading: false }));
-                    return;
-                }
+            const idToken = await user.getIdToken();
 
-                // Debounce rapid auth events
-                if (pendingAuthRef.current) {
-                    clearTimeout(pendingAuthRef.current);
-                }
+            // Set session, but keep loading:true if we need to fetch role
+            if (isActive) {
+                setState(prev => ({
+                    ...prev,
+                    session: { user, access_token: idToken },
+                    user,
+                    // Don't release loading until we at least try to get the role
+                    // unless we already have it.
+                    loading: hasRoleRef.current ? false : true,
+                    roleLoading: hasRoleRef.current ? false : true,
+                    error: null,
+                }));
+                hasInitialized.current = true;
+                clearTimeout(safetyTimer);
+            }
 
-                await new Promise<void>(resolve => {
-                    pendingAuthRef.current = setTimeout(resolve, 100);
-                });
+            // Skip re-fetching role if we already have it
+            if (hasRoleRef.current) {
+                console.log('[SuperAdminAuth] Skipping profile re-fetch - role data exists');
+                setState(prev => ({ ...prev, roleLoading: false }));
+                return;
+            }
 
-                if (!isActive) return;
+            if (!isActive) return;
 
-                // Fetch profile via API (which handles admin_users & user_profiles correctly)
-                // Super admins are in the admin_users table, which the API safely checks first.
-                try {
-                    const res = await fetch('/api/auth/profile', {
-                        headers: { Authorization: `Bearer ${session.access_token}` },
-                    });
+            // Check custom claims for super_admin role
+            try {
+                const tokenResult = await user.getIdTokenResult();
+                const role = (tokenResult.claims.role as string) || null;
 
-                    if (!res.ok) throw new Error('Failed to fetch profile');
-
-                    const { profile } = await res.json();
-
-                    if (isActive) {
-                        if (profile?.role) {
-                            hasRoleRef.current = true;
-                        }
-
-                        setState(prev => ({
-                            ...prev,
-                            roleLoading: false,
-                            userRole: profile?.role ?? null,
-                            error: null,
-                        }));
-
-                        securityLog.info('SUPER_ADMIN_AUTH_RESOLVED', {
-                            userId: session.user.id,
-                            role: profile?.role,
+                // Also check via API as fallback
+                let resolvedRole = role;
+                if (!resolvedRole) {
+                    try {
+                        const res = await fetch('/api/auth/profile', {
+                            headers: { Authorization: `Bearer ${idToken}` },
                         });
+                        if (res.ok) {
+                            const { profile } = await res.json();
+                            resolvedRole = profile?.role || null;
+
+                            // Profile endpoint can assign missing custom claims.
+                            // Refresh token to make those claims available immediately.
+                            if (resolvedRole) {
+                                await user.getIdToken(true).catch(() => { });
+                            }
+                        }
+                    } catch {
+                        // Fallback failed, use claims
                     }
-                } catch (err: any) {
-                    if (isActive) {
-                        setState(prev => ({
-                            ...prev,
-                            roleLoading: false,
-                            error: err.message,
-                        }));
+                }
+
+                if (isActive) {
+                    if (resolvedRole) {
+                        hasRoleRef.current = true;
                     }
+                    setState(prev => ({
+                        ...prev,
+                        loading: false, // Release loading now that role is resolved
+                        roleLoading: false,
+                        userRole: resolvedRole,
+                        error: null,
+                    }));
+                    securityLog.info('SUPER_ADMIN_AUTH_RESOLVED', {
+                        userId: user.uid,
+                        role: resolvedRole,
+                    });
+                }
+            } catch (err: any) {
+                if (isActive) {
+                    setState(prev => ({
+                        ...prev,
+                        roleLoading: false,
+                        error: err.message,
+                    }));
                 }
             }
-        );
+        });
 
         return () => {
             isActive = false;
-            subscription.unsubscribe();
+            unsubscribe();
             clearTimeout(safetyTimer);
         };
     }, []);
 
     /**
-     * signOut — clears ONLY the admin session (hotelpro-admin-session in localStorage).
-     * Does NOT affect the tenant session (hotelpro-tenant-session in sessionStorage).
-     * A hotel-owner logged into a restaurant dashboard in another tab is unaffected.
+     * signOut — clears ONLY the admin session.
+     * Does NOT affect the tenant session (different Firebase App instance).
      */
     const signOut = async () => {
         setState({
@@ -178,12 +198,7 @@ export function SuperAdminAuthProvider({ children }: { children: ReactNode }) {
             loading: false, roleLoading: false,
             error: null, userRole: null,
         });
-        // scope: 'local' = sign out only this client's session, not server-wide
-        await supabaseSuperAdmin.auth.signOut({ scope: 'local' });
-        // Belt-and-suspenders: manually clear the key
-        if (typeof window !== 'undefined') {
-            window.localStorage.removeItem(ADMIN_SESSION_KEY);
-        }
+        await firebaseSignOut(adminAuth);
         securityLog.info('SUPER_ADMIN_SIGN_OUT', { scope: 'admin' });
     };
 

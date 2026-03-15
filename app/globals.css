@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import "../node_modules/tailwindcss/index.css";
 @import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
@@ -42,6 +42,10 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+  --brand-accent: #ff4757;
+  --brand-accent-2: #2ed573;
+  --brand-deep: #0f172a;
+  --brand-deep-2: #111827;
 }
 
 .dark {
@@ -128,13 +132,18 @@
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
-  
+
   *::-webkit-scrollbar {
     display: none;
   }
 
   body {
     @apply bg-background text-foreground;
+    font-family: "Plus Jakarta Sans", Inter, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background:
+      radial-gradient(circle at 0% 0%, rgba(255, 71, 87, 0.08) 0%, transparent 35%),
+      radial-gradient(circle at 100% 0%, rgba(46, 213, 115, 0.08) 0%, transparent 40%),
+      linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
   }
 
   html {
@@ -142,11 +151,66 @@
     overflow-y: scroll;
   }
 
-  h1 { font-size: var(--text-2xl); font-weight: var(--font-weight-medium); line-height: 1.5; }
-  h2 { font-size: var(--text-xl); font-weight: var(--font-weight-medium); line-height: 1.5; }
-  h3 { font-size: var(--text-lg); font-weight: var(--font-weight-medium); line-height: 1.5; }
-  h4 { font-size: var(--text-base); font-weight: var(--font-weight-medium); line-height: 1.5; }
-  label { font-size: var(--text-base); font-weight: var(--font-weight-medium); line-height: 1.5; }
-  button { font-size: var(--text-base); font-weight: var(--font-weight-medium); line-height: 1.5; }
-  input { font-size: var(--text-base); font-weight: var(--font-weight-normal); line-height: 1.5; }
+  h1 {
+    font-size: var(--text-2xl);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
+  }
+
+  h2 {
+    font-size: var(--text-xl);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
+  }
+
+  h3 {
+    font-size: var(--text-lg);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
+  }
+
+  h4 {
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
+  }
+
+  label {
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
+  }
+
+  button {
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
+  }
+
+  input {
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-normal);
+    line-height: 1.5;
+  }
+}
+
+@layer components {
+  .premium-glass {
+    @apply rounded-2xl border border-white/30 bg-white/60 backdrop-blur-md;
+    box-shadow: 0 10px 15px -3px rgba(2, 6, 23, 0.07), 0 4px 6px -2px rgba(2, 6, 23, 0.04);
+  }
+
+  .premium-sidebar {
+    background: linear-gradient(180deg, var(--brand-deep) 0%, var(--brand-deep-2) 100%);
+  }
+
+  .premium-sidebar-text {
+    color: #cbd5e1;
+  }
+
+  .premium-sidebar-active {
+    background: linear-gradient(90deg, rgba(255, 71, 87, 0.2) 0%, rgba(255, 71, 87, 0.08) 100%);
+    border: 1px solid rgba(255, 71, 87, 0.35);
+    box-shadow: 0 0 0 1px rgba(255, 71, 87, 0.2), 0 10px 20px -12px rgba(255, 71, 87, 0.7);
+  }
 }

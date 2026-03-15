@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
+import { adminAuth, adminFirestore } from '@/lib/firebase-admin';
+import { FieldValue } from 'firebase-admin/firestore';
 
 const ADMIN_ACCESS_KEY = process.env.ADMIN_ACCESS_KEY ?? '';
 
 // Team limits per tier
-const TEAM_LIMITS = {
+const TEAM_LIMITS: Record<string, number> = {
     starter: 2,
     '1k': 2,
     pro: 10,
@@ -20,19 +21,17 @@ export const ROLE_COLORS = {
 };
 
 /**
- * /api/admin/manage
+ * /api/admin/manage  (Firebase)
  * 
- * Handles management of admin users.
- * Uses the privileged supabaseAdmin client to bypass Row Level Security (RLS).
+ * Handles management of admin/staff users.
+ * Uses Firebase Admin SDK to manage users and Firestore staff sub-collections.
  * Requires the ADMIN_ACCESS_KEY in the headers for all operations.
  */
 
-// ─── Verification Gate ───────────────────────────────────────────────────────
 function verifyKey(req: NextRequest) {
     const key = (req.headers.get('x-admin-key') || '').trim();
     const secret = (process.env.ADMIN_ACCESS_KEY || '').trim();
 
-    // ERROR: If the server itself doesn't have the key set, that's a config issue.
     if (!secret) return { isValid: false, reason: 'SERVER_CONFIG_MISSING' };
 
     const isValid = key === secret;
@@ -54,27 +53,32 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: 'Auth Error: Invalid Master Key (Manage)' }, { status: 401 });
         }
 
-        const roleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-        if (!roleKey) {
-            console.error('[admin-manage] SUPABASE_SERVICE_ROLE_KEY is missing from .env!');
-            return NextResponse.json({
-                error: 'Server Misconfigured: Missing Service Role Key',
-                detail: 'Please add SUPABASE_SERVICE_ROLE_KEY to your .env file to enable this feature.'
-            }, { status: 500 });
+        const tenantId =
+            req.nextUrl.searchParams.get('tenant_id') ||
+            req.nextUrl.searchParams.get('tenantId') ||
+            req.nextUrl.searchParams.get('restaurantId') ||
+            '';
+        if (!tenantId) {
+            return NextResponse.json({ error: 'Missing tenant_id parameter' }, { status: 400 });
         }
 
-        console.log('[admin-manage] Fetching admin list from Supabase (ADMIN)...');
-        const { data, error } = await supabaseAdmin
-            .from('admin_users')
-            .select('*')
-            .order('created_at', { ascending: false });
+        console.log(`[admin-manage] Fetching staff list for tenant: ${tenantId}`);
+        const staffSnap = await adminFirestore
+            .collection(`restaurants/${tenantId}/staff`)
+            .get();
 
-        if (error) {
-            console.error('[admin-manage] Supabase error:', error.message);
-            throw error;
-        }
+        const data = staffSnap.docs.map(doc => {
+            const row = doc.data() as Record<string, unknown>;
+            return {
+                id: doc.id,
+                ...row,
+                // Backward compatibility: older staff docs may not have is_active.
+                // Missing flag should be treated as active.
+                is_active: row.is_active !== false,
+            };
+        });
 
-        console.log('[admin-manage] Success. Found', data?.length, 'admins');
+        console.log('[admin-manage] Success. Found', data.length, 'staff members');
         return NextResponse.json(data);
     } catch (err: any) {
         console.error('[admin-manage] GET CRASH:', err.message);
@@ -95,32 +99,19 @@ export async function POST(req: NextRequest) {
     }
 
     try {
-        const roleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-        if (!roleKey) {
-            console.error('[admin-manage] SUPABASE_SERVICE_ROLE_KEY is missing from .env!');
-            return NextResponse.json({
-                error: 'Server Misconfigured: Missing Service Role Key',
-                detail: 'Please add SUPABASE_SERVICE_ROLE_KEY to your .env file to enable this feature.'
-            }, { status: 500 });
-        }
-
         const { email, action, role, tenantId, subscriptionTier } = await req.json();
 
         if (action === 'add' || action === 'invite') {
             // Server-side limit enforcement
             if (tenantId && subscriptionTier) {
-                const limit = TEAM_LIMITS[subscriptionTier as keyof typeof TEAM_LIMITS] || 2;
+                const limit = TEAM_LIMITS[subscriptionTier] || 2;
 
-                // Count current team members for this tenant
-                const { data: currentMembers, error: countError } = await supabaseAdmin
-                    .from('user_profiles')
-                    .select('id')
-                    .eq('tenant_id', tenantId)
-                    .in('role', ['owner', 'manager', 'staff', 'admin']);
+                // Count current staff members for this tenant
+                const staffSnap = await adminFirestore
+                    .collection(`restaurants/${tenantId}/staff`)
+                    .get();
 
-                if (countError) throw countError;
-
-                const currentCount = currentMembers?.length || 0;
+                const currentCount = staffSnap.size;
 
                 if (currentCount >= limit) {
                     const tierName = subscriptionTier === 'pro' || subscriptionTier === '2k' ? 'Pro' : 'Starter';
@@ -134,89 +125,87 @@ export async function POST(req: NextRequest) {
             const isStarterTier = ['starter', '1k'].includes(subscriptionTier || '');
             const finalRole = isStarterTier ? 'owner' : (role || 'staff');
 
-            // Check if user already exists in auth
-            const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
-            const existingUser = existingUsers?.users?.find(u => u.email === email);
+            // Check if user already exists in Firebase Auth
+            let existingUser;
+            try {
+                existingUser = await adminAuth.getUserByEmail(email);
+            } catch {
+                // User doesn't exist — that's fine
+            }
 
             if (existingUser) {
-                // User already exists - check if they're in user_profiles for this tenant
-                const { data: existingProfile } = await supabaseAdmin
-                    .from('user_profiles')
-                    .select('id')
-                    .eq('id', existingUser.id)
-                    .eq('tenant_id', tenantId)
-                    .single();
+                // User already exists - check if they're already staff for this tenant
+                const existingStaffDoc = await adminFirestore
+                    .doc(`restaurants/${tenantId}/staff/${existingUser.uid}`)
+                    .get();
 
-                if (existingProfile) {
+                if (existingStaffDoc.exists) {
                     return NextResponse.json({
                         error: 'This user is already a member of your restaurant.'
                     }, { status: 400 });
                 }
 
-                // Add existing user to this tenant's user_profiles
-                const { error: profileError } = await supabaseAdmin
-                    .from('user_profiles')
-                    .upsert({
-                        id: existingUser.id,
-                        tenant_id: tenantId,
-                        role: finalRole,
-                        full_name: existingUser.user_metadata?.full_name || email.split('@')[0],
-                    });
-
-                if (profileError) throw profileError;
-            } else {
-                // New user - create account directly with temporary password
-                // (Supabase invite requires SMTP configuration which may not be set up)
-
-                // Generate a secure temporary password
                 const tempPassword = `Welcome${Math.random().toString(36).slice(-6).toUpperCase()}!${Math.floor(Math.random() * 90 + 10)}`;
 
-                const { data: createData, error: createError } = await supabaseAdmin.auth.admin.createUser({
-                    email: email,
-                    password: tempPassword,
-                    email_confirm: true, // Auto-confirm so they can login immediately
-                    user_metadata: {
-                        restaurant_id: tenantId,
+                // Reset password to a temporary one so owner can share deterministic credentials.
+                await adminAuth.updateUser(existingUser.uid, { password: tempPassword });
+
+                // Add existing user to this tenant's staff
+                await adminFirestore
+                    .doc(`restaurants/${tenantId}/staff/${existingUser.uid}`)
+                    .set({
+                        email: email.toLowerCase().trim(),
                         role: finalRole,
-                        full_name: email.split('@')[0],
-                        invited_at: new Date().toISOString(),
-                        needs_password_change: true,
-                    },
+                        full_name: existingUser.displayName || email.split('@')[0],
+                        is_active: true,
+                        temp_password: tempPassword,
+                        invited_at: FieldValue.serverTimestamp(),
+                    });
+
+                // Update custom claims
+                const existingClaims = existingUser.customClaims || {};
+                await adminAuth.setCustomUserClaims(existingUser.uid, {
+                    ...existingClaims,
+                    role: finalRole,
+                    restaurant_id: tenantId,
+                    tenant_id: tenantId,
+                    must_change_password: true,
                 });
 
-                if (createError) {
-                    console.error('[admin-manage] Create user error:', createError.message);
-                    throw createError;
-                }
+                return NextResponse.json({
+                    message: 'Team member added successfully! Share the temporary password below.',
+                    tempPassword,
+                });
+            } else {
+                // New user - create account with temporary password
+                const tempPassword = `Welcome${Math.random().toString(36).slice(-6).toUpperCase()}!${Math.floor(Math.random() * 90 + 10)}`;
 
-                // Create user_profile for the new user
-                if (createData?.user) {
-                    const { error: profileError } = await supabaseAdmin
-                        .from('user_profiles')
-                        .upsert({
-                            id: createData.user.id,
-                            tenant_id: tenantId,
-                            role: finalRole,
-                            full_name: email.split('@')[0],
-                        });
+                const newUser = await adminAuth.createUser({
+                    email: email,
+                    password: tempPassword,
+                    emailVerified: true,
+                    displayName: email.split('@')[0],
+                });
 
-                    if (profileError) {
-                        console.error('[admin-manage] Profile creation error:', profileError.message);
-                    }
-                }
-
-                // Also add to admin_users for backward compatibility
-                const { error } = await supabaseAdmin
-                    .from('admin_users')
-                    .upsert({
-                        email,
-                        is_active: true,
+                // Add to tenant's staff sub-collection
+                await adminFirestore
+                    .doc(`restaurants/${tenantId}/staff/${newUser.uid}`)
+                    .set({
+                        email: email.toLowerCase().trim(),
                         role: finalRole,
                         full_name: email.split('@')[0],
+                        is_active: true,
+                        temp_password: tempPassword,
+                        invited_at: FieldValue.serverTimestamp(),
                     });
-                if (error && !error.message.includes('role')) {
-                    console.error('[admin-manage] admin_users upsert error:', error.message);
-                }
+
+                // Set custom claims
+                await adminAuth.setCustomUserClaims(newUser.uid, {
+                    role: finalRole,
+                    restaurant_id: tenantId,
+                    tenant_id: tenantId,
+                    must_change_password: true,
+                });
 
                 return NextResponse.json({
                     message: 'Team member created successfully!',
@@ -224,55 +213,87 @@ export async function POST(req: NextRequest) {
                     instructions: `Share this temporary password with ${email}. They should change it after first login.`
                 });
             }
-
-            // For existing users, also add to admin_users
-            const { error } = await supabaseAdmin
-                .from('admin_users')
-                .upsert({
-                    email,
-                    is_active: true,
-                    role: finalRole,
-                    full_name: email.split('@')[0],
-                });
-            if (error && !error.message.includes('role')) {
-                console.error('[admin-manage] admin_users upsert error:', error.message);
+        } else if (action === 'remove') {
+            // Deactivate: mark staff as inactive
+            if (!tenantId) {
+                return NextResponse.json({ error: 'Missing tenantId' }, { status: 400 });
             }
+
+            // Find user by email in staff
+            const staffSnap = await adminFirestore
+                .collection(`restaurants/${tenantId}/staff`)
+                .where('email', '==', email.toLowerCase().trim())
+                .get();
+
+            for (const docSnap of staffSnap.docs) {
+                await docSnap.ref.update({ is_active: false });
+            }
+
+            return NextResponse.json({ message: 'Staff member deactivated' });
+        } else if (action === 'reactivate') {
+            if (!tenantId) {
+                return NextResponse.json({ error: 'Missing tenantId' }, { status: 400 });
+            }
+
+            const staffSnap = await adminFirestore
+                .collection(`restaurants/${tenantId}/staff`)
+                .where('email', '==', email.toLowerCase().trim())
+                .get();
+
+            for (const docSnap of staffSnap.docs) {
+                await docSnap.ref.update({ is_active: true });
+            }
+
+            return NextResponse.json({ message: 'Staff member reactivated' });
+        } else if (action === 'delete') {
+            // Fully delete user from auth and staff
+            try {
+                const user = await adminAuth.getUserByEmail(email);
+
+                // Delete from staff sub-collection
+                if (tenantId) {
+                    await adminFirestore.doc(`restaurants/${tenantId}/staff/${user.uid}`).delete();
+                }
+
+                // Delete from Firebase Auth
+                await adminAuth.deleteUser(user.uid);
+            } catch {
+                // User might not exist in auth
+            }
+
+            return NextResponse.json({ message: 'Staff member deleted' });
+        } else if (action === 'issue_temp_password') {
+            if (!tenantId) {
+                return NextResponse.json({ error: 'Missing tenantId' }, { status: 400 });
+            }
+
+            const user = await adminAuth.getUserByEmail(email);
+            const staffRef = adminFirestore.doc(`restaurants/${tenantId}/staff/${user.uid}`);
+            const staffSnap = await staffRef.get();
+            if (!staffSnap.exists) {
+                return NextResponse.json({ error: 'User is not a staff member of this restaurant.' }, { status: 404 });
+            }
+
+            const tempPassword = `Welcome${Math.random().toString(36).slice(-6).toUpperCase()}!${Math.floor(Math.random() * 90 + 10)}`;
+            await adminAuth.updateUser(user.uid, { password: tempPassword });
+
+            const existingClaims = user.customClaims || {};
+            await adminAuth.setCustomUserClaims(user.uid, {
+                ...existingClaims,
+                must_change_password: true,
+                restaurant_id: tenantId,
+                tenant_id: tenantId,
+            });
+
+            await staffRef.update({
+                temp_password: tempPassword,
+                is_active: true,
+            });
 
             return NextResponse.json({
-                message: 'Team member added successfully! They can now login with their existing credentials.'
+                message: 'Temporary password issued successfully.',
+                tempPassword,
             });
-        } else if (action === 'remove') {
-            const { error } = await supabaseAdmin
-                .from('admin_users')
-                .update({ is_active: false })
-                .eq('email', email);
-            if (error) throw error;
-            return NextResponse.json({ message: 'Admin deactivated' });
-        } else if (action === 'reactivate') {
-            const { error } = await supabaseAdmin
-                .from('admin_users')
-                .update({ is_active: true })
-                .eq('email', email);
-            if (error) throw error;
-            return NextResponse.json({ message: 'Admin reactivated' });
-        } else if (action === 'delete') {
-            // Fully delete user from auth and profiles to free up the seat
-            const { data: usersData } = await supabaseAdmin.auth.admin.listUsers();
-            const existingUser = usersData?.users?.find(u => u.email === email);
-
-            if (existingUser) {
-                // Delete from user_profiles
-                await supabaseAdmin.from('user_profiles').delete().eq('id', existingUser.id);
-                // Also delete from auth to fully remove the user and prevent future login/add conflicts
-                await supabaseAdmin.auth.admin.deleteUser(existingUser.id);
-            }
-
-            const { error } = await supabaseAdmin
-                .from('admin_users')
-                .delete()
-                .eq('email', email);
-            if (error) throw error;
-            return NextResponse.json({ message: 'Admin deleted' });
         }
 
         return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
@@ -280,12 +301,3 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: err.message }, { status: 500 });
     }
 }
-
-/**
- * Explanation for Beginners:
- * 
- * "State Management" is how we keep track of what is happening in the app.
- * In this file, we use "Server-Side Verification" – the server checks the
- * x-admin-key header against a secret key stored on the server (.env).
- * If they don't match, we stop the request before touching the database.
- */

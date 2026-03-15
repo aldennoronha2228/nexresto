@@ -50,7 +50,7 @@ export default function MaintenancePage() {
                 </div>
 
                 <div className="mt-12 text-[10px] text-slate-400 uppercase tracking-widest font-bold">
-                    Powered by HotelPro System
+                    Powered by NexResto
                 </div>
             </div>
         </div>

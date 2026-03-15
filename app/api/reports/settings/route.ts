@@ -1,19 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+import { adminAuth, adminFirestore } from '@/lib/firebase-admin';
 
 /**
- * GET /api/reports/settings
+ * GET /api/reports/settings  (Firebase)
  * Get report settings for a restaurant
  */
 export async function GET(request: NextRequest) {
     const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const idToken = authHeader.replace('Bearer ', '');
     const { searchParams } = new URL(request.url);
     const restaurantId = searchParams.get('restaurantId');
 
@@ -22,61 +20,51 @@ export async function GET(request: NextRequest) {
     }
 
     // Verify user token
-    const anonClient = createClient(supabaseUrl, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
-        auth: { persistSession: false },
-        global: { headers: { Authorization: authHeader } },
-    });
-
-    const { data: { user }, error: authError } = await anonClient.auth.getUser();
-    if (authError || !user) {
+    let decodedToken;
+    try {
+        decodedToken = await adminAuth.verifyIdToken(idToken);
+    } catch {
         return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
     }
 
-    const serviceClient = createClient(supabaseUrl, supabaseServiceKey, {
-        auth: { persistSession: false },
-    });
+    const userRecord = await adminAuth.getUser(decodedToken.uid);
+    const claims = userRecord.customClaims || {};
 
     // Verify user belongs to this restaurant
-    const { data: profile } = await serviceClient
-        .from('user_profiles')
-        .select('tenant_id, role')
-        .eq('id', user.id)
-        .single();
-
-    if (!profile || profile.tenant_id !== restaurantId) {
+    const claimRestaurantId = String(claims.restaurant_id || claims.tenant_id || '');
+    if (claims.role !== 'super_admin' && claimRestaurantId !== restaurantId) {
         return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
     // Get restaurant settings
-    const { data: restaurant, error } = await serviceClient
-        .from('restaurants')
-        .select('email_reports_enabled, subscription_tier')
-        .eq('id', restaurantId)
-        .single();
+    const restDoc = await adminFirestore.doc(`restaurants/${restaurantId}`).get();
+    const restData = restDoc.data();
 
-    if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+    if (!restData) {
+        return NextResponse.json({ error: 'Restaurant not found' }, { status: 404 });
     }
 
-    const isPro = restaurant?.subscription_tier === 'pro' || 
-                  restaurant?.subscription_tier === '2k' || 
-                  restaurant?.subscription_tier === '2.5k';
+    const isPro = restData.subscription_tier === 'pro' ||
+        restData.subscription_tier === '2k' ||
+        restData.subscription_tier === '2.5k';
 
     return NextResponse.json({
-        emailReportsEnabled: restaurant?.email_reports_enabled ?? false,
+        emailReportsEnabled: restData.email_reports_enabled ?? false,
         isPro,
     });
 }
 
 /**
- * POST /api/reports/settings
+ * POST /api/reports/settings  (Firebase)
  * Update report settings for a restaurant
  */
 export async function POST(request: NextRequest) {
     const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    const idToken = authHeader.replace('Bearer ', '');
 
     const body = await request.json();
     const { restaurantId, emailReportsEnabled } = body;
@@ -86,62 +74,45 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify user token
-    const anonClient = createClient(supabaseUrl, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
-        auth: { persistSession: false },
-        global: { headers: { Authorization: authHeader } },
-    });
-
-    const { data: { user }, error: authError } = await anonClient.auth.getUser();
-    if (authError || !user) {
+    let decodedToken;
+    try {
+        decodedToken = await adminAuth.verifyIdToken(idToken);
+    } catch {
         return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
     }
 
-    const serviceClient = createClient(supabaseUrl, supabaseServiceKey, {
-        auth: { persistSession: false },
-    });
+    const userRecord = await adminAuth.getUser(decodedToken.uid);
+    const claims = userRecord.customClaims || {};
 
     // Verify user belongs to this restaurant and is owner
-    const { data: profile } = await serviceClient
-        .from('user_profiles')
-        .select('tenant_id, role')
-        .eq('id', user.id)
-        .single();
-
-    if (!profile || profile.tenant_id !== restaurantId) {
+    const claimRestaurantId = String(claims.restaurant_id || claims.tenant_id || '');
+    if (claims.role !== 'super_admin' && claimRestaurantId !== restaurantId) {
         return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
-    if (profile.role !== 'owner') {
+    if (claims.role !== 'owner' && claims.role !== 'super_admin') {
         return NextResponse.json({ error: 'Only owners can change report settings' }, { status: 403 });
     }
 
     // Check subscription tier
-    const { data: restaurant } = await serviceClient
-        .from('restaurants')
-        .select('subscription_tier')
-        .eq('id', restaurantId)
-        .single();
+    const restDoc = await adminFirestore.doc(`restaurants/${restaurantId}`).get();
+    const restData = restDoc.data();
 
-    const isPro = restaurant?.subscription_tier === 'pro' || 
-                  restaurant?.subscription_tier === '2k' || 
-                  restaurant?.subscription_tier === '2.5k';
+    const isPro = restData?.subscription_tier === 'pro' ||
+        restData?.subscription_tier === '2k' ||
+        restData?.subscription_tier === '2.5k';
 
     if (!isPro) {
-        return NextResponse.json({ 
+        return NextResponse.json({
             error: 'Email Reports are a Pro feature',
-            upgrade: true 
+            upgrade: true
         }, { status: 403 });
     }
 
     // Update setting
-    const { error } = await serviceClient
-        .from('restaurants')
-        .update({ email_reports_enabled: emailReportsEnabled })
-        .eq('id', restaurantId);
-
-    if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
-    }
+    await adminFirestore.doc(`restaurants/${restaurantId}`).update({
+        email_reports_enabled: emailReportsEnabled,
+    });
 
     return NextResponse.json({ success: true, emailReportsEnabled });
 }

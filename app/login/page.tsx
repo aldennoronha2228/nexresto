@@ -4,9 +4,12 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, Mail, Lock, AlertCircle, Loader2, ShieldCheck } from 'lucide-react';
-import { signInWithEmail, signInWithGoogle, signUpAndCreateTenant } from '@/lib/auth';
-import { supabase, supabaseSuperAdmin } from '@/lib/supabase';
+import { signInWithEmail, signInWithGoogle, signUpAndCreateTenant } from '@/lib/firebase-auth';
+import { signInWithCredential, GoogleAuthProvider, sendPasswordResetEmail as firebaseSendPasswordResetEmail } from 'firebase/auth';
+import { tenantAuth, adminAuth } from '@/lib/firebase';
 import { useAuth } from '@/context/AuthContext';
+import { useSuperAdminAuth } from '@/context/SuperAdminAuthContext';
+
 
 function GoogleIcon() {
     return (
@@ -58,8 +61,11 @@ function PasswordStrength({ password }: { password: string }) {
 
 type FormMode = 'signin' | 'signup' | 'verify-otp';
 
+
+
 export default function LoginPage() {
-    const { session, loading, userRole, tenantLoading, tenantId } = useAuth();
+    const { session, loading, userRole, tenantLoading, tenantId, mustChangePassword } = useAuth();
+    const { session: adminSession, loading: adminLoading, userRole: adminUserRole } = useSuperAdminAuth();
     const router = useRouter();
     const [mode, setMode] = useState<FormMode>('signin');
     const [email, setEmail] = useState('');
@@ -70,29 +76,35 @@ export default function LoginPage() {
     const [showPass, setShowPass] = useState(false);
     const [formLoading, setFormLoading] = useState(false);
     const [googleLoading, setGoogleLoading] = useState(false);
+    const [resetLoading, setResetLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [info, setInfo] = useState<string | null>(null);
 
     // OTP verification state
-    const [generatedOtp, setGeneratedOtp] = useState('');
     const [enteredOtp, setEnteredOtp] = useState('');
     const [otpExpiry, setOtpExpiry] = useState<string | null>(null);
 
-    // No localStorage cleanup needed — auth session is now in sessionStorage (tab-isolated).
-
     useEffect(() => {
-        if (!loading && !tenantLoading && session) {
+        if (!loading && !tenantLoading && !adminLoading && session) {
+            if (mustChangePassword) {
+                window.location.href = '/change-password';
+                return;
+            }
+
             if (userRole === 'super_admin') {
-                router.replace('/super-admin');
-            } else if (userRole && tenantId) {
-                // Any role (owner, admin, staff) with a tenantId can access the dashboard
-                router.replace(`/${tenantId}/dashboard/orders`);
+                if (adminSession) {
+                    window.location.href = '/admin';
+                }
+                return;
+            }
+
+            if (userRole && tenantId) {
+                window.location.href = `/${tenantId}/dashboard/orders`;
             } else if (!tenantLoading && !userRole) {
-                // Fully loaded but no role at all → truly unauthorized
-                router.replace('/unauthorized');
+                window.location.href = '/unauthorized';
             }
         }
-    }, [session, loading, tenantLoading, userRole, tenantId, router]);
+    }, [session, loading, tenantLoading, adminLoading, adminSession, userRole, tenantId, mustChangePassword, router]);
 
     const handleEmailAuth = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -118,48 +130,85 @@ export default function LoginPage() {
                 setMode('verify-otp');
                 setInfo('Check your email for the verification code.');
             } else {
-                // Sign in directly — then immediately resolve the profile ourselves.
-                // Don't rely on useEffect/onAuthStateChange which can deadlock.
-                const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-                if (signInError) throw signInError;
-                if (!signInData.session) throw new Error('No session returned');
+                // ─── Super Admin .env Sync Flow ────────────────────────────────
+                // We try a special API route first that uses the .env as the source
+                // of truth for both email and password. This allows instant changes.
+                const adminVerifyRes = await fetch('/api/auth/admin-verify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password }),
+                });
 
-                // Fetch profile directly using the access token we just got
+                let userCredential;
+                let savedCustomToken: string | null = null;
+
+                if (adminVerifyRes.ok) {
+                    const data = await adminVerifyRes.json();
+                    savedCustomToken = data.customToken;
+                    const { signInWithToken } = await import('@/lib/firebase-auth');
+                    userCredential = await signInWithToken(savedCustomToken!);
+                } else {
+                    // Fallback to standard tenant login (for staff/regular users)
+                    userCredential = await signInWithEmail(email, password);
+                }
+
+                const user = userCredential.user;
+                const idToken = await user.getIdToken(true);
+
+                // For all users, fetch profile to resolve orientation/dashboard
                 const profileRes = await fetch('/api/auth/profile', {
-                    headers: { Authorization: `Bearer ${signInData.session.access_token}` },
+                    headers: { Authorization: `Bearer ${idToken}` },
                 });
 
                 if (profileRes.ok) {
                     const { profile } = await profileRes.json();
+                    if (profile?.must_change_password) {
+                        window.location.href = '/change-password';
+                        return;
+                    }
+
                     if (profile?.role === 'super_admin') {
-                        // ── Seed the admin-specific Supabase client ────────────────────────────
-                        // Copy the JWT into the admin client (hotelpro-admin-session in
-                        // localStorage). SuperAdminAuthContext watches THIS client via
-                        // onAuthStateChange. Without this, the admin layout could not
-                        // find a session and would loop back to /login.
-                        await supabaseSuperAdmin.auth.setSession({
-                            access_token: signInData.session.access_token,
-                            refresh_token: signInData.session.refresh_token,
-                        });
-                        router.replace('/super-admin');
+                        // Store the custom token so the super-admin page can
+                        // sign into its isolated adminAuth instance without blocking login.
+                        if (savedCustomToken) {
+                            sessionStorage.setItem('pending_admin_token', savedCustomToken);
+                        }
+                        // Ensure the latest claims are baked into the current token before navigation.
+                        await user.getIdToken(true).catch(() => { });
+                        window.location.href = '/admin';
                         return;
                     }
                     if (profile?.role && profile?.tenant_id) {
-                        router.replace(`/${profile.tenant_id}/dashboard/orders`);
+                        // The profile endpoint may set custom claims on first login.
+                        // Refresh the token to avoid transient Firestore permission errors.
+                        await user.getIdToken(true).catch(() => { });
+                        window.location.href = `/${profile.tenant_id}/dashboard/orders`;
                         return;
                     }
                 }
 
-                // Profile missing or no role → unauthorized
-                router.replace('/unauthorized');
+                const tokenResult = await user.getIdTokenResult();
+                if (tokenResult.claims.must_change_password) {
+                    window.location.href = '/change-password';
+                    return;
+                }
+
+                // If we reach here, no valid dashboard role found
+                window.location.href = '/unauthorized';
             }
         } catch (err: any) {
             const msg = err?.message ?? 'Authentication failed';
-            if (msg.includes('Invalid login credentials') || msg.includes('invalid_grant')) { setError('Incorrect email or password. Please try again.'); }
-            else if (msg.includes('Email not confirmed') || msg.includes('email_not_confirmed')) { setError('Please confirm your email address first. Check your inbox.'); }
-            else if (msg.includes('User already registered') || msg.includes('already registered')) { setError('This email is already registered. Try signing in instead.'); }
-            else if (msg.includes('not authorized') || msg.includes('not the owner')) { setError('Your account does not have dashboard access. Contact the administrator.'); }
-            else { setError(msg); }
+            if (msg.includes('auth/invalid-credential') || msg.includes('auth/wrong-password') || msg.includes('auth/user-not-found')) {
+                setError('Incorrect email or password. Please try again.');
+            } else if (msg.includes('auth/email-already-in-use') || msg.includes('already registered')) {
+                setError('This email is already registered. Try signing in instead.');
+            } else if (msg.includes('auth/too-many-requests')) {
+                setError('Too many failed attempts. Please wait a moment and try again.');
+            } else if (msg.includes('not authorized') || msg.includes('not the owner')) {
+                setError('Your account does not have dashboard access. Contact the administrator.');
+            } else {
+                setError(msg);
+            }
         } finally { setFormLoading(false); }
     };
 
@@ -181,7 +230,6 @@ export default function LoginPage() {
 
             setInfo('Account created successfully! You can now sign in.');
             setMode('signin');
-            setGeneratedOtp('');
             setEnteredOtp('');
         } catch (err: any) {
             setError(err?.message ?? 'Verification failed');
@@ -190,8 +238,85 @@ export default function LoginPage() {
 
     const handleGoogle = async () => {
         setGoogleLoading(true); setError(null);
-        try { await signInWithGoogle(); }
-        catch (err: any) { setError(err?.message ?? 'Google sign-in failed'); setGoogleLoading(false); }
+        try {
+            const result = await signInWithGoogle();
+            const user = result.user;
+
+            const idToken = await user.getIdToken(true);
+
+            // Fetch profile for tenant info
+            const profileRes = await fetch('/api/auth/profile', {
+                headers: { Authorization: `Bearer ${idToken}` },
+            });
+
+            if (profileRes.ok) {
+                const { profile } = await profileRes.json();
+                if (profile?.must_change_password) {
+                    router.replace('/change-password');
+                    return;
+                }
+
+                if (profile?.role === 'super_admin') {
+                    // Seed the admin-specific auth instance too
+                    const credential = GoogleAuthProvider.credentialFromResult(result);
+                    if (credential) {
+                        try {
+                            await signInWithCredential(adminAuth, credential);
+                        } catch (err) {
+                            console.warn('Could not seed adminAuth instance:', err);
+                        }
+                    }
+                    // Ensure fresh claims before redirect.
+                    await user.getIdToken(true).catch(() => { });
+                    router.replace('/super-admin');
+                    return;
+                }
+                if (profile?.role && profile?.tenant_id) {
+                    // Claims can be set server-side during profile hydration.
+                    await user.getIdToken(true).catch(() => { });
+                    router.replace(`/${profile.tenant_id}/dashboard/orders`);
+                    return;
+                }
+            }
+
+            // No profile found → unauthorized
+            router.replace('/unauthorized');
+        } catch (err: any) {
+            const code = typeof err?.code === 'string' ? err.code : '';
+            if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+                // User dismissed the popup. Keep the form quiet.
+                return;
+            }
+            setError(err?.message ?? 'Google sign-in failed');
+        } finally {
+            setGoogleLoading(false);
+        }
+    };
+
+    const handleForgotPassword = async () => {
+        if (!email.trim()) {
+            setError('Enter your email first, then click Forgot Password.');
+            return;
+        }
+
+        setResetLoading(true);
+        setError(null);
+        setInfo(null);
+        try {
+            await firebaseSendPasswordResetEmail(tenantAuth, email.trim());
+            setInfo('Password reset email sent. New invited users can use this if they lost the temporary password.');
+        } catch (err: any) {
+            const code = typeof err?.code === 'string' ? err.code : '';
+            if (code.includes('user-not-found')) {
+                setError('No account found with this email.');
+            } else if (code.includes('invalid-email')) {
+                setError('Please enter a valid email address.');
+            } else {
+                setError(err?.message || 'Failed to send reset email. Please try again.');
+            }
+        } finally {
+            setResetLoading(false);
+        }
     };
 
     return (
@@ -204,14 +329,14 @@ export default function LoginPage() {
                         <div className="p-8">
                             <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="flex flex-col items-center mb-8">
                                 <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center mb-4 shadow-lg shadow-blue-500/30"><ShieldCheck className="w-8 h-8 text-white" /></div>
-                                <h1 className="text-2xl font-bold text-white tracking-tight">Hotel Dashboard</h1>
+                                <h1 className="text-2xl font-bold text-white tracking-tight">NexResto Dashboard</h1>
                                 <p className="text-slate-400 text-sm mt-1">Authorized personnel only</p>
                             </motion.div>
 
                             {mode !== 'verify-otp' && (
                                 <div className="flex gap-1 p-1 bg-slate-800/60 rounded-xl mb-6">
                                     {(['signin', 'signup'] as const).map(m => (
-                                        <button key={m} onClick={() => { setMode(m); setError(null); setInfo(null); setGeneratedOtp(''); setEnteredOtp(''); }} className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${mode === m ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25' : 'text-slate-400 hover:text-white'}`}>
+                                        <button key={m} onClick={() => { setMode(m); setError(null); setInfo(null); setEnteredOtp(''); }} className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${mode === m ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25' : 'text-slate-400 hover:text-white'}`}>
                                             {m === 'signin' ? 'Sign In' : 'Create Account'}
                                         </button>
                                     ))}
@@ -245,12 +370,8 @@ export default function LoginPage() {
                                         </div>
                                         <div className="bg-slate-800/80 border border-slate-700/60 rounded-2xl p-6 mb-4">
                                             <Mail className="w-12 h-12 mx-auto text-emerald-400 mb-3" />
-                                            <p className="text-sm text-slate-300 mb-2">
-                                                We sent a 6-digit code to
-                                            </p>
-                                            <p className="text-emerald-400 font-medium">
-                                                {email}
-                                            </p>
+                                            <p className="text-sm text-slate-300 mb-2">We sent a 6-digit code to</p>
+                                            <p className="text-emerald-400 font-medium">{email}</p>
                                         </div>
                                         <p className="text-[10px] text-slate-500">Code expires in 10 minutes</p>
                                     </div>
@@ -258,31 +379,12 @@ export default function LoginPage() {
                                     <form onSubmit={handleVerifyOtp} className="space-y-4">
                                         <div>
                                             <label className="block text-xs font-medium text-slate-400 mb-1.5 ml-1">Enter Verification Code</label>
-                                            <input
-                                                type="text"
-                                                value={enteredOtp}
-                                                onChange={e => setEnteredOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                                                placeholder="000000"
-                                                maxLength={6}
-                                                className="w-full h-14 px-4 bg-slate-800/60 border border-slate-700/60 rounded-xl text-white text-center text-2xl font-mono tracking-[0.3em] placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500/40 transition-all"
-                                            />
+                                            <input type="text" value={enteredOtp} onChange={e => setEnteredOtp(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="000000" maxLength={6} className="w-full h-14 px-4 bg-slate-800/60 border border-slate-700/60 rounded-xl text-white text-center text-2xl font-mono tracking-[0.3em] placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500/40 transition-all" />
                                         </div>
-                                        <motion.button
-                                            type="submit"
-                                            disabled={formLoading || enteredOtp.length !== 6}
-                                            whileHover={{ scale: formLoading ? 1 : 1.02 }}
-                                            whileTap={{ scale: formLoading ? 1 : 0.98 }}
-                                            className="w-full h-12 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl font-semibold text-sm shadow-lg shadow-emerald-500/30 hover:shadow-emerald-500/50 transition-all disabled:opacity-60 flex items-center justify-center gap-2"
-                                        >
+                                        <motion.button type="submit" disabled={formLoading || enteredOtp.length !== 6} whileHover={{ scale: formLoading ? 1 : 1.02 }} whileTap={{ scale: formLoading ? 1 : 0.98 }} className="w-full h-12 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl font-semibold text-sm shadow-lg shadow-emerald-500/30 hover:shadow-emerald-500/50 transition-all disabled:opacity-60 flex items-center justify-center gap-2">
                                             {formLoading ? <><Loader2 className="w-4 h-4 animate-spin" />Verifying...</> : 'Verify & Create Account →'}
                                         </motion.button>
-                                        <button
-                                            type="button"
-                                            onClick={() => { setMode('signup'); setEnteredOtp(''); setError(null); }}
-                                            className="w-full h-10 text-slate-400 hover:text-white text-sm transition-colors"
-                                        >
-                                            ← Back to signup
-                                        </button>
+                                        <button type="button" onClick={() => { setMode('signup'); setEnteredOtp(''); setError(null); }} className="w-full h-10 text-slate-400 hover:text-white text-sm transition-colors">← Back to signup</button>
                                     </form>
                                 </motion.div>
                             ) : (
@@ -323,6 +425,18 @@ export default function LoginPage() {
                                                 {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                                             </button>
                                         </div>
+                                        {mode === 'signin' && (
+                                            <div className="mt-2 flex justify-end">
+                                                <button
+                                                    type="button"
+                                                    onClick={handleForgotPassword}
+                                                    disabled={resetLoading || formLoading || googleLoading}
+                                                    className="text-xs text-blue-400 hover:text-blue-300 disabled:opacity-60"
+                                                >
+                                                    {resetLoading ? 'Sending reset email...' : 'Forgot Password?'}
+                                                </button>
+                                            </div>
+                                        )}
                                         {mode === 'signup' && password && <PasswordStrength password={password} />}
                                     </div>
                                     <motion.button type="submit" disabled={formLoading} whileHover={{ scale: formLoading ? 1 : 1.02 }} whileTap={{ scale: formLoading ? 1 : 0.98 }} className="w-full h-12 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold text-sm shadow-lg shadow-blue-500/30 hover:shadow-blue-500/50 transition-all disabled:opacity-60 flex items-center justify-center gap-2">
@@ -344,7 +458,7 @@ export default function LoginPage() {
                         </div>
                     </div>
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }} className="flex items-center justify-center gap-2 mt-4 text-xs text-slate-600">
-                        <ShieldCheck className="w-3.5 h-3.5" /><span>Secured by Supabase Auth • End-to-end encrypted sessions</span>
+                        <ShieldCheck className="w-3.5 h-3.5" /><span>Secured by Firebase Auth • End-to-end encrypted sessions</span>
                     </motion.div>
                 </motion.div>
             </div>

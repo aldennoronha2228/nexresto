@@ -4,17 +4,16 @@
  * Super Admin Layout
  * Protected route that only allows users with role: 'super_admin'
  *
- * Uses SuperAdminAuthContext which watches the `supabaseSuperAdmin` client.
- * That client reads from `hotelpro-admin-session` in localStorage — a
- * completely separate storage key from the tenant dashboard's
- * `hotelpro-tenant-session` in sessionStorage.
+ * Uses SuperAdminAuthContext which watches the admin Firebase app.
+ * That client creates an isolated session from the tenant dashboard's
+ * Firebase app.
  *
- * Session seeding: the login page calls supabaseSuperAdmin.auth.setSession()
+ * Session seeding: the login page signs in with the admin Firebase instance
  * after confirming role === 'super_admin', so this context always has a
  * real session to read.
  *
- * Sign-out: only clears hotelpro-admin-session. Tenant sessions in
- * other tabs are unaffected (isolated storage keys).
+ * Sign-out: only clears the admin Firebase session. Tenant sessions in
+ * other tabs are unaffected.
  */
 
 import { useSuperAdminAuth } from '@/context/SuperAdminAuthContext';
@@ -41,8 +40,8 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
     const router = useRouter();
 
     // Use the ADMIN-specific auth context.
-    // This watches supabaseSuperAdmin (hotelpro-admin-session in localStorage).
-    // Completely isolated from the tenant dashboard's supabase client.
+    // This watches the admin Firebase app.
+    // Completely isolated from the tenant dashboard's Firebase app.
     const { session, loading, roleLoading, signOut, userRole } = useSuperAdminAuth();
 
     const isSuperAdmin = userRole === 'super_admin';
@@ -65,7 +64,7 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
     }, [isFullyLoaded, session, userRole, router]);
 
     useEffect(() => {
-        document.title = 'Super-Admin — HotelPro';
+        document.title = 'Super-Admin — NexResto';
     }, []);
 
     // Sign out from admin ONLY — does NOT touch the tenant session in other tabs

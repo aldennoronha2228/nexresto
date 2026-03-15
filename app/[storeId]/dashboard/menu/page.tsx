@@ -5,12 +5,12 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Search, Edit, Trash2, RefreshCw, AlertCircle, X, Save, Upload, FileSpreadsheet, Download, CheckCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Switch } from '@/components/ui/switch';
-import { fetchMenuItems, fetchCategories, toggleMenuItemAvailability, deleteMenuItem, createMenuItem, updateMenuItem, createCategory, deleteCategory } from '@/lib/api';
+import { fetchMenuItems, fetchCategories, toggleMenuItemAvailability, deleteMenuItem, createMenuItem, updateMenuItem, createCategory, deleteCategory } from '@/lib/firebase-api';
 import type { MenuItem, Category } from '@/lib/types';
 import { setItemAvailability, seedAvailabilityMap, applyAvailabilityOverrides } from '@/lib/menuAvailability';
-import { useAuth } from '@/context/AuthContext';
 import { useRestaurant } from '@/hooks/useRestaurant';
 import { RoleGuard } from '@/components/dashboard/RoleGuard';
+import { tenantAuth, adminAuth } from '@/lib/firebase';
 
 const CATEGORY_ICONS: Record<string, string> = {
     starters: '🥗', mains: '🍽️', 'main course': '🍽️', rice: '🍚', 'rice & breads': '🍚',
@@ -307,24 +307,66 @@ export default function MenuManagementPage() {
     const [showExcelModal, setShowExcelModal] = useState(false);
     const [editItem, setEditItem] = useState<MenuItem | null>(null);
     const [actionLoading, setActionLoading] = useState<string | null>(null);
-    const { storeId: tenantId, loading: tenantLoading } = useRestaurant();
+    const { storeId: tenantId, db: contextDb, loading: tenantLoading } = useRestaurant();
+
+    const loadDataViaServer = async () => {
+        if (!tenantId) {
+            throw new Error('Missing tenant context');
+        }
+
+        let idToken: string | null = null;
+        const activeUser = adminAuth.currentUser || tenantAuth.currentUser;
+        if (activeUser) {
+            idToken = await activeUser.getIdToken(true);
+        }
+
+        if (!idToken) {
+            throw new Error('Missing active session');
+        }
+
+        const response = await fetch(`/api/menu/list?restaurantId=${encodeURIComponent(tenantId)}`, {
+            headers: { Authorization: `Bearer ${idToken}` },
+        });
+
+        const payload = await response.json();
+        if (!response.ok) {
+            throw new Error(payload?.error || 'Failed to load menu via server');
+        }
+
+        const menuData = (payload.menuItems || []) as MenuItem[];
+        const catData = (payload.categories || []) as Category[];
+        seedAvailabilityMap(menuData.map(i => ({ id: i.id, available: i.available ?? true })), tenantId);
+        setItems(applyAvailabilityOverrides(menuData, tenantId));
+        setCategories(catData);
+    };
 
     const loadData = async () => {
-        if (!tenantId) {
+        if (!tenantId || !contextDb) {
             setLoading(false);
             return;
         }
         try {
             setError(null);
-            const [menuData, catData] = await Promise.all([fetchMenuItems(tenantId), fetchCategories(tenantId)]);
-            seedAvailabilityMap(menuData.map(i => ({ id: i.id, available: i.available ?? true })));
-            setItems(applyAvailabilityOverrides(menuData));
-            setCategories(catData);
-        } catch { setError('Could not load menu from Supabase. Check your .env credentials.'); }
+            try {
+                await loadDataViaServer();
+                return;
+            } catch {
+                // Fall back to direct Firestore reads if server endpoint is unavailable.
+                const [menuData, catData] = await Promise.all([
+                    fetchMenuItems(tenantId, contextDb),
+                    fetchCategories(tenantId, contextDb)
+                ]);
+                seedAvailabilityMap(menuData.map(i => ({ id: i.id, available: i.available ?? true })), tenantId);
+                setItems(applyAvailabilityOverrides(menuData, tenantId));
+                setCategories(catData);
+            }
+        } catch (err: any) {
+            setError(err?.message || 'Access denied for this restaurant menu. Please sign out and sign in again, then verify your role/restaurant access.');
+        }
         finally { setLoading(false); }
     };
 
-    useEffect(() => { loadData(); }, [tenantId]);
+    useEffect(() => { loadData(); }, [tenantId, contextDb]);
 
     const filteredItems = items.filter(item => {
         const matchesCat = selectedCategory === 'all' || item.category_id === selectedCategory;
@@ -332,35 +374,37 @@ export default function MenuManagementPage() {
     });
 
     const handleToggleAvailability = async (itemId: string, current: boolean) => {
+        if (!tenantId || !contextDb) return;
         const next = !current;
         setActionLoading(itemId);
         // Optimistic local update
         setItems(prev => prev.map(i => i.id === itemId ? { ...i, available: next } : i));
-        // Persist to localStorage immediately (works even if Supabase is not set up)
-        setItemAvailability(itemId, next);
-        try { await toggleMenuItemAvailability(itemId, next); }
+        // Persist to localStorage immediately
+        setItemAvailability(itemId, next, tenantId);
+        try { await toggleMenuItemAvailability(tenantId, itemId, next, contextDb); }
         catch { setItems(prev => prev.map(i => i.id === itemId ? { ...i, available: current } : i)); }
         setActionLoading(null);
     };
 
     const handleDelete = async (itemId: string) => {
+        if (!tenantId || !contextDb) return;
         if (!confirm('Delete this menu item? This cannot be undone.')) return;
         setActionLoading(itemId);
         setItems(prev => prev.filter(i => i.id !== itemId));
-        try { await deleteMenuItem(itemId); } catch { loadData(); }
+        try { await deleteMenuItem(tenantId, itemId, contextDb); } catch { loadData(); }
         setActionLoading(null);
     };
 
     const handleSaveItem = async (form: ItemFormData) => {
-        if (!tenantId) return;
+        if (!tenantId || !contextDb) return;
         const payload = { name: form.name, price: parseFloat(form.price), category_id: form.category_id, type: form.type, image_url: form.image_url || undefined };
-        if (editItem) { await updateMenuItem(editItem.id, payload); } else { await createMenuItem(tenantId, payload); }
+        if (editItem) { await updateMenuItem(tenantId, editItem.id, payload, contextDb); } else { await createMenuItem(tenantId, payload, contextDb); }
         await loadData();
     };
 
     const handleSaveCategory = async (name: string) => {
-        if (!tenantId) return;
-        await createCategory(tenantId, name, categories.length + 1);
+        if (!tenantId || !contextDb) return;
+        await createCategory(tenantId, name, categories.length + 1, contextDb);
         await loadData();
     };
 
@@ -372,24 +416,24 @@ export default function MenuManagementPage() {
     if (loading) return (
         <div className="flex items-center justify-center h-64">
             <RefreshCw className="w-8 h-8 text-blue-500 animate-spin" />
-            <span className="ml-3 text-slate-500">Loading menu from Supabase…</span>
+            <span className="ml-3 text-slate-500">Loading menu from Firebase…</span>
         </div>
     );
 
     return (
         <RoleGuard requiredPermission="can_view_menu">
-            <div className="space-y-4 lg:space-y-6">
+            <div className="space-y-6 lg:space-y-8">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
-                        <h1 className="text-2xl font-semibold text-slate-900">Menu Management</h1>
+                        <h1 className="text-2xl lg:text-4xl font-bold text-slate-900 tracking-tight">Menu Management</h1>
                         <p className="text-sm text-slate-500 mt-1">Manage your restaurant menu items and availability</p>
                     </div>
                     <div className="flex items-center gap-2">
-                        <button onClick={loadData} className="p-2 rounded-xl hover:bg-slate-100 transition-colors" title="Refresh"><RefreshCw className="w-4 h-4 text-slate-500" /></button>
-                        <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={() => setShowExcelModal(true)} className="flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl font-medium text-sm hover:bg-slate-50 transition-colors">
+                        <button onClick={loadData} className="p-2.5 rounded-xl bg-white/70 border border-white/40 hover:bg-white transition-colors shadow-sm" title="Refresh"><RefreshCw className="w-4 h-4 text-rose-500" /></button>
+                        <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={() => setShowExcelModal(true)} className="flex items-center justify-center gap-2 px-4 py-2.5 premium-glass text-slate-700 rounded-xl font-medium text-sm hover:bg-white transition-colors">
                             <FileSpreadsheet className="w-4 h-4" />Import Excel
                         </motion.button>
-                        <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={() => { setEditItem(null); setShowModal(true); }} className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-medium text-sm shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 transition-shadow">
+                        <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={() => { setEditItem(null); setShowModal(true); }} className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-[#ff4757] to-[#ff6b81] text-white rounded-xl font-medium text-sm shadow-lg shadow-rose-500/35 hover:shadow-rose-500/50 transition-shadow">
                             <Plus className="w-4 h-4" />Add Item
                         </motion.button>
                     </div>
@@ -399,12 +443,12 @@ export default function MenuManagementPage() {
 
                 <div className="flex flex-col lg:flex-row gap-4 lg:gap-6">
                     <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="lg:w-64 flex-shrink-0">
-                        <div className="bg-white rounded-2xl p-4 border border-slate-200/60 shadow-sm">
+                        <div className="premium-glass p-5">
                             <h3 className="text-sm font-semibold text-slate-900 mb-3">Categories</h3>
                             <div className="lg:space-y-1 flex lg:flex-col gap-2 overflow-x-auto pb-2 lg:pb-0 -mx-1 px-1 lg:mx-0 lg:px-0">
                                 {categoryList.map(cat => (
                                     <div key={cat.id} className="flex items-center group">
-                                        <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={() => setSelectedCategory(cat.id)} className={cn('flex-1 flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap lg:w-full', selectedCategory === cat.id ? 'bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-600 border border-blue-200/60' : 'text-slate-600 hover:bg-slate-50')}>
+                                        <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={() => setSelectedCategory(cat.id)} className={cn('flex-1 flex items-center gap-3 px-3 py-2 rounded-2xl text-sm font-medium transition-all whitespace-nowrap lg:w-full', selectedCategory === cat.id ? 'bg-gradient-to-r from-rose-50 to-orange-50 text-rose-600 border border-rose-200/60 shadow-sm' : 'text-slate-600 hover:bg-white/70')}>
                                             <span className="text-lg lg:text-base">{cat.icon}</span>
                                             <span className="flex-1 text-left hidden lg:inline">{cat.name}</span>
                                             <span className="lg:hidden">{cat.name.split(' ')[0]}</span>
@@ -424,16 +468,16 @@ export default function MenuManagementPage() {
                     <div className="flex-1 space-y-4">
                         <div className="relative">
                             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                            <input type="text" placeholder="Search menu items…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full h-12 pl-12 pr-4 bg-white border border-slate-200/60 rounded-xl text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500/40 transition-all shadow-sm" />
+                            <input type="text" placeholder="Search menu items…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full h-12 pl-12 pr-4 bg-white/75 border border-white/40 rounded-2xl text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500/40 transition-all shadow-sm backdrop-blur" />
                         </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
                             {filteredItems.map((item, i) => {
                                 const catName = item.categories?.name ?? categories.find(c => c.id === item.category_id)?.name ?? 'Unknown';
                                 const isDeleting = actionLoading === item.id;
                                 return (
-                                    <motion.div key={item.id} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.04 }} whileHover={{ y: -4 }} className={cn('bg-white rounded-2xl p-5 border shadow-sm hover:shadow-md transition-all', item.available ? 'border-slate-200/60' : 'border-slate-200/60 opacity-60', isDeleting && 'opacity-40')}>
+                                    <motion.div key={item.id} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.04 }} whileHover={{ y: -6 }} className={cn('premium-glass rounded-2xl p-5 hover:scale-[1.02] border transition-all', item.available ? 'border-white/40' : 'border-white/30 opacity-60', isDeleting && 'opacity-40')}>
                                         <div className="flex items-start justify-between mb-3">
-                                            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-slate-100 to-slate-50 flex items-center justify-center overflow-hidden">
+                                            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-rose-100 to-emerald-50 border border-white/60 flex items-center justify-center overflow-hidden shadow-sm">
                                                 {item.image_url ? <img src={item.image_url} alt={item.name} className="w-full h-full object-cover rounded-xl" /> : <span className="text-2xl">{getCategoryIcon(catName)}</span>}
                                             </div>
                                             <div className="flex items-center gap-2">
@@ -441,10 +485,10 @@ export default function MenuManagementPage() {
                                                 <Switch checked={item.available ?? true} onCheckedChange={() => handleToggleAvailability(item.id, item.available ?? true)} disabled={isDeleting} />
                                             </div>
                                         </div>
-                                        <h3 className="font-semibold text-slate-900 mb-1">{item.name}</h3>
+                                        <h3 className="font-semibold text-slate-900 mb-1 tracking-tight">{item.name}</h3>
                                         <div className="flex items-center justify-between mb-4">
                                             <span className="text-xs px-2.5 py-1 bg-slate-100 text-slate-600 rounded-lg font-medium">{catName}</span>
-                                            <span className="text-lg font-semibold text-slate-900">₹{item.price}</span>
+                                            <span className="text-xl font-extrabold text-slate-900">₹{item.price}</span>
                                         </div>
                                         <div className="flex items-center gap-2">
                                             <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={() => { setEditItem(item); setShowModal(true); }} className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-lg text-sm font-medium transition-colors"><Edit className="w-3.5 h-3.5" /> Edit</motion.button>
@@ -455,7 +499,7 @@ export default function MenuManagementPage() {
                                 );
                             })}
                         </div>
-                        {filteredItems.length === 0 && <div className="bg-white rounded-2xl p-12 border border-slate-200/60 text-center"><p className="text-4xl mb-3">🍽️</p><p className="text-slate-500">No menu items found</p></div>}
+                        {filteredItems.length === 0 && <div className="premium-glass p-12 text-center"><p className="text-4xl mb-3">🍽️</p><p className="text-slate-600 font-medium">No menu items found</p><p className="text-slate-500 text-sm mt-1">Try a different category or add your next signature dish.</p></div>}
                     </div>
                 </div>
 

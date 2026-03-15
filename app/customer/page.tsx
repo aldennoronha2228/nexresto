@@ -10,32 +10,32 @@ import { MenuItemCard } from '@/components/customer/MenuItemCard';
 import { CartDrawer } from '@/components/customer/CartDrawer';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
-import { supabaseCustomer as supabase } from '@/lib/supabase';
+import { db, tenantAuth, adminAuth } from '@/lib/firebase';
+import { collection, query, where, orderBy, getDocs, onSnapshot } from 'firebase/firestore';
 import { applyAvailabilityOverrides, seedAvailabilityMap } from '@/lib/menuAvailability';
 
-// Fallback static items in case Supabase isn't set up yet
+// Fallback static items in case Firebase isn't set up yet
 import { menuItems as staticItems, categories as staticCategories } from '@/data/menuData';
 
-// Supabase item shape → CartMenuItem shape
-interface SupabaseItem {
+// Firestore item shape → CartMenuItem shape
+interface FirestoreItem {
     id: string;
     name: string;
     price: number;
     image_url: string | null;
     available: boolean;
-    categories: { name: string } | null;
-    // we store description in the static list but Supabase may not have it yet
+    category_id?: string;
 }
 
-function toCartItem(s: SupabaseItem, fallback?: CartMenuItem): CartMenuItem & { available: boolean } {
+function toCartItem(f: FirestoreItem, categoryName: string, fallback?: CartMenuItem): CartMenuItem & { available: boolean } {
     return {
-        id: s.id,
-        name: s.name,
+        id: f.id,
+        name: f.name,
         description: fallback?.description ?? '',
-        price: s.price,
-        image: s.image_url ?? fallback?.image ?? 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=800&q=80',
-        category: s.categories?.name ?? fallback?.category ?? 'Other',
-        available: s.available ?? true,
+        price: f.price,
+        image: f.image_url ?? fallback?.image ?? 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=800&q=80',
+        category: categoryName ?? fallback?.category ?? 'Other',
+        available: f.available ?? true,
     };
 }
 
@@ -45,62 +45,119 @@ function CustomerMenuContent() {
     const [menuItems, setMenuItems] = useState<(CartMenuItem & { available: boolean })[]>([]);
     const [categories, setCategories] = useState<string[]>([]);
     const [loading, setLoading] = useState(true);
+    const [retryNonce, setRetryNonce] = useState(0);
     const { addToCart, setIsCartOpen, totalItems } = useCart();
     const router = useRouter();
     const searchParams = useSearchParams();
-    const tableId = searchParams.get('table');
-    const restaurantId = searchParams.get('restaurant') ?? undefined;
+    const tableId = searchParams.get('table') ?? '';
+    const restaurantId = searchParams.get('restaurant') ?? '';
 
-    // Fetch live menu from Supabase; fall back to static data if not configured
+    const buildCustomerUrl = (path: string) => {
+        const params = new URLSearchParams();
+        if (tableId) params.set('table', tableId);
+        if (restaurantId) params.set('restaurant', restaurantId);
+        const qs = params.toString();
+        return `${path}${qs ? `?${qs}` : ''}`;
+    };
+
+    const refreshTokens = async () => {
+        const jobs: Promise<unknown>[] = [];
+        if (tenantAuth.currentUser) jobs.push(tenantAuth.currentUser.getIdToken(true));
+        if (adminAuth.currentUser) jobs.push(adminAuth.currentUser.getIdToken(true));
+        if (jobs.length > 0) {
+            await Promise.allSettled(jobs);
+        }
+    };
+
+    // Fetch live menu from Firestore; fall back to static data if not configured
     useEffect(() => {
         let cancelled = false;
+        const resolvedTenantId = restaurantId;
 
         async function loadMenu() {
             try {
-                let itemsQuery = supabase
-                    .from('menu_items')
-                    .select('*, categories(name)')
-                    .order('name');
-
-                if (restaurantId) {
-                    itemsQuery = itemsQuery.eq('tenant_id', restaurantId);
+                if (!resolvedTenantId) {
+                    if (!cancelled) {
+                        setMenuItems([]);
+                        setCategories(['All']);
+                        setLoading(false);
+                    }
+                    return;
                 }
 
-                const { data: items, error: itemsErr } = await itemsQuery;
+                const tenantId = resolvedTenantId;
 
-                let catsQuery = supabase
-                    .from('categories')
-                    .select('name')
-                    .order('display_order');
-
-                if (restaurantId) {
-                    catsQuery = catsQuery.eq('tenant_id', restaurantId);
+                // 1. Fetch Categories
+                const catsQuery = query(
+                    collection(db, 'restaurants', tenantId, 'categories'),
+                    orderBy('display_order')
+                );
+                let catsSnap;
+                try {
+                    catsSnap = await getDocs(catsQuery);
+                } catch (err: any) {
+                    const code = typeof err?.code === 'string' ? err.code : '';
+                    if (code.includes('permission-denied')) {
+                        await refreshTokens();
+                        catsSnap = await getDocs(catsQuery);
+                    } else {
+                        throw err;
+                    }
                 }
+                const catMap = new Map<string, string>(); // category_id -> name
+                const catNames: string[] = [];
 
-                const { data: cats, error: catsErr } = await catsQuery;
-
-                if (itemsErr || catsErr || !items || !cats) throw new Error('fetch failed');
-
-                if (cancelled) return;
-
-                // Enrich with static descriptions/images where Supabase row has none
-                const enriched = items.map((s: SupabaseItem) => {
-                    const fallback = staticItems.find(
-                        si => si.name.toLowerCase() === s.name.toLowerCase()
-                    );
-                    return toCartItem(s, fallback);
+                catsSnap.forEach(doc => {
+                    const data = doc.data();
+                    catMap.set(doc.id, data.name);
+                    catNames.push(data.name);
                 });
 
-                // Seed localStorage so overrides are initialised from Supabase state
-                seedAvailabilityMap(enriched.map(i => ({ id: i.id, available: i.available })));
+                // 2. Fetch Menu Items
+                const itemsQuery = query(
+                    collection(db, 'restaurants', tenantId, 'menu_items'),
+                    orderBy('name')
+                );
+                let itemsSnap;
+                try {
+                    itemsSnap = await getDocs(itemsQuery);
+                } catch (err: any) {
+                    const code = typeof err?.code === 'string' ? err.code : '';
+                    if (code.includes('permission-denied')) {
+                        await refreshTokens();
+                        itemsSnap = await getDocs(itemsQuery);
+                    } else {
+                        throw err;
+                    }
+                }
+
+                const items: any[] = [];
+                itemsSnap.forEach(doc => {
+                    items.push({ id: doc.id, ...doc.data() });
+                });
+
+                if (cancelled) return;
+
+                // Enrich with static descriptions/images where Firestore row has none
+                const enriched = items.map((f: FirestoreItem) => {
+                    const fallback = staticItems.find(
+                        si => si.name.toLowerCase() === f.name.toLowerCase()
+                    );
+                    const categoryName = f.category_id ? catMap.get(f.category_id) || 'Other' : 'Other';
+                    return toCartItem(f, categoryName, fallback);
+                });
+
+                // Seed localStorage so overrides are initialised from DB state
+                seedAvailabilityMap(enriched.map(i => ({ id: i.id, available: i.available })), tenantId);
                 // Apply any manual overrides saved by the dashboard
-                setMenuItems(applyAvailabilityOverrides(enriched));
-                setCategories(['All', ...cats.map((c: { name: string }) => c.name)]);
-            } catch {
-                // Supabase not available — use static fallback + localStorage overrides
+                setMenuItems(applyAvailabilityOverrides(enriched, tenantId));
+                setCategories(['All', ...catNames]);
+            } catch (err) {
+                console.error('Failed to load menu from Firestore:', err);
+                // Firestore not available — use static fallback + localStorage overrides
                 if (cancelled) return;
                 const base = staticItems.map(i => ({ ...i, available: true }));
-                setMenuItems(applyAvailabilityOverrides(base));
+                setMenuItems(applyAvailabilityOverrides(base, resolvedTenantId || ''));
                 setCategories(staticCategories);
             } finally {
                 if (!cancelled) setLoading(false);
@@ -109,30 +166,56 @@ function CustomerMenuContent() {
 
         loadMenu();
         return () => { cancelled = true; };
-    }, []);
+    }, [restaurantId, retryNonce]);
 
     // Subscribe to real-time availability changes
     useEffect(() => {
-        const channel = supabase
-            .channel('menu-items-rt')
-            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'menu_items' },
-                (payload) => {
-                    const updated = payload.new as any;
+        const tenantId = restaurantId;
+        if (!tenantId) return;
+
+        const unsubscribe = onSnapshot(
+            collection(db, 'restaurants', tenantId, 'menu_items'),
+            (snapshot) => {
+                let hasChanges = false;
+                const updates = new Map();
+
+                snapshot.docChanges().forEach(change => {
+                    if (change.type === 'modified') {
+                        hasChanges = true;
+                        updates.set(change.doc.id, change.doc.data().available);
+                    }
+                });
+
+                if (hasChanges) {
                     setMenuItems(prev =>
                         prev.map(item =>
-                            item.id === updated.id
-                                ? { ...item, available: updated.available }
+                            updates.has(item.id)
+                                ? { ...item, available: updates.get(item.id) }
                                 : item
                         )
                     );
-                    // Keep localStorage in sync with Supabase real-time changes
-                    import('@/lib/menuAvailability').then(m =>
-                        m.setItemAvailability(updated.id, updated.available)
-                    );
-                })
-            .subscribe();
-        return () => { channel.unsubscribe(); };
-    }, []);
+
+                    // Keep localStorage in sync with Firestore real-time changes
+                    updates.forEach((available, id) => {
+                        import('@/lib/menuAvailability').then(m =>
+                            m.setItemAvailability(id, available, tenantId)
+                        );
+                    });
+                }
+            },
+            async (error: any) => {
+                const code = typeof error?.code === 'string' ? error.code : '';
+                if (code.includes('permission-denied')) {
+                    await refreshTokens();
+                    setRetryNonce((n) => n + 1);
+                    return;
+                }
+                console.error('[CustomerMenu] snapshot error:', error);
+            }
+        );
+
+        return () => { unsubscribe(); };
+    }, [restaurantId]);
 
     useEffect(() => {
         const handleScroll = () => setShowScrollTop(window.scrollY > 400);
@@ -157,7 +240,7 @@ function CustomerMenuContent() {
                             <p className="text-sm text-gray-600 mt-1">{tableId ? `Table ${tableId} · Fine Dining Experience` : 'Fine Dining Experience'}</p>
                         </motion.div>
                         <div className="flex items-center gap-3">
-                            <motion.button onClick={() => router.push('/customer/order-history')} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="bg-white text-[#1B4332] p-4 rounded-2xl shadow-lg hover:shadow-xl transition-all border border-gray-200" title="Order History">
+                            <motion.button onClick={() => router.push(buildCustomerUrl('/customer/order-history'))} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="bg-white text-[#1B4332] p-4 rounded-2xl shadow-lg hover:shadow-xl transition-all border border-gray-200" title="Order History">
                                 <Receipt className="w-6 h-6" />
                             </motion.button>
                             <motion.button onClick={() => setIsCartOpen(true)} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="relative bg-gradient-to-r from-[#1B4332] to-[#2D5F4C] text-white p-4 rounded-2xl shadow-lg hover:shadow-xl transition-all">
@@ -194,6 +277,11 @@ function CustomerMenuContent() {
 
             {/* Items grid */}
             <main className="max-w-7xl mx-auto px-4 md:px-8 py-12">
+                {!loading && !restaurantId && (
+                    <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="mb-8 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4">
+                        <p className="text-amber-800 text-sm font-medium">Missing restaurant context in this link. Please open the menu by scanning the restaurant QR code again.</p>
+                    </motion.div>
+                )}
                 {loading ? (
                     <div className="flex flex-col items-center justify-center py-28 gap-4">
                         <Loader2 className="w-10 h-10 text-[#1B4332] animate-spin" />
@@ -220,7 +308,7 @@ function CustomerMenuContent() {
                 )}
             </main>
 
-            <CartDrawer tableId={tableId ?? ''} restaurantId={restaurantId} />
+            <CartDrawer tableId={tableId} restaurantId={restaurantId || undefined} />
 
             {/* Scroll to top */}
             <AnimatePresence>

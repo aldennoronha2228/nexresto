@@ -11,25 +11,23 @@ import {
     Package, Plus, Search, AlertTriangle, TrendingDown,
     Filter, Download, RefreshCw, Edit2, Trash2, X
 } from 'lucide-react';
-import { useAuth } from '@/context/AuthContext';
 import { ProFeatureGate } from '@/components/dashboard/ProFeatureGate';
 import { RoleGuard } from '@/components/dashboard/RoleGuard';
 import { cn } from '@/lib/utils';
 
-// Mock inventory data
-const mockInventory = [
-    { id: '1', name: 'Chicken (Fresh)', quantity: 25, unit: 'kg', reorderLevel: 30, costPerUnit: 200, supplier: 'Farm Fresh Ltd', status: 'low' },
-    { id: '2', name: 'Basmati Rice', quantity: 50, unit: 'kg', reorderLevel: 20, costPerUnit: 120, supplier: 'Grain Masters', status: 'good' },
-    { id: '3', name: 'Paneer', quantity: 8, unit: 'kg', reorderLevel: 10, costPerUnit: 350, supplier: 'Dairy Fresh', status: 'low' },
-    { id: '4', name: 'Cooking Oil', quantity: 40, unit: 'L', reorderLevel: 15, costPerUnit: 150, supplier: 'Fortune Foods', status: 'good' },
-    { id: '5', name: 'Tomatoes', quantity: 15, unit: 'kg', reorderLevel: 20, costPerUnit: 40, supplier: 'Veggie Market', status: 'low' },
-    { id: '6', name: 'Onions', quantity: 45, unit: 'kg', reorderLevel: 25, costPerUnit: 35, supplier: 'Veggie Market', status: 'good' },
-    { id: '7', name: 'Ginger-Garlic Paste', quantity: 5, unit: 'kg', reorderLevel: 5, costPerUnit: 180, supplier: 'Spice World', status: 'critical' },
-    { id: '8', name: 'Cream', quantity: 12, unit: 'L', reorderLevel: 8, costPerUnit: 280, supplier: 'Dairy Fresh', status: 'good' },
-];
+type InventoryItem = {
+    id: string;
+    name: string;
+    quantity: number;
+    unit: string;
+    reorderLevel: number;
+    costPerUnit: number;
+    supplier: string;
+    status: 'good' | 'low' | 'critical';
+};
 
 function InventoryContent() {
-    const [inventory, setInventory] = useState(mockInventory);
+    const [inventory, setInventory] = useState<InventoryItem[]>([]);
     const [search, setSearch] = useState('');
     const [filterStatus, setFilterStatus] = useState<'all' | 'low' | 'critical'>('all');
     const [showAddModal, setShowAddModal] = useState(false);
@@ -199,40 +197,48 @@ function InventoryContent() {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                            {filteredInventory.map((item) => (
-                                <tr key={item.id} className="hover:bg-slate-50">
-                                    <td className="px-6 py-4">
-                                        <p className="font-medium text-slate-900">{item.name}</p>
-                                        <p className="text-xs text-slate-500">Reorder at {item.reorderLevel} {item.unit}</p>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <span className="font-semibold text-slate-900">{item.quantity}</span>
-                                        <span className="text-slate-500 ml-1">{item.unit}</span>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <span className={cn(
-                                            "px-2.5 py-1 rounded-full text-xs font-medium capitalize",
-                                            getStatusColor(item.status)
-                                        )}>
-                                            {item.status}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4 text-sm text-slate-600">{item.supplier}</td>
-                                    <td className="px-6 py-4 text-right font-medium text-slate-900">
-                                        ₹{(item.quantity * item.costPerUnit).toLocaleString()}
-                                    </td>
-                                    <td className="px-6 py-4 text-right">
-                                        <div className="flex items-center justify-end gap-1">
-                                            <button className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
-                                                <Edit2 className="w-4 h-4 text-slate-400" />
-                                            </button>
-                                            <button className="p-2 hover:bg-red-50 rounded-lg transition-colors">
-                                                <Trash2 className="w-4 h-4 text-red-400" />
-                                            </button>
-                                        </div>
+                            {filteredInventory.length === 0 ? (
+                                <tr>
+                                    <td colSpan={6} className="px-6 py-12 text-center text-slate-400 text-sm">
+                                        No inventory data yet
                                     </td>
                                 </tr>
-                            ))}
+                            ) : (
+                                filteredInventory.map((item) => (
+                                    <tr key={item.id} className="hover:bg-slate-50">
+                                        <td className="px-6 py-4">
+                                            <p className="font-medium text-slate-900">{item.name}</p>
+                                            <p className="text-xs text-slate-500">Reorder at {item.reorderLevel} {item.unit}</p>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <span className="font-semibold text-slate-900">{item.quantity}</span>
+                                            <span className="text-slate-500 ml-1">{item.unit}</span>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <span className={cn(
+                                                "px-2.5 py-1 rounded-full text-xs font-medium capitalize",
+                                                getStatusColor(item.status)
+                                            )}>
+                                                {item.status}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4 text-sm text-slate-600">{item.supplier}</td>
+                                        <td className="px-6 py-4 text-right font-medium text-slate-900">
+                                            ₹{(item.quantity * item.costPerUnit).toLocaleString()}
+                                        </td>
+                                        <td className="px-6 py-4 text-right">
+                                            <div className="flex items-center justify-end gap-1">
+                                                <button className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+                                                    <Edit2 className="w-4 h-4 text-slate-400" />
+                                                </button>
+                                                <button className="p-2 hover:bg-red-50 rounded-lg transition-colors">
+                                                    <Trash2 className="w-4 h-4 text-red-400" />
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
                         </tbody>
                     </table>
                 </div>

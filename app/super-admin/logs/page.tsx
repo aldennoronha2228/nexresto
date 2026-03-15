@@ -12,7 +12,7 @@ import {
     Info, AlertTriangle, XCircle, CheckCircle,
     Building2, User, ChevronDown
 } from 'lucide-react';
-import { getGlobalLogs, type GlobalLog } from '@/lib/super-admin-actions';
+import { getGlobalLogs, type GlobalLog } from '@/lib/firebase-super-admin-actions';
 import { cn } from '@/lib/utils';
 
 const EVENT_TYPES = [

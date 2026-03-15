@@ -24,6 +24,23 @@ import { useSuperAdminAuth } from '@/context/SuperAdminAuthContext';
 
 // Define permissions for each role
 export const ROLE_PERMISSIONS = {
+    super_admin: {
+        can_view_orders: true,
+        can_manage_orders: true,
+        can_view_menu: true,
+        can_manage_menu: true,
+        can_view_tables: true,
+        can_manage_tables: true,
+        can_view_history: true,
+        can_view_analytics: true,
+        can_view_inventory: true,
+        can_manage_inventory: true,
+        can_view_branding: true,
+        can_manage_branding: true,
+        can_view_account: true,
+        can_manage_admins: true,
+        can_view_billing: true,
+    },
     owner: {
         can_view_orders: true,
         can_manage_orders: true,
@@ -66,14 +83,14 @@ export const ROLE_PERMISSIONS = {
         can_view_tables: true,
         can_manage_tables: true,
         can_view_history: true,
-        can_view_analytics: false, // Managers cannot access analytics
-        can_view_inventory: true,
-        can_manage_inventory: true,
-        can_view_branding: true,
-        can_manage_branding: true,
-        can_view_account: true,
+        can_view_analytics: false,
+        can_view_inventory: false,
+        can_manage_inventory: false,
+        can_view_branding: false,
+        can_manage_branding: false,
+        can_view_account: false,
         can_manage_admins: false,
-        can_view_billing: false, // Managers cannot access billing
+        can_view_billing: false,
     },
     staff: {
         can_view_orders: true,
@@ -112,6 +129,7 @@ export const ROUTE_PERMISSIONS: Record<string, PermissionType> = {
 // Helper to check if a role has a permission
 export function hasPermission(role: string | null, permission: PermissionType): boolean {
     if (!role) return false;
+    if (role === 'super_admin') return true;
     const roleKey = role as RoleType;
     const permissions = ROLE_PERMISSIONS[roleKey];
     if (!permissions) return false;
@@ -121,6 +139,9 @@ export function hasPermission(role: string | null, permission: PermissionType): 
 // Helper to get all allowed routes for a role
 export function getAllowedRoutes(role: string | null): string[] {
     if (!role) return [];
+    if (role === 'super_admin') {
+        return Object.keys(ROUTE_PERMISSIONS);
+    }
     const roleKey = role as RoleType;
     const permissions = ROLE_PERMISSIONS[roleKey];
     if (!permissions) return [];

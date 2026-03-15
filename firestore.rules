@@ -1,0 +1,169 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─── Helper Functions ─────────────────────────────────────────────────
+    
+    // Check if the user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Check if the user is a super_admin (via custom claims)
+    function isSuperAdmin() {
+      return isAuthenticated() && request.auth.token.role == 'super_admin';
+    }
+    
+    // Check if the user belongs to this restaurant (via custom claims)
+    function belongsToRestaurant(resId) {
+      return isAuthenticated() && (
+        request.auth.token.restaurant_id == resId ||
+        request.auth.token.tenant_id == resId ||
+        exists(/databases/$(database)/documents/restaurants/$(resId)/staff/$(request.auth.uid))
+      );
+    }
+    
+    // Check if the user has a specific role
+    function hasRole(role) {
+      return isAuthenticated() && request.auth.token.role == role;
+    }
+    
+    // Check if user is owner or admin of the restaurant
+    function isOwnerOrAdmin(resId) {
+      return isAuthenticated() && (
+        (
+          request.auth.token.restaurant_id == resId &&
+          (request.auth.token.role == 'owner' || request.auth.token.role == 'admin')
+        ) || (
+          request.auth.token.tenant_id == resId &&
+          (request.auth.token.role == 'owner' || request.auth.token.role == 'admin')
+        ) || (
+          exists(/databases/$(database)/documents/restaurants/$(resId)/staff/$(request.auth.uid)) &&
+          (
+            get(/databases/$(database)/documents/restaurants/$(resId)/staff/$(request.auth.uid)).data.role == 'owner' ||
+            get(/databases/$(database)/documents/restaurants/$(resId)/staff/$(request.auth.uid)).data.role == 'admin'
+          )
+        )
+      );
+    }
+    
+    // Check if user is staff of the restaurant
+    function isStaff(resId) {
+      return isAuthenticated() && (
+        (
+          request.auth.token.restaurant_id == resId &&
+          request.auth.token.role == 'staff'
+        ) || (
+          request.auth.token.tenant_id == resId &&
+          request.auth.token.role == 'staff'
+        ) || (
+          exists(/databases/$(database)/documents/restaurants/$(resId)/staff/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/restaurants/$(resId)/staff/$(request.auth.uid)).data.role == 'staff'
+        )
+      );
+    }
+    
+    // Get the restaurant document to check tier
+    function getRestaurant(resId) {
+      return get(/databases/$(database)/documents/restaurants/$(resId));
+    }
+
+    // ─── Restaurant Documents ─────────────────────────────────────────────
+    // Super-admins: full access to entire collection
+    // Restaurant users: can only read/write their own restaurant
+    
+    match /restaurants/{resId} {
+      // Anyone with auth can read their own restaurant; super-admins can read all
+      allow read: if isSuperAdmin() || belongsToRestaurant(resId);
+      
+      // Only super-admins can create/delete restaurants (tenant creation is via Admin SDK)
+      allow create, delete: if isSuperAdmin();
+      
+      // Owners can update their restaurant; super-admins can update any
+      allow update: if isSuperAdmin() || isOwnerOrAdmin(resId);
+      
+      // ─── Menu Items Sub-collection ────────────────────────────────────
+      match /menu_items/{itemId} {
+        allow read: if true; // Public for customer menu
+        allow create, update, delete: if isSuperAdmin() || isOwnerOrAdmin(resId);
+      }
+      
+      // ─── Orders Sub-collection ────────────────────────────────────────
+      match /orders/{orderId} {
+        // Staff can view orders; customers can create orders (anon write)
+        allow read: if isSuperAdmin() || belongsToRestaurant(resId);
+        
+        // Allow anonymous order creation (customers scanning QR codes)
+        allow create: if true;
+        
+        // Only restaurant staff/owners can update/delete orders
+        allow update, delete: if isSuperAdmin() || belongsToRestaurant(resId);
+      }
+      
+      // ─── Staff Sub-collection ─────────────────────────────────────────
+      // Tier-based constraints:
+      //   Starter: max 2 staff documents
+      //   Pro: max 10 staff documents
+      match /staff/{userId} {
+        allow read: if isSuperAdmin() || belongsToRestaurant(resId);
+        
+        // Staff can only be managed by owners/admins or super-admins
+        allow update, delete: if isSuperAdmin() || isOwnerOrAdmin(resId);
+        
+        // Tier-based staff limit on creation
+        allow create: if isSuperAdmin() || (
+          isOwnerOrAdmin(resId) && (
+            // Pro tier: allow up to 10 staff
+            (getRestaurant(resId).data.subscription_tier == 'pro' && 
+             request.resource.data != null) ||
+            // Starter tier: allow up to 2 staff
+            (getRestaurant(resId).data.subscription_tier == 'starter' &&
+             request.resource.data != null)
+          )
+        );
+      }
+      
+      // ─── Categories Sub-collection ────────────────────────────────────
+      match /categories/{catId} {
+        allow read: if true; // Public for customer menu
+        allow create, update, delete: if isSuperAdmin() || isOwnerOrAdmin(resId);
+      }
+      
+      // ─── Settings Sub-collection ──────────────────────────────────────
+      match /settings/{settingId} {
+        allow read: if isSuperAdmin() || belongsToRestaurant(resId);
+        allow write: if isSuperAdmin() || isOwnerOrAdmin(resId);
+      }
+      
+      // ─── Analytics Sub-collection ─────────────────────────────────────
+      match /analytics/{docId} {
+        allow read: if isSuperAdmin() || isOwnerOrAdmin(resId);
+        // Only server-side (Admin SDK) should write analytics
+        allow write: if false;
+      }
+    }
+    
+    // ─── Global Logs (Super-Admin only) ─────────────────────────────────
+    match /global_logs/{logId} {
+      allow read: if isSuperAdmin();
+      allow write: if false;
+    }
+
+    // ─── Admin Profiles (Super-Admin only) ──────────────────────────────
+    match /admin_profiles/{userId} {
+      allow read: if isSuperAdmin();
+      allow write: if false;
+    }
+
+    // ─── Pending Signups (Super-Admin only) ─────────────────────────────
+    match /pending_signups/{signupId} {
+      allow read: if isSuperAdmin();
+      allow write: if false;
+    }
+    
+    // ─── Deny all other paths ───────────────────────────────────────────
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -9,28 +9,55 @@
  */
 const LS_KEY = 'hotelmenu_availability';
 
-export function getAvailabilityMap(): Record<string, boolean> {
+function resolveScope(scopeId?: string): string {
+    if (scopeId) return scopeId;
+    if (typeof window === 'undefined') return 'default';
+
+    const queryRestaurant = new URLSearchParams(window.location.search).get('restaurant');
+    if (queryRestaurant) return queryRestaurant;
+
+    const segments = window.location.pathname.split('/').filter(Boolean);
+    const dashboardIdx = segments.indexOf('dashboard');
+    if (dashboardIdx > 0) {
+        return segments[dashboardIdx - 1];
+    }
+
+    return 'default';
+}
+
+function scopedKey(scopeId?: string): string {
+    return `${LS_KEY}:${resolveScope(scopeId)}`;
+}
+
+export function getAvailabilityMap(scopeId?: string): Record<string, boolean> {
     if (typeof window === 'undefined') return {};
     try {
-        const raw = localStorage.getItem(LS_KEY);
-        return raw ? JSON.parse(raw) : {};
+        const key = scopedKey(scopeId);
+        const raw = localStorage.getItem(key);
+        if (raw) return JSON.parse(raw);
+
+        // One-time fallback for older unscoped data.
+        const legacyRaw = localStorage.getItem(LS_KEY);
+        return legacyRaw ? JSON.parse(legacyRaw) : {};
     } catch {
         return {};
     }
 }
 
-export function setItemAvailability(itemId: string, available: boolean): void {
+export function setItemAvailability(itemId: string, available: boolean, scopeId?: string): void {
     if (typeof window === 'undefined') return;
-    const map = getAvailabilityMap();
+    const key = scopedKey(scopeId);
+    const map = getAvailabilityMap(scopeId);
     map[itemId] = available;
-    localStorage.setItem(LS_KEY, JSON.stringify(map));
+    localStorage.setItem(key, JSON.stringify(map));
 }
 
 /** Apply the stored overrides on top of a list of items */
 export function applyAvailabilityOverrides<T extends { id: string; available?: boolean }>(
-    items: T[]
+    items: T[],
+    scopeId?: string
 ): T[] {
-    const map = getAvailabilityMap();
+    const map = getAvailabilityMap(scopeId);
     return items.map(item =>
         Object.prototype.hasOwnProperty.call(map, item.id)
             ? { ...item, available: map[item.id] }
@@ -40,10 +67,12 @@ export function applyAvailabilityOverrides<T extends { id: string; available?: b
 
 /** Seed the map from an initial list (sets only items not already overridden) */
 export function seedAvailabilityMap<T extends { id: string; available?: boolean }>(
-    items: T[]
+    items: T[],
+    scopeId?: string
 ): void {
     if (typeof window === 'undefined') return;
-    const map = getAvailabilityMap();
+    const key = scopedKey(scopeId);
+    const map = getAvailabilityMap(scopeId);
     let changed = false;
     for (const item of items) {
         if (!Object.prototype.hasOwnProperty.call(map, item.id) && item.available !== undefined) {
@@ -51,5 +80,5 @@ export function seedAvailabilityMap<T extends { id: string; available?: boolean 
             changed = true;
         }
     }
-    if (changed) localStorage.setItem(LS_KEY, JSON.stringify(map));
+    if (changed) localStorage.setItem(key, JSON.stringify(map));
 }

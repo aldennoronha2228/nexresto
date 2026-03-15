@@ -5,18 +5,56 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Download, QrCode, Trash2, Minus, Check, FolderOpen, Save, X, ZoomIn, Share2, Lock, Sparkles, Edit3, Users } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 import { cn } from '@/lib/utils';
-import { getTables, setTables as setSharedTables, type Table } from '@/data/sharedData';
+import { getTables, getDefaultTables, setTables as setSharedTables, type Table } from '@/data/sharedData';
 import { useAuth } from '@/context/AuthContext';
 import { useRestaurant } from '@/hooks/useRestaurant';
 import { ProFeatureGate, ProBadge } from '@/components/dashboard/ProFeatureGate';
+import { adminAuth, tenantAuth } from '@/lib/firebase';
 
 const MENU_CUSTOMER_PATH = process.env.NEXT_PUBLIC_MENU_CUSTOMER_PATH ?? '/customer';
 
+function resolveMenuBaseUrl() {
+    if (typeof window === 'undefined') return process.env.NEXT_PUBLIC_MENU_BASE_URL ?? '';
+
+    const configured = (process.env.NEXT_PUBLIC_MENU_BASE_URL ?? '').trim();
+    const origin = window.location.origin;
+    if (!configured) return origin;
+
+    try {
+        const cfg = new URL(configured);
+        const current = new URL(origin);
+        const cfgIsLocal = cfg.hostname === 'localhost' || cfg.hostname === '127.0.0.1';
+        const currentIsLocal = current.hostname === 'localhost' || current.hostname === '127.0.0.1';
+
+        // In local dev, prefer the actual running origin if configured localhost URL
+        // has a different protocol or port (common with Next auto-switching to 3001).
+        if (cfgIsLocal && currentIsLocal) {
+            if (cfg.protocol !== current.protocol || cfg.port !== current.port) {
+                return origin;
+            }
+        }
+
+        return cfg.origin;
+    } catch {
+        return origin;
+    }
+}
+
 function getTableMenuUrl(baseUrl: string, tableId: string, restaurantId?: string | null) {
-    const params = new URLSearchParams();
-    params.set('table', tableId);
-    if (restaurantId) params.set('restaurant', restaurantId);
-    return `${baseUrl}${MENU_CUSTOMER_PATH}?${params.toString()}`;
+    const normalizedBase = (baseUrl || '').trim() || (typeof window !== 'undefined' ? window.location.origin : '');
+    const normalizedPath = MENU_CUSTOMER_PATH.startsWith('/') ? MENU_CUSTOMER_PATH : `/${MENU_CUSTOMER_PATH}`;
+
+    try {
+        const url = new URL(normalizedPath, normalizedBase.endsWith('/') ? normalizedBase : `${normalizedBase}/`);
+        url.searchParams.set('table', tableId);
+        if (restaurantId) url.searchParams.set('restaurant', restaurantId);
+        return url.toString();
+    } catch {
+        const params = new URLSearchParams();
+        params.set('table', tableId);
+        if (restaurantId) params.set('restaurant', restaurantId);
+        return `${normalizedBase}${normalizedPath}?${params.toString()}`;
+    }
 }
 
 interface Wall { id: string; x: number; y: number; width: number; height: number; orientation: 'horizontal' | 'vertical' }
@@ -59,8 +97,25 @@ function QRPreviewModal({ table, onClose, baseUrl, restaurantId }: { table: Tabl
                     <div className="p-4 bg-white rounded-2xl shadow-lg border border-slate-100">
                         <QRCodeCanvas id={`qr-preview-${table.id}`} value={url} size={240} level="H" includeMargin={false} bgColor="#ffffff" fgColor="#1e293b" />
                     </div>
-                    <p className="mt-4 text-xs text-slate-400 text-center break-all px-2">{url}</p>
+                    <a
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-4 text-xs text-blue-600 hover:text-blue-700 underline text-center break-all px-2"
+                    >
+                        {url}
+                    </a>
                     <div className="flex gap-3 mt-6 w-full">
+                        <motion.a
+                            whileHover={{ scale: 1.03 }}
+                            whileTap={{ scale: 0.97 }}
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex-1 flex items-center justify-center gap-2 h-11 border border-blue-200 rounded-xl text-sm font-medium text-blue-600 hover:bg-blue-50 transition-colors"
+                        >
+                            <ZoomIn className="w-4 h-4" />Open Link
+                        </motion.a>
                         <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={() => navigator.clipboard?.writeText(url)} className="flex-1 flex items-center justify-center gap-2 h-11 border border-slate-200 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors">
                             <Share2 className="w-4 h-4" />Copy URL
                         </motion.button>
@@ -498,54 +553,204 @@ export default function TablesQRCodesPage() {
     // baseUrl is computed client-side only to avoid SSR/hydration mismatch
     const [baseUrl, setBaseUrl] = useState('');
     const { storeId: tenantId, subscriptionTier } = useRestaurant();
+    const scopedKey = useCallback((baseKey: string) => {
+        if (!tenantId) return baseKey;
+        return `${baseKey}:${tenantId}`;
+    }, [tenantId]);
+
+    const getActiveToken = useCallback(async (): Promise<string> => {
+        if (tenantAuth.currentUser) return tenantAuth.currentUser.getIdToken(true);
+        if (adminAuth.currentUser) return adminAuth.currentUser.getIdToken(true);
+        throw new Error('Missing active session');
+    }, []);
+
+    const saveLayoutToServer = useCallback(async (nextTables: Table[], nextWalls: Wall[], nextDesks: Desk[], nextPlans: FloorPlan[]) => {
+        if (!tenantId) return;
+        const token = await getActiveToken();
+        const response = await fetch('/api/tables/layout', {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                restaurantId: tenantId,
+                tables: nextTables,
+                walls: nextWalls,
+                desks: nextDesks,
+                floorPlans: nextPlans,
+            }),
+        });
+
+        if (!response.ok) {
+            const payload = await response.json().catch(() => ({}));
+            throw new Error(payload?.error || 'Failed to save table layout');
+        }
+    }, [tenantId, getActiveToken]);
     // Pro tier can be 'pro', '2k', or '2.5k' (backwards compatibility)
     const isPro = subscriptionTier === 'pro' || subscriptionTier === '2k' || subscriptionTier === '2.5k';
 
     useEffect(() => {
-        setBaseUrl(process.env.NEXT_PUBLIC_MENU_BASE_URL ?? window.location.origin);
+        let active = true;
 
-        let initialTablesData: Table[] | null = null;
-        let initialFloorPlans: FloorPlan[] = [];
+        const loadState = async () => {
+        setBaseUrl(resolveMenuBaseUrl());
 
-        try {
-            const savedTables = localStorage.getItem('hotelmenu_floorplan_tables');
-            if (savedTables) initialTablesData = JSON.parse(savedTables);
+        const defaultSeedTables = getDefaultTables();
+        const defaultSeedWalls: Wall[] = [];
+        const defaultSeedDesks: Desk[] = [];
+        const defaultSeedPlans: FloorPlan[] = [{
+            id: '1',
+            name: 'Default Layout',
+            tables: defaultSeedTables,
+            walls: defaultSeedWalls,
+            desks: defaultSeedDesks,
+        }];
 
-            const savedWalls = localStorage.getItem('hotelmenu_walls');
-            if (savedWalls) setWalls(JSON.parse(savedWalls));
+        if (tenantId) {
+            try {
+                const token = await getActiveToken();
+                const response = await fetch(`/api/tables/layout?restaurantId=${encodeURIComponent(tenantId)}`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
 
-            const savedDesks = localStorage.getItem('hotelmenu_desks');
-            if (savedDesks) setDesks(JSON.parse(savedDesks));
+                if (response.ok) {
+                    const payload = await response.json();
+                    if (payload?.found && payload?.layout) {
+                        const serverTables = Array.isArray(payload.layout.tables) ? payload.layout.tables as Table[] : [];
+                        const serverWalls = Array.isArray(payload.layout.walls) ? payload.layout.walls as Wall[] : [];
+                        const serverDesks = Array.isArray(payload.layout.desks) ? payload.layout.desks as Desk[] : [];
+                        const serverPlans = Array.isArray(payload.layout.floorPlans) ? payload.layout.floorPlans as FloorPlan[] : [];
 
-            const savedPlans = localStorage.getItem('hotelmenu_floorPlans');
-            if (savedPlans) initialFloorPlans = JSON.parse(savedPlans);
-        } catch (error) {
-            console.error("Failed to load from localStorage:", error);
-            // Fallback to default if parsing fails
+                        if (!active) return;
+                        setTables(serverTables);
+                        setWalls(serverWalls);
+                        setDesks(serverDesks);
+                        setFloorPlans(serverPlans.length > 0 ? serverPlans : [{ id: '1', name: 'Default Layout', tables: serverTables, walls: serverWalls, desks: serverDesks }]);
+                        setSharedTables(serverTables, tenantId);
+                        setIsLoaded(true);
+                        return;
+                    }
+
+                    if (!payload?.found) {
+                        if (!active) return;
+                        setTables(defaultSeedTables);
+                        setWalls(defaultSeedWalls);
+                        setDesks(defaultSeedDesks);
+                        setFloorPlans(defaultSeedPlans);
+                        setSharedTables(defaultSeedTables, tenantId);
+
+                        await saveLayoutToServer(defaultSeedTables, defaultSeedWalls, defaultSeedDesks, defaultSeedPlans);
+                        setIsLoaded(true);
+                        return;
+                    }
+                }
+            } catch {
+                // fall through to deterministic defaults when server layout is unavailable
+            }
         }
 
-        const resolvedTables = initialTablesData || getTables();
+        const resolvedTables = getDefaultTables();
+        if (!active) return;
         setTables(resolvedTables);
+        setWalls(defaultSeedWalls);
+        setDesks(defaultSeedDesks);
 
-        // Ensure there's at least one floor plan if none were loaded or parsing failed
-        if (initialFloorPlans.length === 0) {
-            setFloorPlans([{ id: '1', name: 'Default Layout', tables: resolvedTables, walls: [], desks: [] }]);
-        } else {
-            setFloorPlans(initialFloorPlans);
-        }
+        setFloorPlans(defaultSeedPlans);
+        setSharedTables(resolvedTables, tenantId || undefined);
         setIsLoaded(true);
-    }, []);
+        };
+
+        loadState();
+        return () => {
+            active = false;
+        };
+    }, [tenantId, scopedKey, getActiveToken, saveLayoutToServer]);
 
     // Autosave whenever the floor plan components change, but ONLY after initial load
     useEffect(() => {
         if (!isLoaded) return;
-        setSharedTables(tables);
+        setSharedTables(tables, tenantId || undefined);
         // Explicitly write tables to localStorage ourselves to absolutely guarantee it saves
-        localStorage.setItem('hotelmenu_floorplan_tables', JSON.stringify(tables));
-        localStorage.setItem('hotelmenu_walls', JSON.stringify(walls));
-        localStorage.setItem('hotelmenu_desks', JSON.stringify(desks));
-        localStorage.setItem('hotelmenu_floorPlans', JSON.stringify(floorPlans));
-    }, [tables, walls, desks, floorPlans, isLoaded]);
+        localStorage.setItem(scopedKey('hotelmenu_floorplan_tables'), JSON.stringify(tables));
+        localStorage.setItem(scopedKey('hotelmenu_walls'), JSON.stringify(walls));
+        localStorage.setItem(scopedKey('hotelmenu_desks'), JSON.stringify(desks));
+        localStorage.setItem(scopedKey('hotelmenu_floorPlans'), JSON.stringify(floorPlans));
+    }, [tables, walls, desks, floorPlans, isLoaded, tenantId, scopedKey]);
+
+    useEffect(() => {
+        if (!isLoaded || !tenantId) return;
+
+        const timer = setTimeout(() => {
+            saveLayoutToServer(tables, walls, desks, floorPlans).catch(() => {
+                // local state remains available even if network save fails
+            });
+        }, 500);
+
+        return () => clearTimeout(timer);
+    }, [tables, walls, desks, floorPlans, isLoaded, tenantId, saveLayoutToServer]);
+
+    useEffect(() => {
+        if (!isLoaded || !tenantId) return;
+
+        let active = true;
+
+        const syncStatusFromOrders = async () => {
+            try {
+                const token = await getActiveToken();
+                const response = await fetch(`/api/orders/live?restaurantId=${encodeURIComponent(tenantId)}`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+
+                if (!response.ok) return;
+                const payload = await response.json();
+                const liveOrders = Array.isArray(payload?.orders) ? payload.orders : [];
+
+                const activeTableIds = new Set(
+                    liveOrders
+                        .filter((o: any) => ['new', 'preparing', 'done'].includes(String(o?.status || '')) && o?.table)
+                        .map((o: any) => String(o.table).trim().toLowerCase())
+                );
+
+                if (!active) return;
+
+                setTables(prevTables => {
+                    let changed = false;
+                    const nextTables = prevTables.map((t) => {
+                        const strippedId = t.id.replace('T-', '');
+                        const numStr = parseInt(strippedId, 10).toString();
+                        const hasActiveOrder = activeTableIds.has(t.id.toLowerCase()) ||
+                            activeTableIds.has(t.name.toLowerCase()) ||
+                            activeTableIds.has(strippedId.toLowerCase()) ||
+                            activeTableIds.has(numStr.toLowerCase()) ||
+                            activeTableIds.has(`table ${numStr}`);
+
+                        const targetStatus: Table['status'] = hasActiveOrder ? 'busy' : 'available';
+                        if (t.status !== targetStatus) {
+                            changed = true;
+                            return { ...t, status: targetStatus };
+                        }
+                        return t;
+                    });
+
+                    if (changed) {
+                        setSharedTables(nextTables, tenantId || undefined);
+                    }
+                    return nextTables;
+                });
+            } catch {
+                // keep table editor usable if order sync is temporarily unavailable
+            }
+        };
+
+        syncStatusFromOrders();
+        const interval = setInterval(syncStatusFromOrders, 15000);
+
+        return () => {
+            active = false;
+            clearInterval(interval);
+        };
+    }, [tenantId, isLoaded, getActiveToken]);
 
     const addTable = () => { const newT: Table = { id: `T-${String(tables.length + 1).padStart(2, '0')}`, name: `Table ${tables.length + 1}`, seats: 4, x: 100, y: 100, status: 'available' }; setTables([...tables, newT]); setHasChanges(true); };
     const removeTable = () => {
@@ -554,8 +759,8 @@ export default function TablesQRCodesPage() {
             setTables(newTables);
             setHasChanges(true);
             // Force immediate save for delete specifically
-            localStorage.setItem('hotelmenu_floorplan_tables', JSON.stringify(newTables));
-            setSharedTables(newTables);
+            localStorage.setItem(scopedKey('hotelmenu_floorplan_tables'), JSON.stringify(newTables));
+            setSharedTables(newTables, tenantId || undefined);
         }
     };
 
@@ -566,24 +771,24 @@ export default function TablesQRCodesPage() {
         const newTables = [...tables, newT];
         setTables(newTables);
         setHasChanges(true);
-        localStorage.setItem('hotelmenu_floorplan_tables', JSON.stringify(newTables));
-        setSharedTables(newTables);
+        localStorage.setItem(scopedKey('hotelmenu_floorplan_tables'), JSON.stringify(newTables));
+        setSharedTables(newTables, tenantId || undefined);
     };
 
     const editTable = (id: string, name: string, seats: number) => {
         const newTables = tables.map(t => t.id === id ? { ...t, name, seats } : t);
         setTables(newTables);
         setHasChanges(true);
-        localStorage.setItem('hotelmenu_floorplan_tables', JSON.stringify(newTables));
-        setSharedTables(newTables);
+        localStorage.setItem(scopedKey('hotelmenu_floorplan_tables'), JSON.stringify(newTables));
+        setSharedTables(newTables, tenantId || undefined);
     };
 
     const deleteTable = (id: string) => {
         const newTables = tables.filter(t => t.id !== id);
         setTables(newTables);
         setHasChanges(true);
-        localStorage.setItem('hotelmenu_floorplan_tables', JSON.stringify(newTables));
-        setSharedTables(newTables);
+        localStorage.setItem(scopedKey('hotelmenu_floorplan_tables'), JSON.stringify(newTables));
+        setSharedTables(newTables, tenantId || undefined);
     };
 
     const addWall = () => { setWalls([...walls, { id: `W-${walls.length + 1}`, x: 50, y: 50, width: 200, height: 8, orientation: 'horizontal' }]); setHasChanges(true); };

@@ -17,8 +17,9 @@ import { GlobalSearch } from '@/components/dashboard/GlobalSearch';
 import { NotificationBell } from '@/components/dashboard/NotificationBell';
 import { UpgradeModal } from '@/components/dashboard/UpgradeModal';
 import { SubscriptionGuard } from '@/components/dashboard/SubscriptionGuard';
+import GeminiSupportChat from '@/components/dashboard/GeminiSupportChat';
 import { hasPermission, type PermissionType } from '@/components/dashboard/RoleGuard';
-import { supabase } from '@/lib/supabase';
+import { tenantAuth, adminAuth } from '@/lib/firebase';
 import { toast } from 'sonner';
 
 
@@ -49,10 +50,23 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const pathname = usePathname();
     const params = useParams<{ storeId: string }>();
     const router = useRouter();
-    const { user, session, loading, signOut, error, userRole } = useAuth();
+    const {
+        user,
+        session,
+        loading,
+        signOut,
+        error,
+        userRole,
+        mustChangePassword,
+        refreshTenant,
+        subscriptionStatus,
+        subscriptionEndDate,
+        subscriptionDaysRemaining,
+    } = useAuth();
     const { storeId: activeStoreId, isSuperAdmin, subscriptionTier, tenantName } = useRestaurant();
     const urlStoreId = params?.storeId || '';
     const [showConflict, setShowConflict] = useState(false);
+    const [displayTenantName, setDisplayTenantName] = useState<string>('NexResto');
 
     // Get Super Admin state (God Mode check)
     const {
@@ -61,7 +75,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         loading: superAdminLoading
     } = useSuperAdminAuth();
 
-    const isGodMode = superAdminSession && superAdminRole === 'super_admin';
+    const isGodMode = !session && superAdminSession && superAdminRole === 'super_admin';
 
     // Instead of redirecting super admins to /super-admin, we let them view this page!
     // But if a regular tenant user has no session, redirect them to login.
@@ -70,8 +84,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             if (!session && !isGodMode) {
                 router.replace('/login');
             }
+
+            if (session && !isGodMode && mustChangePassword) {
+                router.replace('/change-password');
+                return;
+            }
+
+            // Authenticated but no resolved claims/profile -> do not let dashboard query Firestore.
+            if (session && !isGodMode && !userRole) {
+                router.replace('/unauthorized');
+            }
         }
-    }, [loading, superAdminLoading, session, isGodMode, router]);
+    }, [loading, superAdminLoading, session, isGodMode, mustChangePassword, userRole, router]);
 
     // ── Session Guard (inline overlay — no redirect, no separate page) ───────────
     // If a non-super-admin user navigates to /restaurant-a/dashboard
@@ -100,6 +124,61 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
     // Check if user has Pro tier
     const isPro = subscriptionTier === 'pro' || subscriptionTier === '2k' || subscriptionTier === '2.5k';
+    const showEndingSoonReminder =
+        !isGodMode &&
+        !!subscriptionEndDate &&
+        (subscriptionStatus === 'active' || subscriptionStatus === 'trial') &&
+        typeof subscriptionDaysRemaining === 'number' &&
+        subscriptionDaysRemaining >= 0 &&
+        subscriptionDaysRemaining <= 5;
+
+    // Resolve a stable display name for the current URL tenant.
+    // This avoids showing slug fallbacks like `the-grand-...` in the sidebar.
+    useEffect(() => {
+        const fallbackName = tenantName || urlStoreId || 'NexResto';
+        setDisplayTenantName(fallbackName);
+
+        if (!urlStoreId) {
+            return;
+        }
+
+        let cancelled = false;
+
+        (async () => {
+            try {
+                const token = adminAuth.currentUser
+                    ? await adminAuth.currentUser.getIdToken(true)
+                    : tenantAuth.currentUser
+                        ? await tenantAuth.currentUser.getIdToken(true)
+                        : isGodMode
+                            ? superAdminSession?.access_token
+                            : session?.access_token;
+
+                if (!token) return;
+
+                const res = await fetch(`/api/tenant/name?restaurantId=${encodeURIComponent(urlStoreId)}`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                    cache: 'no-store',
+                });
+
+                if (!res.ok) {
+                    return;
+                }
+
+                const data = await res.json();
+                const nextName = (data?.name || '').toString().trim();
+                if (!cancelled && nextName) {
+                    setDisplayTenantName(nextName);
+                }
+            } catch {
+                // Keep fallback name if request fails.
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [tenantName, urlStoreId, isGodMode, session?.access_token, superAdminSession?.access_token]);
 
     // ── Navigation scoped to URL slug ───────────────────────────────────
     // Always build hrefs from `urlStoreId` (the slug in the address bar),
@@ -117,6 +196,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
     const filteredNavigation = navigation.filter(item =>
         hasPermission(activeRole, item.permission)
+    );
+
+    const mobilePrimaryNavigation = filteredNavigation.filter((item) =>
+        item.basePath === '/dashboard/orders' ||
+        item.basePath === '/dashboard/menu' ||
+        item.basePath === '/dashboard/analytics'
     );
 
     // Handle clicking on a Pro-only feature when on Starter tier
@@ -139,14 +224,30 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
     // Refresh session on route change to prevent stale state
     useEffect(() => {
-        supabase.auth.getSession().catch(() => { });
+        tenantAuth.currentUser?.getIdToken(true).catch(() => { });
     }, [pathname]);
 
+    // Refresh tenant profile when tab regains focus/visibility.
+    // This keeps subscription tier/status in sync after super-admin changes.
     useEffect(() => {
-        if (!loading && (!session || !user)) {
-            router.replace('/login');
-        }
-    }, [loading, session, user, router]);
+        if (!session || isGodMode) return;
+
+        const onVisibilityOrFocus = () => {
+            if (document.visibilityState === 'visible') {
+                refreshTenant().catch(() => { });
+            }
+        };
+
+        window.addEventListener('focus', onVisibilityOrFocus);
+        document.addEventListener('visibilitychange', onVisibilityOrFocus);
+
+        return () => {
+            window.removeEventListener('focus', onVisibilityOrFocus);
+            document.removeEventListener('visibilitychange', onVisibilityOrFocus);
+        };
+    }, [session, isGodMode, refreshTenant]);
+
+
 
     // Force redirect if auth error
     useEffect(() => {
@@ -183,6 +284,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
     // If no tenant session AND no god mode session, block render
     if (!session && !isGodMode) {
+        return null; // Will redirect via useEffect
+    }
+
+    if (session && !isGodMode && !userRole) {
+        return null; // Will redirect via useEffect
+    }
+
+    if (session && !isGodMode && mustChangePassword) {
         return null; // Will redirect via useEffect
     }
 
@@ -298,27 +407,27 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
     const activeUser = user || superAdminSession?.user;
 
-    const userInitial = activeUser?.user_metadata?.full_name?.[0]
+    const userInitial = activeUser?.displayName?.[0]
         ?? activeUser?.email?.[0]?.toUpperCase()
         ?? 'A';
 
     return (
         <SubscriptionGuard>
-            <div className="min-h-screen bg-[#F8FAFC]">
+                <div className="min-h-screen">
                 {/* Desktop Sidebar */}
                 <motion.aside
                     initial={false}
                     animate={{ width: collapsed ? 80 : 240 }}
-                    className="hidden lg:block fixed left-0 top-0 h-full bg-white border-r border-slate-200/60 z-30"
+                    className="hidden lg:block fixed left-0 top-0 h-full premium-sidebar border-r border-white/10 z-30"
                 >
                     <div className="flex flex-col h-full">
                         {/* Logo */}
-                        <div className="h-16 flex items-center px-6 border-b border-slate-200/60">
+                            <div className="h-16 flex items-center px-6 border-b border-white/10">
                             <motion.div initial={false} animate={{ opacity: collapsed ? 0 : 1 }} className="flex items-center gap-2">
-                                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center">
-                                    <span className="text-white font-bold text-sm">{(tenantName?.[0] ?? 'R').toUpperCase()}</span>
+                                    <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#ff4757] to-[#ff6b81] flex items-center justify-center shadow-lg shadow-rose-500/40">
+                                    <span className="text-white font-bold text-sm">{(displayTenantName?.[0] ?? 'R').toUpperCase()}</span>
                                 </div>
-                                {!collapsed && <span className="font-semibold text-slate-900 truncate max-w-[140px]" title={tenantName ?? 'Restaurant'}>{tenantName ?? 'HotelPro'}</span>}
+                                    {!collapsed && <span className="font-semibold text-slate-100 truncate max-w-[140px]" title={displayTenantName}>{displayTenantName}</span>}
                             </motion.div>
                         </div>
 
@@ -336,8 +445,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                         <motion.div
                                             whileHover={{ x: 4 }}
                                             className={cn(
-                                                "flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200",
-                                                isActive ? "bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-600" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900",
+                                                    "flex items-center gap-3 px-3 py-2.5 rounded-full transition-all duration-200 premium-sidebar-text",
+                                                    isActive ? "premium-sidebar-active text-white" : "hover:bg-white/5 hover:text-white",
                                                 isLocked && "opacity-60"
                                             )}
                                         >
@@ -361,19 +470,56 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         </nav>
 
                         {/* Collapse Button */}
-                        <div className="p-3 border-t border-slate-200/60">
+                            <div className="p-3 border-t border-white/10">
                             <motion.button
                                 whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
                                 onClick={() => setCollapsed(!collapsed)}
-                                className="w-full h-10 flex items-center justify-center rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors"
+                                    className="w-full h-10 flex items-center justify-center rounded-xl bg-white/10 hover:bg-white/15 transition-colors"
                             >
                                 <motion.div animate={{ rotate: collapsed ? 180 : 0 }} transition={{ duration: 0.3 }}>
-                                    <ChevronLeft className="w-5 h-5 text-slate-600" />
+                                        <ChevronLeft className="w-5 h-5 text-slate-100" />
                                 </motion.div>
                             </motion.button>
                         </div>
                     </div>
                 </motion.aside>
+
+                {/* Tablet Sidebar Rail (icon-only) */}
+                <aside className="hidden md:flex lg:hidden fixed left-0 top-0 h-full w-20 premium-sidebar border-r border-white/10 z-30">
+                    <div className="flex flex-col h-full w-full">
+                        <div className="h-16 flex items-center justify-center border-b border-white/10">
+                            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#ff4757] to-[#ff6b81] flex items-center justify-center shadow-lg shadow-rose-500/40">
+                                <span className="text-white font-bold text-sm">{(displayTenantName?.[0] ?? 'R').toUpperCase()}</span>
+                            </div>
+                        </div>
+
+                        <nav className="flex-1 px-2 py-4 space-y-2">
+                            {filteredNavigation.map((item) => {
+                                const isActive = pathname === item.href || (pathname === `/${urlStoreId}/dashboard` && item.href === `/${urlStoreId}/dashboard/orders`);
+                                const isLocked = item.proOnly && !isPro;
+
+                                return (
+                                    <button
+                                        key={`tablet-${item.name}`}
+                                        onClick={() => handleNavClick(item)}
+                                        className="w-full"
+                                        title={item.name}
+                                    >
+                                        <div
+                                            className={cn(
+                                                'h-11 rounded-2xl flex items-center justify-center transition-all premium-sidebar-text',
+                                                isActive ? 'premium-sidebar-active text-white' : 'hover:bg-white/5 hover:text-white',
+                                                isLocked && 'opacity-60'
+                                            )}
+                                        >
+                                            <item.icon className="w-5 h-5" />
+                                        </div>
+                                    </button>
+                                );
+                            })}
+                        </nav>
+                    </div>
+                </aside>
 
                 {/* Mobile Menu Overlay */}
                 <AnimatePresence>
@@ -386,21 +532,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                             <motion.div
                                 initial={{ x: -280 }} animate={{ x: 0 }} exit={{ x: -280 }}
                                 onClick={(e) => e.stopPropagation()}
-                                className="absolute left-0 top-0 h-full w-72 bg-white shadow-2xl"
+                                className="absolute left-0 top-0 h-full w-72 premium-sidebar shadow-2xl"
                             >
                                 <div className="flex flex-col h-full">
-                                    <div className="h-16 flex items-center justify-between px-6 border-b border-slate-200/60">
+                                        <div className="h-16 flex items-center justify-between px-6 border-b border-white/10 premium-sidebar">
                                         <div className="flex items-center gap-2">
-                                            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center">
-                                                <span className="text-white font-bold text-sm">H</span>
+                                                <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#ff4757] to-[#ff6b81] flex items-center justify-center shadow-lg shadow-rose-500/40">
+                                                <span className="text-white font-bold text-sm">{(displayTenantName?.[0] ?? 'R').toUpperCase()}</span>
                                             </div>
-                                            <span className="font-semibold text-slate-900">{tenantName ?? 'HotelPro'}</span>
+                                                <span className="font-semibold text-slate-100 truncate max-w-[170px]" title={displayTenantName}>{displayTenantName}</span>
                                         </div>
-                                        <button onClick={() => setMobileMenuOpen(false)} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
-                                            <X className="w-5 h-5 text-slate-600" />
+                                            <button onClick={() => setMobileMenuOpen(false)} className="p-2 hover:bg-white/10 rounded-lg transition-colors">
+                                                <X className="w-5 h-5 text-slate-100" />
                                         </button>
                                     </div>
-                                    <nav className="flex-1 px-3 py-4 space-y-1">
+                                        <nav className="flex-1 px-3 py-4 space-y-1 premium-sidebar">
                                         {filteredNavigation.map((item) => {
                                             const isActive = pathname === item.href;
                                             const isLocked = item.proOnly && !isPro;
@@ -411,8 +557,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                                     className="w-full text-left"
                                                 >
                                                     <div className={cn(
-                                                        "flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200",
-                                                        isActive ? "bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-600" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900",
+                                                            "flex items-center gap-3 px-3 py-2.5 rounded-full transition-all duration-200 premium-sidebar-text",
+                                                            isActive ? "premium-sidebar-active text-white" : "hover:bg-white/5 hover:text-white",
                                                         isLocked && "opacity-60"
                                                     )}>
                                                         <item.icon className="w-5 h-5 flex-shrink-0" />
@@ -436,28 +582,29 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 </AnimatePresence>
 
                 {/* Main Content */}
-                <div className="lg:pl-60">
+                <div className="md:pl-20 lg:pl-60">
                     <motion.div initial={false} animate={{ paddingLeft: collapsed ? 80 : 240 }} className="hidden lg:block" />
 
                     {/* Top Navbar */}
-                    <header className="h-16 sticky top-0 z-20 bg-white/70 backdrop-blur-xl border-b border-slate-200/60">
+                    <header className="h-16 sticky top-0 z-20 bg-white/45 backdrop-blur-xl border-b border-white/30">
                         <div className="h-full px-4 lg:px-6 flex items-center justify-between gap-4">
-                            <button onClick={() => setMobileMenuOpen(true)} className="lg:hidden p-2 hover:bg-slate-100 rounded-lg transition-colors">
-                                <Menu className="w-5 h-5 text-slate-600" />
-                            </button>
+                            <div className="md:hidden text-sm font-semibold text-slate-800">Dashboard</div>
                             <div className="hidden md:block flex-1 max-w-md">
                                 <GlobalSearch />
                             </div>
                             <div className="flex items-center gap-2 lg:gap-3">
                                 <NotificationBell />
+                                <button onClick={() => setMobileMenuOpen(true)} className="md:hidden p-2 hover:bg-slate-100 rounded-lg transition-colors" title="Open settings">
+                                    <Menu className="w-5 h-5 text-slate-600" />
+                                </button>
                                 <div className="relative">
                                     <motion.button
                                         whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
                                         onClick={() => setShowUserMenu(p => !p)}
-                                        className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white font-bold text-sm"
+                                        className="hidden md:flex w-10 h-10 rounded-xl bg-gradient-to-br from-[#ff4757] to-[#ff6b81] items-center justify-center text-white font-bold text-sm shadow-lg shadow-rose-500/35"
                                     >
-                                        {user?.user_metadata?.avatar_url ? (
-                                            <img src={user.user_metadata.avatar_url} alt="avatar" className="w-full h-full rounded-xl object-cover" />
+                                        {user?.photoURL ? (
+                                            <img src={user.photoURL} alt="avatar" className="w-full h-full rounded-xl object-cover" />
                                         ) : userInitial}
                                     </motion.button>
                                     <AnimatePresence>
@@ -467,7 +614,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                                 className="absolute right-0 top-12 w-56 bg-white rounded-2xl shadow-xl border border-slate-200/60 z-50 overflow-hidden"
                                             >
                                                 <div className="px-4 py-3 border-b border-slate-100">
-                                                    <p className="text-xs font-semibold text-slate-900 truncate">{user?.user_metadata?.full_name ?? 'Admin'}</p>
+                                                    <p className="text-xs font-semibold text-slate-900 truncate">{user?.displayName ?? 'Admin'}</p>
                                                     <p className="text-xs text-slate-500 truncate mt-0.5">{user?.email}</p>
                                                     {tenantName && <p className="text-[10px] text-blue-600 font-medium mt-0.5 truncate">🏨 {tenantName}</p>}
                                                 </div>
@@ -483,8 +630,26 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         </div>
                     </header>
 
+                    {showEndingSoonReminder && (
+                        <div className="px-4 lg:px-6 pt-4">
+                            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 flex items-start gap-3">
+                                <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                                <div>
+                                    <p className="text-sm font-semibold text-amber-900">
+                                        {subscriptionDaysRemaining === 0
+                                            ? 'Your subscription ends today.'
+                                            : `Your subscription ends in ${subscriptionDaysRemaining} day${subscriptionDaysRemaining === 1 ? '' : 's'}.`}
+                                    </p>
+                                    <p className="text-xs text-amber-700 mt-0.5">
+                                        End date: {subscriptionEndDate}. Please renew before expiry to avoid dashboard interruption.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Page Content */}
-                    <div className="p-4 lg:p-6 pb-24 lg:pb-6" key={pathname}>
+                    <div className="p-6 lg:p-8 pb-24 lg:pb-8" key={pathname}>
                         {children}
 
                         {/* Database Connection Status Footer */}
@@ -499,9 +664,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 </div>
 
                 {/* Mobile Bottom Navigation - Shows top allowed features */}
-                <nav className="lg:hidden fixed bottom-0 left-0 right-0 h-16 bg-white/70 backdrop-blur-xl border-t border-slate-200/60 z-30">
+                <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white/70 backdrop-blur-xl border-t border-slate-200/60 z-30">
                     <div className="h-full px-2 flex items-center justify-around">
-                        {filteredNavigation.slice(0, 5).map((item) => {
+                        {mobilePrimaryNavigation.map((item) => {
                             const isActive = pathname === item.href;
                             return (
                                 <button
@@ -528,6 +693,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     onClose={() => setShowUpgradeModal(false)}
                     featureName={upgradeFeature}
                 />
+
+                <GeminiSupportChat />
             </div>
         </SubscriptionGuard>
     );

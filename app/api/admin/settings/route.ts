@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
+import { adminFirestore } from '@/lib/firebase-admin';
 
 /**
- * /api/admin/settings
+ * /api/admin/settings  (Firebase)
  * 
  * Handles site-wide settings like 'Global Access'.
  * Requires the ADMIN_ACCESS_KEY in the headers.
@@ -28,10 +28,22 @@ export async function GET(req: NextRequest) {
     }
 
     try {
-        const { data, error } = await supabaseAdmin
-            .from('site_settings')
-            .select('*');
-        if (error) throw error;
+        // Get the restaurant_id from query params or env
+        const restaurantId = req.nextUrl.searchParams.get('restaurant_id') || process.env.NEXT_PUBLIC_RESTAURANT_ID || '';
+
+        if (!restaurantId) {
+            return NextResponse.json({ error: 'Missing restaurant_id' }, { status: 400 });
+        }
+
+        const settingsSnap = await adminFirestore
+            .collection(`restaurants/${restaurantId}/settings`)
+            .get();
+
+        const data = settingsSnap.docs.map(doc => ({
+            key: doc.id,
+            ...doc.data(),
+        }));
+
         return NextResponse.json(data);
     } catch (err: any) {
         return NextResponse.json({ error: err.message }, { status: 500 });
@@ -48,7 +60,8 @@ export async function POST(req: NextRequest) {
     }
 
     try {
-        const { key, value } = await req.json();
+        const { key, value, restaurant_id } = await req.json();
+        const restaurantId = restaurant_id || process.env.NEXT_PUBLIC_RESTAURANT_ID || '';
 
         // Security check: Only allow updating certain keys
         const allowedKeys = ['is_site_public'];
@@ -56,22 +69,16 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Forbidden: Unauthorized Key Change' }, { status: 403 });
         }
 
-        const { error } = await supabaseAdmin
-            .from('site_settings')
-            .update({ value, updated_at: new Date().toISOString() })
-            .eq('key', key);
-
-        if (error) throw error;
+        await adminFirestore
+            .doc(`restaurants/${restaurantId}/settings/${key}`)
+            .set({
+                key,
+                value,
+                updated_at: new Date().toISOString(),
+            }, { merge: true });
 
         return NextResponse.json({ message: 'Settings Updated Successfully' });
     } catch (err: any) {
         return NextResponse.json({ error: err.message }, { status: 500 });
     }
 }
-
-/**
- * Explanation for Beginners:
- * This API handles "Site State Management". 
- * Any state that affects the WHOLE app (like maintenance mode)
- * is stored in a special database table and guarded by our secret Master Key.
- */

@@ -7,11 +7,11 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { 
+import {
     DollarSign, Building2, ShoppingBag, UserPlus,
     TrendingUp, TrendingDown, RefreshCw, X, Check
 } from 'lucide-react';
-import { getPlatformStats, getGlobalLogs, type PlatformStats, type GlobalLog } from '@/lib/super-admin-actions';
+import { getPlatformStats, getGlobalLogs, type PlatformStats, type GlobalLog } from '@/lib/firebase-super-admin-actions';
 import { cn } from '@/lib/utils';
 
 const formatCurrency = (amount: number) => {
@@ -176,7 +176,7 @@ export default function SuperAdminOverview() {
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-2xl font-bold text-white">Platform Overview</h1>
-                    <p className="text-slate-400 mt-1">Monitor your entire HotelPro network</p>
+                    <p className="text-slate-400 mt-1">Monitor your entire NexResto network</p>
                 </div>
                 <motion.button
                     whileHover={{ scale: 1.05 }}
@@ -285,7 +285,7 @@ export default function SuperAdminOverview() {
                             View all →
                         </button>
                     </div>
-                    
+
                     {recentLogs.length === 0 ? (
                         <div className="text-center py-8">
                             <p className="text-slate-400">No recent activity</p>
@@ -389,7 +389,7 @@ export default function SuperAdminOverview() {
                                 <div key={idx} className="flex items-center gap-3">
                                     <div className={cn(
                                         "w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0",
-                                        feature.included 
+                                        feature.included
                                             ? selectedTier === 'pro' ? 'bg-blue-500/20' : 'bg-green-500/20'
                                             : 'bg-slate-700'
                                     )}>

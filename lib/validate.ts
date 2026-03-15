@@ -30,9 +30,9 @@ function isPositiveNumber(v: unknown, max = 1_000_000): v is number {
     return typeof v === 'number' && isFinite(v) && v > 0 && v <= max;
 }
 
-/** Validates a UUID v4 (Supabase uses these for primary keys) */
-function isUuid(v: unknown): v is string {
-    return typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
+/** Validates an ID (Firestore uses alphanumeric 20-char strings, Supabase uses UUIDs) */
+function isValidId(v: unknown): v is string {
+    return typeof v === 'string' && /^[a-zA-Z0-9_\-]+$/.test(v) && v.length >= 10 && v.length <= 50;
 }
 
 /** Table IDs follow the pattern T-01 through T-99 or are arbitrary short strings, or empty if not provided */
@@ -103,14 +103,14 @@ export function validateMenuItemPayload(raw: unknown): ValidationResult<ValidMen
 
     if (!isNonEmptyString(p.name, 200)) return { ok: false, error: 'Menu item name is required (max 200 chars)' };
     if (!isPositiveNumber(p.price, 100_000)) return { ok: false, error: 'Price must be a positive number' };
-    if (!isUuid(p.category_id)) return { ok: false, error: 'category_id must be a valid UUID' };
+    if (!isValidId(p.category_id)) return { ok: false, error: 'category_id must be a valid ID' };
     if (p.type !== 'veg' && p.type !== 'non-veg') return { ok: false, error: 'type must be "veg" or "non-veg"' };
 
     if (p.image_url !== undefined && p.image_url !== null && p.image_url !== '') {
         if (!isNonEmptyString(p.image_url, 2048)) return { ok: false, error: 'image_url too long' };
         try {
             const url = new URL(p.image_url as string);
-            const allowedHosts = ['images.unsplash.com', 'res.cloudinary.com', 'supabase.co', 'storage.googleapis.com'];
+            const allowedHosts = ['images.unsplash.com', 'res.cloudinary.com', 'firebasestorage.googleapis.com', 'storage.googleapis.com'];
             const isAllowed = allowedHosts.some(h => url.hostname.endsWith(h));
             if (!isAllowed && process.env.NODE_ENV === 'production') {
                 return { ok: false, error: 'image_url must point to an allowed image host' };

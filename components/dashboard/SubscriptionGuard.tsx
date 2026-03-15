@@ -8,6 +8,7 @@
 import { motion } from 'motion/react';
 import { AlertTriangle, CreditCard, Mail, Phone } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { useSuperAdminAuth } from '@/context/SuperAdminAuthContext';
 
 interface SubscriptionGuardProps {
     children: React.ReactNode;
@@ -15,14 +16,16 @@ interface SubscriptionGuardProps {
 
 export function SubscriptionGuard({ children }: SubscriptionGuardProps) {
     const { subscriptionStatus, tenantName, loading } = useAuth();
+    const { userRole: superAdminRole } = useSuperAdminAuth();
+    const isSuperAdmin = superAdminRole === 'super_admin';
 
     // Don't block while loading
     if (loading) {
         return <>{children}</>;
     }
 
-    // Allow access if status is active or trial
-    if (subscriptionStatus === 'active' || subscriptionStatus === 'trial' || !subscriptionStatus) {
+    // Allow access if status is active/trial OR if user is a Super Admin (God Mode bypass)
+    if (isSuperAdmin || subscriptionStatus === 'active' || subscriptionStatus === 'trial' || !subscriptionStatus) {
         return <>{children}</>;
     }
 
@@ -48,7 +51,7 @@ export function SubscriptionGuard({ children }: SubscriptionGuardProps) {
                             {isCancelled ? 'Subscription Cancelled' : 'Payment Required'}
                         </h1>
                         <p className="text-slate-400">
-                            {isCancelled 
+                            {isCancelled
                                 ? 'Your restaurant subscription has been cancelled.'
                                 : 'Your subscription payment is overdue.'
                             }
@@ -66,7 +69,7 @@ export function SubscriptionGuard({ children }: SubscriptionGuardProps) {
 
                         <div className="space-y-3">
                             <p className="text-sm text-slate-300">
-                                {isCancelled 
+                                {isCancelled
                                     ? 'Access to your dashboard has been suspended. To restore access, please contact our support team to reactivate your subscription.'
                                     : 'Your dashboard access is temporarily restricted until payment is received. Please update your payment method or contact support.'
                                 }
@@ -76,7 +79,7 @@ export function SubscriptionGuard({ children }: SubscriptionGuardProps) {
                         {/* Action Buttons */}
                         <div className="space-y-3 pt-4">
                             <a
-                                href="mailto:support@hotelpro.com?subject=Subscription%20Reactivation"
+                                href="mailto:support@nexresto.com?subject=Subscription%20Reactivation"
                                 className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-semibold rounded-xl transition-all"
                             >
                                 <Mail className="w-5 h-5" />

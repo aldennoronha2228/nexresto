@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { CheckCircle2, Home, Receipt, Loader2, AlertCircle, Wifi } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { submitOrderToSupabase } from '@/lib/submitOrder';
+import { submitOrderToFirestore } from '@/lib/firebase-submit-order';
 import { Suspense } from 'react';
 
 function OrderSummaryContent() {
@@ -14,6 +14,14 @@ function OrderSummaryContent() {
     const searchParams = useSearchParams();
     const tableId = searchParams.get('table') ?? '';
     const restaurantId = searchParams.get('restaurant') ?? undefined;
+
+    const buildMenuUrl = () => {
+        const params = new URLSearchParams();
+        if (tableId) params.set('table', tableId);
+        if (restaurantId) params.set('restaurant', restaurantId);
+        const qs = params.toString();
+        return `/customer${qs ? `?${qs}` : ''}`;
+    };
 
     const [status, setStatus] = React.useState<'submitting' | 'success' | 'error'>('submitting');
     const [orderId, setOrderId] = React.useState('');
@@ -30,7 +38,7 @@ function OrderSummaryContent() {
         if (submitted.current || cart.length === 0) {
             // Nothing in cart — go back to menu
             if (cart.length === 0 && !submitted.current) {
-                router.replace('/customer');
+                router.replace(buildMenuUrl());
             }
             return;
         }
@@ -38,7 +46,7 @@ function OrderSummaryContent() {
 
         const total = parseFloat((totalPrice + 5).toFixed(2));
 
-        submitOrderToSupabase([...cart], tableId, total, restaurantId)
+        submitOrderToFirestore([...cart], tableId, total, restaurantId)
             .then(({ orderId, dailyOrderNumber }) => {
                 setOrderId(orderId);
                 setOrderNumber(dailyOrderNumber);
@@ -53,7 +61,7 @@ function OrderSummaryContent() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    const handleBackToMenu = () => router.push('/customer' + (tableId ? `?table=${tableId}` : ''));
+    const handleBackToMenu = () => router.push(buildMenuUrl());
     const handleRetry = () => { submitted.current = false; setStatus('submitting'); setErrorMsg(''); };
 
     return (

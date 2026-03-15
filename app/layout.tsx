@@ -8,8 +8,8 @@ import { Toaster } from 'sonner';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'HotelPro — Dashboard',
-  description: 'Hotel restaurant management dashboard',
+  title: 'NexResto — Dashboard',
+  description: 'NexResto restaurant management dashboard',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -17,9 +17,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className} suppressHydrationWarning>
         {/*
-          Two independent auth providers — each watches a different Supabase client:
-            AuthProvider          → supabase         → hotelpro-tenant-session (sessionStorage)
-            SuperAdminAuthProvider → supabaseSuperAdmin → hotelpro-admin-session  (localStorage)
+          Two independent auth providers — each watches a different Firebase auth instance:
+            AuthProvider           → firebase          → tenant admin session
+            SuperAdminAuthProvider → firebaseAdminAuth → super admin session
           They are completely isolated: signing out of one never affects the other.
         */}
         <AuthProvider>

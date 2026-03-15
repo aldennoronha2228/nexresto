@@ -17,13 +17,13 @@ export async function sendOtpEmail(to: string, otp: string, restaurantName: stri
 
     try {
         const { error } = await getResendClient().emails.send({
-            from: process.env.RESEND_FROM_EMAIL || 'HotelPro <onboarding@resend.dev>',
+            from: process.env.RESEND_FROM_EMAIL || 'NexResto <onboarding@resend.dev>',
             to: [to],
             subject: `${otp} is your verification code`,
             html: `
                 <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
                     <div style="text-align: center; margin-bottom: 32px;">
-                        <h1 style="color: #10b981; font-size: 28px; margin: 0;">HotelPro</h1>
+                        <h1 style="color: #10b981; font-size: 28px; margin: 0;">NexResto</h1>
                         <p style="color: #64748b; margin: 8px 0 0;">Restaurant Management System</p>
                     </div>
                     

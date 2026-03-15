@@ -4,7 +4,8 @@ import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'motion/react';
 import { Eye, EyeOff, Lock, Loader2, ShieldCheck, CheckCircle2 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { auth } from '@/lib/firebase';
+import { verifyPasswordResetCode, confirmPasswordReset } from 'firebase/auth';
 import { toast } from 'sonner';
 
 function PasswordStrength({ password }: { password: string }) {
@@ -94,44 +95,33 @@ function SetupPasswordContent() {
     const [success, setSuccess] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [userEmail, setUserEmail] = useState<string | null>(null);
-    const [userRole, setUserRole] = useState<string | null>(null);
+
+    const oobCode = searchParams.get('oobCode');
 
     useEffect(() => {
-        // Check for session/token from invite link
-        const checkSession = async () => {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (session?.user) {
-                setUserEmail(session.user.email ?? null);
-                setUserRole(session.user.user_metadata?.role ?? null);
-            }
-        };
-
-        // Handle the hash fragment from Supabase invite email
-        const hashParams = new URLSearchParams(window.location.hash.slice(1));
-        const accessToken = hashParams.get('access_token');
-        const refreshToken = hashParams.get('refresh_token');
-        const type = hashParams.get('type');
-
-        if (type === 'invite' && accessToken && refreshToken) {
-            supabase.auth.setSession({
-                access_token: accessToken,
-                refresh_token: refreshToken,
-            }).then(({ data, error }) => {
-                if (error) {
-                    setError('Invalid or expired invitation link. Please contact your administrator.');
-                } else if (data.session?.user) {
-                    setUserEmail(data.session.user.email ?? null);
-                    setUserRole(data.session.user.user_metadata?.role ?? null);
-                }
-            });
-        } else {
-            checkSession();
+        if (!oobCode) {
+            setError('Missing password reset code. Please use the link sent to your email.');
+            return;
         }
-    }, []);
+
+        // Verify the code and get the user's email
+        verifyPasswordResetCode(auth, oobCode)
+            .then(email => {
+                setUserEmail(email);
+            })
+            .catch(err => {
+                setError('Invalid or expired password reset link. Please try again.');
+            });
+    }, [oobCode]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError(null);
+
+        if (!oobCode) {
+            setError('Missing reset code.');
+            return;
+        }
 
         if (password.length < 8) {
             setError('Password must be at least 8 characters.');
@@ -154,18 +144,12 @@ function SetupPasswordContent() {
         setLoading(true);
 
         try {
-            const { error: updateError } = await supabase.auth.updateUser({
-                password: password,
-            });
-
-            if (updateError) {
-                throw updateError;
-            }
+            await confirmPasswordReset(auth, oobCode, password);
 
             setSuccess(true);
             toast.success('Password set successfully!');
 
-            // Redirect to login after a short delay to trigger proper tenant resolution
+            // Redirect to login after a short delay
             setTimeout(() => {
                 router.push('/login');
             }, 2000);
@@ -198,7 +182,7 @@ function SetupPasswordContent() {
                             </motion.div>
                             <h1 className="text-2xl font-bold text-white mb-2">You're All Set!</h1>
                             <p className="text-slate-400 mb-4">
-                                Your password has been created. Redirecting to the dashboard...
+                                Your password has been updated. Redirecting to login...
                             </p>
                             <div className="flex items-center justify-center gap-2 text-slate-500">
                                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -228,19 +212,11 @@ function SetupPasswordContent() {
                                 <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center mb-4 shadow-lg shadow-blue-500/30">
                                     <ShieldCheck className="w-8 h-8 text-white" />
                                 </div>
-                                <h1 className="text-2xl font-bold text-white">Set Your Password</h1>
+                                <h1 className="text-2xl font-bold text-white">Reset Password</h1>
                                 {userEmail && (
                                     <p className="text-slate-400 text-sm mt-2">
-                                        Welcome, <span className="text-blue-400">{userEmail}</span>
+                                        For <span className="text-blue-400">{userEmail}</span>
                                     </p>
-                                )}
-                                {userRole && (
-                                    <span className={`mt-2 px-3 py-1 rounded-full text-xs font-semibold ${userRole === 'owner' ? 'bg-purple-500/20 text-purple-300' :
-                                            userRole === 'manager' ? 'bg-blue-500/20 text-blue-300' :
-                                                'bg-slate-500/20 text-slate-300'
-                                        }`}>
-                                        {userRole.charAt(0).toUpperCase() + userRole.slice(1)}
-                                    </span>
                                 )}
                             </div>
 
@@ -271,6 +247,7 @@ function SetupPasswordContent() {
                                             placeholder="Enter your password"
                                             className="w-full pl-11 pr-12 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"
                                             required
+                                            disabled={!oobCode}
                                         />
                                         <button
                                             type="button"
@@ -296,12 +273,13 @@ function SetupPasswordContent() {
                                             onChange={(e) => setConfirmPassword(e.target.value)}
                                             placeholder="Confirm your password"
                                             className={`w-full pl-11 pr-4 py-3 bg-slate-800/50 border rounded-xl text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all ${confirmPassword && password !== confirmPassword
-                                                    ? 'border-rose-500/50'
-                                                    : confirmPassword && password === confirmPassword
-                                                        ? 'border-emerald-500/50'
-                                                        : 'border-slate-700/50'
+                                                ? 'border-rose-500/50'
+                                                : confirmPassword && password === confirmPassword
+                                                    ? 'border-emerald-500/50'
+                                                    : 'border-slate-700/50'
                                                 }`}
                                             required
+                                            disabled={!oobCode}
                                         />
                                     </div>
                                     {confirmPassword && password !== confirmPassword && (
@@ -315,7 +293,7 @@ function SetupPasswordContent() {
                                 {/* Submit Button */}
                                 <button
                                     type="submit"
-                                    disabled={loading || password.length < 8 || password !== confirmPassword}
+                                    disabled={loading || password.length < 8 || password !== confirmPassword || !oobCode}
                                     className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold rounded-xl shadow-lg shadow-blue-500/25 transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     {loading ? (

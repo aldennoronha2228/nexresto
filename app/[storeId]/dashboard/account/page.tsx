@@ -12,6 +12,7 @@ import { useSuperAdminAuth } from '@/context/SuperAdminAuthContext';
 import { useRestaurant } from '@/hooks/useRestaurant';
 import { toast } from 'sonner';
 import { Switch } from '@/components/ui/switch';
+import { auth } from '@/lib/firebase';
 import { RoleGuard } from '@/components/dashboard/RoleGuard';
 
 interface AdminUser {
@@ -19,6 +20,7 @@ interface AdminUser {
     is_active: boolean;
     created_at: string;
     role?: string;
+    temp_password?: string;
 }
 
 // Available roles for Pro tier
@@ -42,7 +44,7 @@ export default function AccountPage() {
     const activeUser = user || superAdminSession?.user;
 
     // Check if Pro tier or God Mode
-    const isPro = subscriptionTier === 'pro' || subscriptionTier === '2k' || subscriptionTier === '2.5k';
+    const isPro = isSuperAdmin || subscriptionTier === 'pro' || subscriptionTier === '2k' || subscriptionTier === '2.5k';
 
     // ─── Email Reports State ──────────────────────────────────────────────────
     const [emailReportsEnabled, setEmailReportsEnabled] = useState(false);
@@ -68,6 +70,7 @@ export default function AccountPage() {
     const [showCredentials, setShowCredentials] = useState(false);
     const [newUserCredentials, setNewUserCredentials] = useState<{ email: string; password: string } | null>(null);
     const [copiedPassword, setCopiedPassword] = useState(false);
+    const [copiedRowEmail, setCopiedRowEmail] = useState<string | null>(null);
 
     // ─── Security Token Storage ───────────────────────────────────────────────
     // Once verified, we keep the clean key here to use for all actions.
@@ -82,10 +85,14 @@ export default function AccountPage() {
     // ─── Fetch Admins (Privileged) ───────────────────────────────────────────
     const fetchAdmins = async (key: string) => {
         const cleanKey = key.trim();
+        if (!tenantId) {
+            toast.error('Restaurant context missing. Please refresh and try again.');
+            return;
+        }
         setLoadingAdmins(true);
         try {
             // cb=... is a cache-buster. It forces the browser to get fresh data.
-            const res = await fetch(`/api/admin/manage?cb=${Date.now()}`, {
+            const res = await fetch(`/api/admin/manage?tenant_id=${encodeURIComponent(tenantId)}&cb=${Date.now()}`, {
                 method: 'GET',
                 headers: { 'x-admin-key': cleanKey }
             });
@@ -197,7 +204,7 @@ export default function AccountPage() {
                     'Content-Type': 'application/json',
                     'x-admin-key': verifiedMasterKey.trim()
                 },
-                body: JSON.stringify({ email, action })
+                body: JSON.stringify({ email, action, tenantId })
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error);
@@ -217,11 +224,37 @@ export default function AccountPage() {
                     'Content-Type': 'application/json',
                     'x-admin-key': verifiedMasterKey.trim()
                 },
-                body: JSON.stringify({ email, action: 'delete' })
+                body: JSON.stringify({ email, action: 'delete', tenantId })
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error);
             toast.success('Admin permanently deleted');
+            fetchAdmins(verifiedMasterKey);
+        } catch (err: any) {
+            toast.error(err.message);
+        }
+    };
+
+    const handleIssueTempPassword = async (email: string) => {
+        try {
+            const res = await fetch(`/api/admin/manage?cb=${Date.now()}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-admin-key': verifiedMasterKey.trim(),
+                },
+                body: JSON.stringify({ email, action: 'issue_temp_password', tenantId }),
+            });
+
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Failed to issue temporary password');
+
+            if (data.tempPassword) {
+                setNewUserCredentials({ email, password: data.tempPassword });
+                setShowCredentials(true);
+            }
+
+            toast.success('Temporary password generated.');
             fetchAdmins(verifiedMasterKey);
         } catch (err: any) {
             toast.error(err.message);
@@ -233,7 +266,7 @@ export default function AccountPage() {
         if (!tenantId || !isPro) return;
 
         try {
-            const token = localStorage.getItem('supabase_access_token');
+            const token = await auth.currentUser?.getIdToken();
             const res = await fetch(`/api/reports/settings?restaurantId=${tenantId}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
@@ -255,7 +288,7 @@ export default function AccountPage() {
 
         setEmailReportsLoading(true);
         try {
-            const token = localStorage.getItem('supabase_access_token');
+            const token = await auth.currentUser?.getIdToken();
             const res = await fetch('/api/reports/settings', {
                 method: 'POST',
                 headers: {
@@ -300,7 +333,7 @@ export default function AccountPage() {
                         </div>
                         <div className="flex-1 text-center md:text-left">
                             <h2 className="text-xl font-bold text-slate-900">
-                                {isSuperAdmin ? 'Super Admin (God Mode)' : (activeUser?.user_metadata?.full_name || 'Admin User')}
+                                {isSuperAdmin ? 'Super Admin (God Mode)' : (activeUser?.displayName || 'Admin User')}
                             </h2>
                             <div className="flex items-center justify-center md:justify-start gap-2 mt-1.5 text-slate-500 text-sm">
                                 <Mail className="w-4 h-4" />
@@ -317,7 +350,7 @@ export default function AccountPage() {
                 </div>
 
                 {/* Email Reports Toggle (Pro Only) */}
-                <div className="bg-white rounded-3xl border border-slate-200/60 shadow-sm overflow-hidden">
+                <div className="bg-white rounded-3xl border border-slate-200/60 shadow-sm overflow-visible">
                     <div className="px-6 py-5 flex items-center justify-between">
                         <div className="flex items-center gap-3">
                             <div className={cn(
@@ -530,7 +563,7 @@ export default function AccountPage() {
                                                         </button>
 
                                                         {showRoleDropdown && (
-                                                            <div className="absolute top-full left-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden z-50">
+                                                            <div className="absolute bottom-full left-0 mb-2 w-64 bg-white rounded-xl shadow-xl border border-slate-200 max-h-60 overflow-y-auto overscroll-contain z-50">
                                                                 {ROLES.map((role) => (
                                                                     <button
                                                                         key={role.value}
@@ -578,6 +611,7 @@ export default function AccountPage() {
                                                 <tr>
                                                     <th className="px-4 py-3">Admin Email</th>
                                                     <th className="px-4 py-3">Role</th>
+                                                    <th className="px-4 py-3">Temp Password</th>
                                                     <th className="px-4 py-3">Status</th>
                                                     <th className="px-4 py-3 text-right">Actions</th>
                                                 </tr>
@@ -610,6 +644,31 @@ export default function AccountPage() {
                                                                 </span>
                                                             </td>
                                                             <td className="px-4 py-4">
+                                                                {admin.temp_password ? (
+                                                                    <div className="inline-flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1">
+                                                                        <span className="font-mono text-xs text-slate-700 select-all">{admin.temp_password}</span>
+                                                                        <button
+                                                                            onClick={() => {
+                                                                                navigator.clipboard.writeText(admin.temp_password || '');
+                                                                                setCopiedRowEmail(admin.email);
+                                                                                setTimeout(() => setCopiedRowEmail(null), 1500);
+                                                                            }}
+                                                                            className={cn(
+                                                                                "p-1 rounded transition-colors",
+                                                                                copiedRowEmail === admin.email
+                                                                                    ? "bg-emerald-100 text-emerald-600"
+                                                                                    : "text-slate-500 hover:bg-slate-200"
+                                                                            )}
+                                                                            title="Copy temporary password"
+                                                                        >
+                                                                            {copiedRowEmail === admin.email ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                                                                        </button>
+                                                                    </div>
+                                                                ) : (
+                                                                    <span className="text-xs text-slate-400">-</span>
+                                                                )}
+                                                            </td>
+                                                            <td className="px-4 py-4">
                                                                 <span className={cn(
                                                                     "px-2 py-0.5 rounded-full text-[10px] font-bold",
                                                                     admin.is_active ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-500 italic"
@@ -630,6 +689,13 @@ export default function AccountPage() {
                                                                         title={admin.is_active ? 'Deactivate' : 'Reactivate'}
                                                                     >
                                                                         {admin.is_active ? <ToggleRight className="w-4 h-4" /> : <ToggleLeft className="w-4 h-4" />}
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => handleIssueTempPassword(admin.email)}
+                                                                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                                                        title="Generate temporary password"
+                                                                    >
+                                                                        <Key className="w-4 h-4" />
                                                                     </button>
                                                                     <button
                                                                         onClick={() => handleDeleteAdmin(admin.email)}
@@ -718,7 +784,7 @@ export default function AccountPage() {
 
                                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
                                     <p className="text-amber-800 text-sm">
-                                        <strong>Important:</strong> This password is shown only once. Make sure to share it securely with the team member. They should change it after their first login.
+                                        <strong>Important:</strong> This password is also visible in the unlocked Admin Management table until the user changes it. On first login they are automatically redirected to the Change Password screen before dashboard access.
                                     </p>
                                 </div>
 

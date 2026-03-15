@@ -12,37 +12,21 @@ import {
     ShoppingBag, Users, Clock, Calendar, ArrowUpRight,
     FileText, Download, Loader2, ChevronRight, Lock, Sparkles
 } from 'lucide-react';
-import { useAuth } from '@/context/AuthContext';
 import { useRestaurant } from '@/hooks/useRestaurant';
 import { ProFeatureGate } from '@/components/dashboard/ProFeatureGate';
 import { RoleGuard } from '@/components/dashboard/RoleGuard';
 import { cn } from '@/lib/utils';
 import { downloadReportPDF, generateWeeklySummaryPDF, type DailyReport } from '@/lib/reportPDF';
+import { auth } from '@/lib/firebase';
 
-// Mock data for the analytics dashboard
-const revenueData = [
-    { day: 'Mon', revenue: 12500 },
-    { day: 'Tue', revenue: 18200 },
-    { day: 'Wed', revenue: 15800 },
-    { day: 'Thu', revenue: 22400 },
-    { day: 'Fri', revenue: 28900 },
-    { day: 'Sat', revenue: 35200 },
-    { day: 'Sun', revenue: 31000 },
-];
-
-const topItems = [
-    { name: 'Butter Chicken', orders: 145, revenue: 21750, trend: 12 },
-    { name: 'Paneer Tikka', orders: 98, revenue: 14700, trend: 8 },
-    { name: 'Biryani Special', orders: 87, revenue: 17400, trend: -3 },
-    { name: 'Tandoori Roti', orders: 234, revenue: 4680, trend: 5 },
-    { name: 'Mango Lassi', orders: 156, revenue: 7800, trend: 15 },
-];
+const revenueData: Array<{ day: string; revenue: number }> = [];
+const topItems: Array<{ name: string; orders: number; revenue: number; trend: number }> = [];
 
 const statCards = [
-    { title: 'Total Revenue', value: '₹1,64,000', change: '+12.5%', isPositive: true, icon: DollarSign },
-    { title: 'Total Orders', value: '847', change: '+8.2%', isPositive: true, icon: ShoppingBag },
-    { title: 'Avg Order Value', value: '₹194', change: '-2.1%', isPositive: false, icon: TrendingUp },
-    { title: 'Repeat Customers', value: '34%', change: '+5.3%', isPositive: true, icon: Users },
+    { title: 'Total Revenue', value: '₹0', change: '0%', isPositive: true, icon: DollarSign },
+    { title: 'Total Orders', value: '0', change: '0%', isPositive: true, icon: ShoppingBag },
+    { title: 'Avg Order Value', value: '₹0', change: '0%', isPositive: true, icon: TrendingUp },
+    { title: 'Repeat Customers', value: '0%', change: '0%', isPositive: true, icon: Users },
 ];
 
 // Reports Section Component
@@ -60,7 +44,7 @@ function ReportsSection() {
 
         setLoading(true);
         try {
-            const token = localStorage.getItem('supabase_access_token');
+            const token = await auth.currentUser?.getIdToken();
             const res = await fetch(`/api/reports?restaurantId=${tenantId}&limit=7`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
@@ -90,7 +74,7 @@ function ReportsSection() {
 
         setGenerating(true);
         try {
-            const token = localStorage.getItem('supabase_access_token');
+            const token = await auth.currentUser?.getIdToken();
             const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
 
             const res = await fetch('/api/reports', {
@@ -281,7 +265,7 @@ function ReportsSection() {
 }
 
 function AnalyticsContent() {
-    const maxRevenue = Math.max(...revenueData.map(d => d.revenue));
+    const maxRevenue = Math.max(1, ...revenueData.map(d => d.revenue));
 
     return (
         <div className="space-y-6">
@@ -353,21 +337,27 @@ function AnalyticsContent() {
                 </div>
 
                 <div className="h-64 flex items-end gap-3">
-                    {revenueData.map((data, i) => (
-                        <div key={data.day} className="flex-1 flex flex-col items-center gap-2">
-                            <motion.div
-                                initial={{ height: 0 }}
-                                animate={{ height: `${(data.revenue / maxRevenue) * 200}px` }}
-                                transition={{ delay: 0.5 + i * 0.1, duration: 0.5 }}
-                                className="w-full bg-gradient-to-t from-blue-500 to-blue-400 rounded-t-lg relative group cursor-pointer"
-                            >
-                                <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                                    ₹{data.revenue.toLocaleString()}
-                                </div>
-                            </motion.div>
-                            <span className="text-xs text-slate-500">{data.day}</span>
+                    {revenueData.length === 0 ? (
+                        <div className="w-full h-full flex items-center justify-center text-slate-400 text-sm">
+                            No analytics data yet
                         </div>
-                    ))}
+                    ) : (
+                        revenueData.map((data, i) => (
+                            <div key={data.day} className="flex-1 flex flex-col items-center gap-2">
+                                <motion.div
+                                    initial={{ height: 0 }}
+                                    animate={{ height: `${(data.revenue / maxRevenue) * 200}px` }}
+                                    transition={{ delay: 0.5 + i * 0.1, duration: 0.5 }}
+                                    className="w-full bg-gradient-to-t from-blue-500 to-blue-400 rounded-t-lg relative group cursor-pointer"
+                                >
+                                    <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                                        ₹{data.revenue.toLocaleString()}
+                                    </div>
+                                </motion.div>
+                                <span className="text-xs text-slate-500">{data.day}</span>
+                            </div>
+                        ))
+                    )}
                 </div>
             </motion.div>
 
@@ -379,30 +369,34 @@ function AnalyticsContent() {
                 className="bg-white rounded-2xl border border-slate-200 p-6"
             >
                 <h2 className="text-lg font-semibold text-slate-900 mb-4">Top Selling Items</h2>
-                <div className="space-y-3">
-                    {topItems.map((item, i) => (
-                        <div key={item.name} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
-                            <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-lg bg-slate-200 flex items-center justify-center text-sm font-bold text-slate-600">
-                                    {i + 1}
+                {topItems.length === 0 ? (
+                    <div className="text-center py-10 text-slate-400 text-sm">No item analytics yet</div>
+                ) : (
+                    <div className="space-y-3">
+                        {topItems.map((item, i) => (
+                            <div key={item.name} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 rounded-lg bg-slate-200 flex items-center justify-center text-sm font-bold text-slate-600">
+                                        {i + 1}
+                                    </div>
+                                    <div>
+                                        <p className="font-medium text-slate-900">{item.name}</p>
+                                        <p className="text-xs text-slate-500">{item.orders} orders</p>
+                                    </div>
                                 </div>
-                                <div>
-                                    <p className="font-medium text-slate-900">{item.name}</p>
-                                    <p className="text-xs text-slate-500">{item.orders} orders</p>
+                                <div className="text-right">
+                                    <p className="font-semibold text-slate-900">₹{item.revenue.toLocaleString()}</p>
+                                    <span className={cn(
+                                        "text-xs",
+                                        item.trend >= 0 ? "text-green-600" : "text-red-600"
+                                    )}>
+                                        {item.trend >= 0 ? '+' : ''}{item.trend}%
+                                    </span>
                                 </div>
                             </div>
-                            <div className="text-right">
-                                <p className="font-semibold text-slate-900">₹{item.revenue.toLocaleString()}</p>
-                                <span className={cn(
-                                    "text-xs",
-                                    item.trend >= 0 ? "text-green-600" : "text-red-600"
-                                )}>
-                                    {item.trend >= 0 ? '+' : ''}{item.trend}%
-                                </span>
-                            </div>
-                        </div>
-                    ))}
-                </div>
+                        ))}
+                    </div>
+                )}
             </motion.div>
 
             {/* Daily Reports Section */}

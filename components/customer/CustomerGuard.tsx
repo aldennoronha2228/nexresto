@@ -13,7 +13,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { fetchIsSitePublic } from '@/lib/api';
+import { fetchIsSitePublic } from '@/lib/firebase-api';
 import { useAuth } from '@/context/AuthContext';
 import { RefreshCw } from 'lucide-react';
 import { motion } from 'motion/react';

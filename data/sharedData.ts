@@ -51,40 +51,79 @@ const defaultTables: Table[] = [
     { id: 'T-18', name: 'Table 18', seats: 3, x: 370, y: 440, status: 'busy' },
 ];
 
+export const getDefaultTables = (): Table[] => defaultTables.map((table) => ({ ...table }));
+
 let tablesData: Table[] | null = null;
 
-const TABLES_STORAGE_KEY = 'hotelmenu_floorplan_tables';
+const TABLES_STORAGE_KEY_PREFIX = 'hotelmenu_floorplan_tables';
+const tablesCache = new Map<string, Table[]>();
 
-export const getTables = (): Table[] => {
+function resolveTableScope(scopeId?: string): string {
+    if (scopeId) return scopeId;
+    if (typeof window === 'undefined') return 'default';
+
+    const segments = window.location.pathname.split('/').filter(Boolean);
+    const dashboardIdx = segments.indexOf('dashboard');
+    if (dashboardIdx > 0) {
+        return segments[dashboardIdx - 1];
+    }
+
+    return 'default';
+}
+
+function getTablesStorageKey(scopeId?: string): string {
+    return `${TABLES_STORAGE_KEY_PREFIX}:${resolveTableScope(scopeId)}`;
+}
+
+export const getTables = (scopeId?: string): Table[] => {
+    const resolvedScope = resolveTableScope(scopeId);
+    const storageKey = getTablesStorageKey(resolvedScope);
+
     if (typeof window !== 'undefined') {
         try {
-            const stored = localStorage.getItem(TABLES_STORAGE_KEY);
+            const stored = localStorage.getItem(storageKey);
             if (stored) {
-                tablesData = JSON.parse(stored);
-                return tablesData!;
+                const parsed = JSON.parse(stored) as Table[];
+                tablesCache.set(resolvedScope, parsed);
+                return parsed;
             }
         } catch (e) {
             console.error('Failed to parse tables from localStorage', e);
         }
     }
 
+    const cached = tablesCache.get(resolvedScope);
+    if (cached) {
+        return cached;
+    }
+
     if (!tablesData) {
         tablesData = [...defaultTables];
     }
-    return tablesData;
+
+    const initial = [...tablesData];
+    tablesCache.set(resolvedScope, initial);
+    return initial;
 };
 
-export const setTables = (tables: Table[]) => {
+export const setTables = (tables: Table[], scopeId?: string) => {
+    const resolvedScope = resolveTableScope(scopeId);
+    const storageKey = getTablesStorageKey(resolvedScope);
+    tablesCache.set(resolvedScope, tables);
+
+    // Keep the last-written scope in legacy memory for backwards compatibility.
     tablesData = tables;
+
     if (typeof window !== 'undefined') {
-        localStorage.setItem(TABLES_STORAGE_KEY, JSON.stringify(tables));
+        localStorage.setItem(storageKey, JSON.stringify(tables));
     }
 };
 
 export const updateTableStatus = (
     tableId: string,
-    status: 'available' | 'busy' | 'reserved'
+    status: 'available' | 'busy' | 'reserved',
+    scopeId?: string
 ) => {
-    const tables = getTables().map(t => t.id === tableId ? { ...t, status } : t);
-    setTables(tables);
+    const tables = getTables(scopeId).map(t => t.id === tableId ? { ...t, status } : t);
+    setTables(tables, scopeId);
 };

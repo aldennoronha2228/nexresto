@@ -4,11 +4,10 @@ import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Calendar, Download, TrendingUp, DollarSign, ShoppingBag, RefreshCw, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { fetchOrderHistory } from '@/lib/api';
 import type { DashboardOrder } from '@/lib/types';
-import { useAuth } from '@/context/AuthContext';
 import { useRestaurant } from '@/hooks/useRestaurant';
 import { RoleGuard } from '@/components/dashboard/RoleGuard';
+import { adminAuth, tenantAuth } from '@/lib/firebase';
 
 const statusConfig = {
     paid: { label: 'Paid', color: 'bg-emerald-500', ring: 'ring-emerald-500/20', text: 'text-emerald-700', bg: 'bg-emerald-50' },
@@ -30,20 +29,34 @@ export default function OrderHistoryPage() {
     const [selectedDate, setSelectedDate] = useState('today');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const { storeId: tenantId, loading: tenantLoading } = useRestaurant();
+    const { storeId: tenantId, db: contextDb, loading: tenantLoading } = useRestaurant();
 
     const loadHistory = async (isMounted = true) => {
-        if (!tenantId) {
+        if (!tenantId || !contextDb) {
             if (isMounted) setLoading(false);
             return;
         }
         try {
             if (isMounted) { setError(null); setLoading(true); }
-            const data = await fetchOrderHistory(tenantId, 200);
+            const activeUser = adminAuth.currentUser || tenantAuth.currentUser;
+            if (!activeUser) {
+                throw new Error('Missing active session');
+            }
+
+            const idToken = await activeUser.getIdToken(true);
+            const response = await fetch(`/api/orders/history?restaurantId=${encodeURIComponent(tenantId)}&limit=200`, {
+                headers: { Authorization: `Bearer ${idToken}` },
+            });
+
+            const payload = await response.json();
+            if (!response.ok) {
+                throw new Error(payload?.error || 'Could not load order history.');
+            }
+
+            const data = (payload.orders || []) as DashboardOrder[];
             if (isMounted) setAllOrders(data);
         } catch (err: any) {
-            console.error('loadHistory error:', err);
-            if (isMounted) setError(err.message || 'Could not load order history from Supabase.');
+            if (isMounted) setError(err.message || 'Could not load order history from Firebase.');
         } finally {
             if (isMounted) setLoading(false);
         }
@@ -53,7 +66,7 @@ export default function OrderHistoryPage() {
         let isMounted = true;
         loadHistory(isMounted);
         return () => { isMounted = false; };
-    }, [tenantId]);
+    }, [tenantId, contextDb]);
 
     const filteredOrders = allOrders.filter(o => {
         if (selectedDate === 'today') return isToday(o.created_at);
@@ -110,7 +123,7 @@ export default function OrderHistoryPage() {
             <div className="space-y-4 lg:space-y-6">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
-                        <h1 className="text-2xl font-semibold text-slate-900">Order History</h1>
+                        <h1 className="text-2xl lg:text-4xl font-semibold text-slate-900">Order History</h1>
                         <p className="text-sm text-slate-500 mt-1">View and analyze past orders</p>
                     </div>
                     <div className="flex items-center gap-2">
