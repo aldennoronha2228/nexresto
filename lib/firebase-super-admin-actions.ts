@@ -10,6 +10,8 @@
 import { adminFirestore, adminAuth } from './firebase-admin';
 import { revalidatePath } from 'next/cache';
 import { FieldValue } from 'firebase-admin/firestore';
+import { getApps } from 'firebase-admin/app';
+import { getStorage } from 'firebase-admin/storage';
 
 // Types
 export interface PlatformStats {
@@ -24,7 +26,7 @@ export interface RestaurantWithOwner {
     name: string;
     owner_name: string | null;
     subscription_tier: 'starter' | 'pro' | '1k' | '2k' | '2.5k';
-    subscription_status: 'active' | 'past_due' | 'cancelled' | 'trial';
+    subscription_status: 'active' | 'past_due' | 'cancelled' | 'trial' | 'expired';
     created_at: string;
     monthly_revenue: number;
     last_report_date: string | null;
@@ -32,6 +34,13 @@ export interface RestaurantWithOwner {
     subscription_end_date: string | null;
     team_count: number;
     team_roles?: { role: string; count: number }[];
+}
+
+export interface RestaurantManagerMetrics {
+    total_revenue: number;
+    total_active_restaurants: number;
+    growth_percent: number;
+    pending_renewals: number;
 }
 
 export interface GlobalLog {
@@ -44,6 +53,28 @@ export interface GlobalLog {
     user_id: string | null;
     created_at: string;
     restaurants?: { name: string } | null;
+}
+
+export interface ResourceMonitorRow {
+    id: string;
+    name: string;
+    logo_url: string | null;
+    subscription_tier: 'starter' | 'pro' | '1k' | '2k' | '2.5k';
+    subscription_status: 'active' | 'past_due' | 'cancelled' | 'trial' | 'expired';
+    storage_used_mb: number;
+    storage_limit_mb: number;
+    ai_credits_used: number;
+    ai_credits_limit: number;
+    db_reads: number;
+    db_writes: number;
+    bandwidth_used_mb: number;
+    bandwidth_limit_mb: number;
+}
+
+export interface ResourceMonitorSummary {
+    total_global_storage_mb: number;
+    total_ai_cost_inr: number;
+    hotels_near_limit: number;
 }
 
 // ─── Verify Super Admin ──────────────────────────────────────────────────────
@@ -110,10 +141,79 @@ export async function getPlatformStats(): Promise<PlatformStats> {
 export async function getAllRestaurants(
     page: number = 1,
     limit: number = 10,
-    search: string = ''
-): Promise<{ data: RestaurantWithOwner[]; total: number }> {
+    search: string = '',
+    filters?: { tier?: 'all' | 'free' | 'pro' | 'enterprise'; status?: 'all' | 'active' | 'past_due' | 'cancelled' | 'trial' | 'expired' }
+): Promise<{ data: RestaurantWithOwner[]; total: number; metrics: RestaurantManagerMetrics }> {
     const restaurantsRef = adminFirestore.collection('restaurants');
     let snap = await restaurantsRef.orderBy('created_at', 'desc').get();
+
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const tierPricing: Record<string, number> = {
+        'starter': 1000,
+        'pro': 2000,
+        '1k': 1000,
+        '2k': 2000,
+        '2.5k': 2500,
+    };
+
+    const normalizeDate = (raw: any): Date | null => {
+        if (!raw) return null;
+        const parsed = new Date(raw);
+        if (Number.isNaN(parsed.getTime())) return null;
+        return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+    };
+
+    const getEffectiveStatus = (rawStatus: any, endDateRaw: any): RestaurantWithOwner['subscription_status'] => {
+        const endDate = normalizeDate(endDateRaw);
+        if (endDate && endDate < today) return 'expired';
+        const status = rawStatus || 'active';
+        if (status === 'active' || status === 'past_due' || status === 'cancelled' || status === 'trial' || status === 'expired') {
+            return status;
+        }
+        return 'active';
+    };
+
+    // Backend metrics used by Restaurant Manager top row.
+    let totalRevenue = 0;
+    let totalActiveRestaurants = 0;
+    let pendingRenewals = 0;
+    let currentMonthSignups = 0;
+    let previousMonthSignups = 0;
+
+    const startOfCurrentMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    const startOfPreviousMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+
+    for (const doc of snap.docs) {
+        const data = doc.data();
+        const effectiveStatus = getEffectiveStatus(data.subscription_status, data.subscription_end_date);
+        const tier = data.subscription_tier || 'starter';
+        if (effectiveStatus === 'active') {
+            totalRevenue += tierPricing[tier] || 0;
+            totalActiveRestaurants += 1;
+        }
+
+        const endDate = normalizeDate(data.subscription_end_date);
+        if (effectiveStatus !== 'expired' && effectiveStatus !== 'cancelled' && endDate) {
+            const diffDays = Math.ceil((endDate.getTime() - today.getTime()) / 86400000);
+            if (diffDays >= 0 && diffDays <= 7) pendingRenewals += 1;
+        }
+
+        const createdAtRaw = data.created_at?.toDate?.() || (data.created_at ? new Date(data.created_at) : null);
+        if (createdAtRaw && !Number.isNaN(createdAtRaw.getTime())) {
+            if (createdAtRaw >= startOfCurrentMonth) currentMonthSignups += 1;
+            else if (createdAtRaw >= startOfPreviousMonth && createdAtRaw < startOfCurrentMonth) previousMonthSignups += 1;
+        }
+
+        if (effectiveStatus === 'expired' && data.subscription_status !== 'expired') {
+            // Keep stored status aligned with date-driven expiry.
+            await doc.ref.update({ subscription_status: 'expired' });
+        }
+    }
+
+    const growthPercent = previousMonthSignups === 0
+        ? (currentMonthSignups > 0 ? 100 : 0)
+        : Math.round(((currentMonthSignups - previousMonthSignups) / previousMonthSignups) * 100);
 
     // Filter by search
     let filteredDocs = snap.docs;
@@ -122,6 +222,23 @@ export async function getAllRestaurants(
         filteredDocs = filteredDocs.filter(doc =>
             (doc.data().name || '').toLowerCase().includes(lowerSearch)
         );
+    }
+
+    if (filters?.tier && filters.tier !== 'all') {
+        filteredDocs = filteredDocs.filter(doc => {
+            const tier = doc.data().subscription_tier || 'starter';
+            if (filters.tier === 'free') return tier === 'starter' || tier === '1k';
+            if (filters.tier === 'pro') return tier === 'pro' || tier === '2k';
+            if (filters.tier === 'enterprise') return tier === '2.5k';
+            return true;
+        });
+    }
+
+    if (filters?.status && filters.status !== 'all') {
+        filteredDocs = filteredDocs.filter(doc => {
+            const d = doc.data();
+            return getEffectiveStatus(d.subscription_status, d.subscription_end_date) === filters.status;
+        });
     }
 
     const total = filteredDocs.length;
@@ -151,7 +268,7 @@ export async function getAllRestaurants(
                 name: d.name || '',
                 owner_name: ownerName,
                 subscription_tier: d.subscription_tier || 'starter',
-                subscription_status: d.subscription_status || 'active',
+                subscription_status: getEffectiveStatus(d.subscription_status, d.subscription_end_date),
                 created_at: createdAt,
                 monthly_revenue: d.monthly_revenue || 0,
                 last_report_date: d.last_report_date || null,
@@ -163,7 +280,16 @@ export async function getAllRestaurants(
         })
     );
 
-    return { data, total };
+    return {
+        data,
+        total,
+        metrics: {
+            total_revenue: totalRevenue,
+            total_active_restaurants: totalActiveRestaurants,
+            growth_percent: growthPercent,
+            pending_renewals: pendingRenewals,
+        },
+    };
 }
 
 // ─── Update Restaurant Subscription ──────────────────────────────────────────
@@ -282,6 +408,33 @@ export async function deleteRestaurant(
             `Restaurant "${restaurantData?.name}" deleted`,
             'warning',
             { restaurant_id: restaurantId, restaurant_name: restaurantData?.name }
+        );
+
+        revalidatePath('/super-admin');
+        return { success: true };
+    } catch (error: any) {
+        return { success: false, error: error.message };
+    }
+}
+
+// ─── Archive Restaurant ──────────────────────────────────────────────────────
+
+export async function archiveRestaurant(
+    restaurantId: string
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        await adminFirestore.doc(`restaurants/${restaurantId}`).update({
+            archived: true,
+            archived_at: FieldValue.serverTimestamp(),
+            subscription_status: 'cancelled',
+        });
+
+        await logActivity(
+            'RESTAURANT_ARCHIVED',
+            `Restaurant ${restaurantId} archived`,
+            'warning',
+            { restaurant_id: restaurantId },
+            restaurantId
         );
 
         revalidatePath('/super-admin');
@@ -480,4 +633,183 @@ export async function promoteToSuperAdmin(
     } catch (error: any) {
         return { success: false, error: error.message };
     }
+}
+
+// ─── Resource Monitor ────────────────────────────────────────────────────────
+
+function toNumber(...values: any[]): number {
+    for (const value of values) {
+        if (typeof value === 'number' && Number.isFinite(value)) return value;
+        if (typeof value === 'string' && value.trim() !== '' && Number.isFinite(Number(value))) return Number(value);
+    }
+    return 0;
+}
+
+function normalizeStatus(rawStatus: any, endDateRaw: any): ResourceMonitorRow['subscription_status'] {
+    const today = new Date();
+    const baseDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const endDate = endDateRaw ? new Date(endDateRaw) : null;
+    if (endDate && !Number.isNaN(endDate.getTime())) {
+        const normalizedEnd = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+        if (normalizedEnd < baseDate) return 'expired';
+    }
+
+    if (rawStatus === 'active' || rawStatus === 'past_due' || rawStatus === 'cancelled' || rawStatus === 'trial' || rawStatus === 'expired') {
+        return rawStatus;
+    }
+    return 'active';
+}
+
+async function getStorageUsageForRestaurant(restaurantId: string): Promise<number | null> {
+    try {
+        const apps = getApps();
+        if (apps.length === 0) return null;
+
+        const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
+        if (!bucketName) return null;
+
+        const storage = getStorage(apps[0]);
+        const bucket = storage.bucket(bucketName);
+        const candidatePrefixes = [`restaurants/${restaurantId}/`, `${restaurantId}/`];
+
+        for (const prefix of candidatePrefixes) {
+            const [files] = await bucket.getFiles({ prefix });
+            if (files.length === 0) continue;
+
+            let totalBytes = 0;
+            files.forEach((file) => {
+                const size = toNumber(file.metadata?.size);
+                totalBytes += size;
+            });
+            return Math.round((totalBytes / (1024 * 1024)) * 100) / 100;
+        }
+
+        return 0;
+    } catch {
+        return null;
+    }
+}
+
+export async function getResourceMonitorData(): Promise<{ rows: ResourceMonitorRow[]; summary: ResourceMonitorSummary }> {
+    const restaurantsSnap = await adminFirestore.collection('restaurants').orderBy('name').get();
+    const currentMonthKey = new Date().toISOString().slice(0, 7);
+    const aiCostPerCreditInr = 0.2;
+
+    const rows: ResourceMonitorRow[] = await Promise.all(restaurantsSnap.docs.map(async (doc) => {
+        const d = doc.data();
+        const id = doc.id;
+
+        const [usageDocA, usageDocB, usageDocC, calculatedStorageMb] = await Promise.all([
+            adminFirestore.collection('resource_usage').doc(id).get(),
+            adminFirestore.collection('usage').doc(id).get(),
+            adminFirestore.collection('restaurants').doc(id).collection('usage').doc(currentMonthKey).get(),
+            getStorageUsageForRestaurant(id),
+        ]);
+
+        const usageA = usageDocA.exists ? usageDocA.data() || {} : {};
+        const usageB = usageDocB.exists ? usageDocB.data() || {} : {};
+        const usageC = usageDocC.exists ? usageDocC.data() || {} : {};
+
+        const storageLimit = toNumber(
+            d.storage_limit_mb,
+            d.usage_limits?.storage_mb,
+            usageA.storage_limit_mb,
+            usageB.storage_limit_mb,
+            500,
+        );
+        const aiLimit = toNumber(
+            d.ai_credits_limit,
+            d.usage_limits?.ai_credits,
+            usageA.ai_credits_limit,
+            usageB.ai_credits_limit,
+            1000,
+        );
+        const bandwidthLimit = toNumber(
+            d.bandwidth_limit_mb,
+            d.usage_limits?.bandwidth_mb,
+            usageA.bandwidth_limit_mb,
+            usageB.bandwidth_limit_mb,
+            2048,
+        );
+
+        const storageUsed = toNumber(
+            calculatedStorageMb,
+            usageA.storage_used_mb,
+            usageA.storageMb,
+            usageB.storage_used_mb,
+            usageC.storage_used_mb,
+            d.storage_used_mb,
+        );
+        const aiCreditsUsed = toNumber(
+            usageA.ai_credits_used,
+            usageA.aiCreditsUsed,
+            usageB.ai_credits_used,
+            usageC.ai_credits_used,
+            d.ai_credits_used,
+        );
+        const dbReads = toNumber(
+            usageA.db_reads,
+            usageA.firestore_reads,
+            usageB.db_reads,
+            usageC.db_reads,
+            d.db_reads,
+        );
+        const dbWrites = toNumber(
+            usageA.db_writes,
+            usageA.firestore_writes,
+            usageB.db_writes,
+            usageC.db_writes,
+            d.db_writes,
+        );
+        const bandwidthUsed = toNumber(
+            usageA.bandwidth_used_mb,
+            usageA.bandwidthMb,
+            usageB.bandwidth_used_mb,
+            usageC.bandwidth_used_mb,
+            d.bandwidth_used_mb,
+        );
+
+        return {
+            id,
+            name: d.name || id,
+            logo_url: d.logo_url || d.logo || null,
+            subscription_tier: d.subscription_tier || 'starter',
+            subscription_status: normalizeStatus(d.subscription_status, d.subscription_end_date),
+            storage_used_mb: storageUsed,
+            storage_limit_mb: storageLimit,
+            ai_credits_used: aiCreditsUsed,
+            ai_credits_limit: aiLimit,
+            db_reads: dbReads,
+            db_writes: dbWrites,
+            bandwidth_used_mb: bandwidthUsed,
+            bandwidth_limit_mb: bandwidthLimit,
+        };
+    }));
+
+    let totalGlobalStorageMb = 0;
+    let totalAiCostInr = 0;
+    let hotelsNearLimit = 0;
+
+    rows.forEach((row) => {
+        totalGlobalStorageMb += row.storage_used_mb;
+        totalAiCostInr += row.ai_credits_used * aiCostPerCreditInr;
+
+        const storagePct = row.storage_limit_mb > 0 ? (row.storage_used_mb / row.storage_limit_mb) * 100 : 0;
+        const aiPct = row.ai_credits_limit > 0 ? (row.ai_credits_used / row.ai_credits_limit) * 100 : 0;
+        if (storagePct >= 80 || aiPct >= 80) hotelsNearLimit += 1;
+    });
+
+    const summary: ResourceMonitorSummary = {
+        total_global_storage_mb: Math.round(totalGlobalStorageMb * 100) / 100,
+        total_ai_cost_inr: Math.round(totalAiCostInr * 100) / 100,
+        hotels_near_limit: hotelsNearLimit,
+    };
+
+    const sortedRows = [...rows].sort((a, b) => {
+        const aPct = a.storage_limit_mb > 0 ? a.storage_used_mb / a.storage_limit_mb : 0;
+        const bPct = b.storage_limit_mb > 0 ? b.storage_used_mb / b.storage_limit_mb : 0;
+        return bPct - aPct;
+    });
+
+    return { rows: sortedRows, summary };
 }

@@ -141,6 +141,19 @@ service cloud.firestore {
         // Only server-side (Admin SDK) should write analytics
         allow write: if false;
       }
+
+      // ─── Usage Sub-collection ─────────────────────────────────────────
+      // Stores metering docs like:
+      // restaurants/{resId}/usage/ai_credits_used
+      match /usage/{usageId} {
+        // Super-admin can monitor all usage in God Mode.
+        // Restaurant users can read their own usage metrics.
+        allow read: if isSuperAdmin() || belongsToRestaurant(resId);
+
+        // Only super-admin, owner/admin, or server-backed tenant writes.
+        allow create, update: if isSuperAdmin() || isOwnerOrAdmin(resId);
+        allow delete: if isSuperAdmin();
+      }
     }
     
     // ─── Global Logs (Super-Admin only) ─────────────────────────────────

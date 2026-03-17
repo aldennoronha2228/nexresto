@@ -37,6 +37,7 @@ import {
     type Auth,
 } from 'firebase/auth';
 import { getFirestore, type Firestore } from 'firebase/firestore';
+import { getStorage, type FirebaseStorage } from 'firebase/storage';
 
 // ─── Firebase Config ──────────────────────────────────────────────────────────
 const firebaseConfig = {
@@ -89,6 +90,7 @@ function getAdminApp(): FirebaseApp {
 const tenantApp = getTenantApp();
 export const db: Firestore = getFirestore(tenantApp);
 export const tenantAuth: Auth = getAuth(tenantApp);
+export const storage: FirebaseStorage = getStorage(tenantApp);
 
 // Set persistence to LOCAL (survives tab close, but each Firebase App instance
 // has its own namespace so admin and tenant don't clash)
@@ -105,6 +107,7 @@ if (typeof window !== 'undefined') {
 const adminApp = getAdminApp();
 export const adminAuth: Auth = getAuth(adminApp);
 export const adminDb: Firestore = getFirestore(adminApp);
+export const adminStorage: FirebaseStorage = getStorage(adminApp);
 
 if (typeof window !== 'undefined') {
     setPersistence(adminAuth, browserLocalPersistence).catch(console.error);

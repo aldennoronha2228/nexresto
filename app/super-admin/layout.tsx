@@ -22,7 +22,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'motion/react';
 import {
     LayoutDashboard, Building2, ScrollText,
-    ChevronLeft, LogOut, Shield, Menu, X
+    ChevronLeft, LogOut, Shield, Menu, X, HardDrive
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -30,6 +30,7 @@ import { cn } from '@/lib/utils';
 const navigation = [
     { name: 'Overview', href: '/super-admin', icon: LayoutDashboard },
     { name: 'Restaurants', href: '/super-admin/restaurants', icon: Building2 },
+    { name: 'Usage & Billing', href: '/super-admin/resource-monitor', icon: HardDrive },
     { name: 'Activity Logs', href: '/super-admin/logs', icon: ScrollText },
 ];
 

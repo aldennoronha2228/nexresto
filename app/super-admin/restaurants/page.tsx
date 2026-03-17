@@ -9,22 +9,24 @@ import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
     Search, MoreVertical, Building2, User, CreditCard,
-    ChevronLeft, ChevronRight, LogIn, KeyRound, Settings,
-    Trash2, AlertTriangle, Check, X, Copy, ExternalLink, FileText, Calendar,
-    Eye, EyeOff, RefreshCw, Shield, Users
+    ChevronLeft, ChevronRight, LogIn, KeyRound,
+    Trash2, AlertTriangle, Check, X, Copy, FileText, Calendar,
+    Eye, EyeOff, RefreshCw, Shield, Users, Filter, DollarSign, TrendingUp, Clock3, Archive
 } from 'lucide-react';
+import Link from 'next/link';
 import { DayPicker } from 'react-day-picker';
 import { format } from 'date-fns';
 import {
     getAllRestaurants,
     updateRestaurantSubscription,
     updateRestaurantStatus,
+    archiveRestaurant,
     deleteRestaurant,
     resetUserPassword,
     sendPasswordResetEmail,
-    getImpersonationToken,
     getRestaurantUsers,
     updateSubscriptionDates,
+    type RestaurantManagerMetrics,
     type RestaurantWithOwner
 } from '@/lib/firebase-super-admin-actions';
 import { cn } from '@/lib/utils';
@@ -36,7 +38,7 @@ const tierColors: Record<string, string> = {
     'pro': 'bg-purple-500/20 text-purple-400 border-purple-500/30',
     '1k': 'bg-slate-500/20 text-slate-300 border-slate-500/30',
     '2k': 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-    '2.5k': 'bg-purple-500/20 text-purple-400 border-purple-500/30',
+    '2.5k': 'bg-amber-500/20 text-amber-300 border-amber-500/40',
 };
 
 const statusColors = {
@@ -44,14 +46,15 @@ const statusColors = {
     past_due: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
     cancelled: 'bg-red-500/20 text-red-400 border-red-500/30',
     trial: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
+    expired: 'bg-red-600/30 text-red-300 border-red-500/50',
 };
 
 const tierLabels: Record<string, string> = {
-    'starter': 'Starter ₹1k',
+    'starter': 'Basic ₹1k',
     'pro': 'Pro ₹2k',
-    '1k': 'Starter ₹1k',
+    '1k': 'Basic ₹1k',
     '2k': 'Pro ₹2k',
-    '2.5k': 'Elite ₹2.5k',
+    '2.5k': 'Enterprise ₹2.5k',
 };
 
 function parseDateInput(value: string): Date | undefined {
@@ -69,19 +72,31 @@ function formatDateInput(value?: Date): string {
 }
 
 export default function RestaurantManager() {
+    const [metrics, setMetrics] = useState<RestaurantManagerMetrics>({
+        total_revenue: 0,
+        total_active_restaurants: 0,
+        growth_percent: 0,
+        pending_renewals: 0,
+    });
     const [restaurants, setRestaurants] = useState<RestaurantWithOwner[]>([]);
     const [total, setTotal] = useState(0);
     const [page, setPage] = useState(1);
     const [search, setSearch] = useState('');
+    const [tierFilter, setTierFilter] = useState<'all' | 'free' | 'pro' | 'enterprise'>('all');
+    const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'past_due' | 'cancelled' | 'trial' | 'expired'>('all');
+    const [showFilters, setShowFilters] = useState(false);
     const [loading, setLoading] = useState(true);
     const [activeMenu, setActiveMenu] = useState<string | null>(null);
 
     // Modal states
-    const [showDeleteModal, setShowDeleteModal] = useState<string | null>(null);
     const [showTierModal, setShowTierModal] = useState<string | null>(null);
     const [showPasswordModal, setShowPasswordModal] = useState<{ restaurantId: string; users: any[] } | null>(null);
-    const [showImpersonateModal, setShowImpersonateModal] = useState<{ restaurantId: string; users: any[] } | null>(null);
     const [showDatesModal, setShowDatesModal] = useState<RestaurantWithOwner | null>(null);
+    const [showExtendModal, setShowExtendModal] = useState<RestaurantWithOwner | null>(null);
+    const [showDangerModal, setShowDangerModal] = useState<{ id: string; name: string } | null>(null);
+    const [dangerAction, setDangerAction] = useState<'archive' | 'delete' | null>(null);
+    const [dangerConfirmText, setDangerConfirmText] = useState('');
+    const [processingDanger, setProcessingDanger] = useState(false);
 
     // Subscription dates state
     const [subStartDate, setSubStartDate] = useState<string>('');
@@ -90,9 +105,7 @@ export default function RestaurantManager() {
     const [savingDates, setSavingDates] = useState(false);
 
     // Action states
-    const [deleting, setDeleting] = useState(false);
     const [tempPassword, setTempPassword] = useState<string | null>(null);
-    const [impersonationLink, setImpersonationLink] = useState<string | null>(null);
     const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
     // Password reset states
@@ -103,35 +116,53 @@ export default function RestaurantManager() {
 
     const loadRestaurants = useCallback(async () => {
         setLoading(true);
-        const { data, total } = await getAllRestaurants(page, ITEMS_PER_PAGE, search);
+        const { data, total, metrics: nextMetrics } = await getAllRestaurants(page, ITEMS_PER_PAGE, search, {
+            tier: tierFilter,
+            status: statusFilter,
+        });
         setRestaurants(data);
         setTotal(total);
+        setMetrics(nextMetrics);
         setLoading(false);
-    }, [page, search]);
+    }, [page, search, tierFilter, statusFilter]);
 
     useEffect(() => {
         loadRestaurants();
     }, [loadRestaurants]);
 
     useEffect(() => {
-        // Reset to page 1 when search changes
+        // Reset to page 1 when search or filters change
         setPage(1);
-    }, [search]);
+    }, [search, tierFilter, statusFilter]);
 
     const totalPages = Math.ceil(total / ITEMS_PER_PAGE);
 
-    const handleDelete = async () => {
-        if (!showDeleteModal) return;
-        setDeleting(true);
-        const result = await deleteRestaurant(showDeleteModal);
-        if (result.success) {
-            setActionMessage({ type: 'success', text: 'Restaurant deleted successfully' });
-            loadRestaurants();
-        } else {
-            setActionMessage({ type: 'error', text: result.error || 'Failed to delete' });
+    const handleDangerAction = async () => {
+        if (!showDangerModal || !dangerAction) return;
+        const expected = dangerAction === 'delete' ? 'DELETE' : 'ARCHIVE';
+        if (dangerConfirmText.trim().toUpperCase() !== expected) {
+            setActionMessage({ type: 'error', text: `Type ${expected} to confirm` });
+            return;
         }
-        setDeleting(false);
-        setShowDeleteModal(null);
+
+        setProcessingDanger(true);
+        const result = dangerAction === 'delete'
+            ? await deleteRestaurant(showDangerModal.id)
+            : await archiveRestaurant(showDangerModal.id);
+
+        if (result.success) {
+            setActionMessage({
+                type: 'success',
+                text: dangerAction === 'delete' ? 'Restaurant deleted' : 'Restaurant archived',
+            });
+            loadRestaurants();
+            setShowDangerModal(null);
+            setDangerAction(null);
+            setDangerConfirmText('');
+        } else {
+            setActionMessage({ type: 'error', text: result.error || 'Action failed' });
+        }
+        setProcessingDanger(false);
     };
 
     const handleTierChange = async (restaurantId: string, tier: 'starter' | 'pro' | '1k' | '2k') => {
@@ -145,7 +176,8 @@ export default function RestaurantManager() {
         setShowTierModal(null);
     };
 
-    const handleStatusChange = async (restaurantId: string, status: 'active' | 'past_due' | 'cancelled' | 'trial') => {
+    const handleStatusChange = async (restaurantId: string, status: 'active' | 'past_due' | 'cancelled' | 'trial' | 'expired') => {
+        if (status === 'expired') return;
         const result = await updateRestaurantStatus(restaurantId, status);
         if (result.success) {
             setActionMessage({ type: 'success', text: 'Status updated' });
@@ -191,10 +223,30 @@ export default function RestaurantManager() {
         setActiveMenu(null);
     };
 
-    const openImpersonateModal = async (restaurantId: string) => {
-        const users = await getRestaurantUsers(restaurantId);
-        setShowImpersonateModal({ restaurantId, users });
-        setActiveMenu(null);
+    const handleQuickExtend = async (days: 7 | 30) => {
+        if (!showExtendModal) return;
+        const baseDate = showExtendModal.subscription_end_date
+            ? new Date(showExtendModal.subscription_end_date)
+            : new Date();
+        const today = new Date();
+        const base = Number.isNaN(baseDate.getTime()) || baseDate < today ? today : baseDate;
+        const nextEnd = new Date(base);
+        nextEnd.setDate(nextEnd.getDate() + days);
+
+        const endStr = format(nextEnd, 'yyyy-MM-dd');
+        const result = await updateSubscriptionDates(
+            showExtendModal.id,
+            showExtendModal.subscription_start_date || format(today, 'yyyy-MM-dd'),
+            endStr
+        );
+
+        if (result.success) {
+            setActionMessage({ type: 'success', text: `Subscription extended by ${days} days` });
+            setShowExtendModal(null);
+            loadRestaurants();
+        } else {
+            setActionMessage({ type: 'error', text: result.error || 'Failed to extend subscription' });
+        }
     };
 
     // Generate a strong password
@@ -251,15 +303,6 @@ export default function RestaurantManager() {
         setResettingPassword(false);
     };
 
-    const handleImpersonate = async (userId: string) => {
-        const result = await getImpersonationToken(userId);
-        if (result.success && result.token) {
-            setImpersonationLink(result.token);
-        } else {
-            setActionMessage({ type: 'error', text: result.error || 'Failed to generate link' });
-        }
-    };
-
     const copyToClipboard = (text: string) => {
         navigator.clipboard.writeText(text);
         setActionMessage({ type: 'success', text: 'Copied to clipboard!' });
@@ -275,6 +318,38 @@ export default function RestaurantManager() {
 
     return (
         <div className="space-y-6">
+            {/* Top metrics row */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div className="bg-slate-800/70 backdrop-blur-sm rounded-xl px-4 py-3">
+                    <p className="text-slate-400 text-xs">Total Revenue</p>
+                    <p className="text-white text-lg font-semibold mt-1 flex items-center gap-2">
+                        <DollarSign className="w-4 h-4 text-emerald-400" />
+                        ₹{metrics.total_revenue.toLocaleString('en-IN')}
+                    </p>
+                </div>
+                <div className="bg-slate-800/70 backdrop-blur-sm rounded-xl px-4 py-3">
+                    <p className="text-slate-400 text-xs">Total Active Restaurants</p>
+                    <p className="text-white text-lg font-semibold mt-1">{metrics.total_active_restaurants}</p>
+                </div>
+                <div className="bg-slate-800/70 backdrop-blur-sm rounded-xl px-4 py-3">
+                    <p className="text-slate-400 text-xs">Growth %</p>
+                    <p className={cn(
+                        "text-lg font-semibold mt-1 flex items-center gap-2",
+                        metrics.growth_percent >= 0 ? 'text-green-400' : 'text-red-400'
+                    )}>
+                        <TrendingUp className="w-4 h-4" />
+                        {metrics.growth_percent >= 0 ? '+' : ''}{metrics.growth_percent}%
+                    </p>
+                </div>
+                <div className="bg-slate-800/70 backdrop-blur-sm rounded-xl px-4 py-3">
+                    <p className="text-slate-400 text-xs">Pending Renewals</p>
+                    <p className="text-amber-400 text-lg font-semibold mt-1 flex items-center gap-2">
+                        <Clock3 className="w-4 h-4" />
+                        {metrics.pending_renewals}
+                    </p>
+                </div>
+            </div>
+
             {/* Header */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div>
@@ -282,16 +357,79 @@ export default function RestaurantManager() {
                     <p className="text-slate-400 mt-1">{total} restaurants in total</p>
                 </div>
 
-                {/* Search */}
-                <div className="relative w-full sm:w-72">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                    <input
-                        type="text"
-                        placeholder="Search restaurants..."
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
-                    />
+                {/* Search and Filter */}
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <div className="relative w-full sm:w-72">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                        <input
+                            type="text"
+                            placeholder="Search restaurants..."
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            className="w-full pl-10 pr-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+                        />
+                    </div>
+                    <div className="relative">
+                        <button
+                            onClick={() => setShowFilters((prev) => !prev)}
+                            className={cn(
+                                "inline-flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm transition-colors",
+                                (tierFilter !== 'all' || statusFilter !== 'all')
+                                    ? 'bg-purple-500/20 border-purple-500/30 text-purple-300'
+                                    : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
+                            )}
+                        >
+                            <Filter className="w-4 h-4" />
+                            Filter
+                        </button>
+
+                        <AnimatePresence>
+                            {showFilters && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: -6 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: -6 }}
+                                    className="absolute right-0 mt-2 w-72 bg-slate-800 border border-slate-700 rounded-xl shadow-xl z-30 p-4"
+                                >
+                                    <p className="text-slate-300 text-sm mb-2">Tier</p>
+                                    <div className="flex flex-wrap gap-2 mb-4">
+                                        {['all', 'free', 'pro', 'enterprise'].map((tier) => (
+                                            <button
+                                                key={tier}
+                                                onClick={() => setTierFilter(tier as typeof tierFilter)}
+                                                className={cn(
+                                                    "px-3 py-1.5 rounded-lg text-xs capitalize transition-colors",
+                                                    tierFilter === tier
+                                                        ? 'bg-purple-600 text-white'
+                                                        : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                                                )}
+                                            >
+                                                {tier}
+                                            </button>
+                                        ))}
+                                    </div>
+
+                                    <p className="text-slate-300 text-sm mb-2">Status</p>
+                                    <div className="flex flex-wrap gap-2">
+                                        {['all', 'active', 'past_due', 'trial', 'cancelled', 'expired'].map((status) => (
+                                            <button
+                                                key={status}
+                                                onClick={() => setStatusFilter(status as typeof statusFilter)}
+                                                className={cn(
+                                                    "px-3 py-1.5 rounded-lg text-xs capitalize transition-colors",
+                                                    statusFilter === status
+                                                        ? 'bg-purple-600 text-white'
+                                                        : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                                                )}
+                                            >
+                                                {status.replace('_', ' ')}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                    </div>
                 </div>
             </div>
 
@@ -403,19 +541,28 @@ export default function RestaurantManager() {
                                             </button>
                                         </td>
                                         <td className="px-6 py-4">
-                                            <select
-                                                value={restaurant.subscription_status}
-                                                onChange={(e) => handleStatusChange(restaurant.id, e.target.value as any)}
-                                                className={cn(
-                                                    "px-3 py-1 rounded-full text-xs font-medium border bg-transparent cursor-pointer focus:outline-none",
-                                                    statusColors[restaurant.subscription_status]
-                                                )}
-                                            >
-                                                <option value="active" className="bg-slate-800">Active</option>
-                                                <option value="past_due" className="bg-slate-800">Past Due</option>
-                                                <option value="cancelled" className="bg-slate-800">Cancelled</option>
-                                                <option value="trial" className="bg-slate-800">Trial</option>
-                                            </select>
+                                            {restaurant.subscription_status === 'expired' ? (
+                                                <span className={cn(
+                                                    "px-3 py-1 rounded-full text-xs font-medium border inline-flex",
+                                                    statusColors.expired
+                                                )}>
+                                                    Expired
+                                                </span>
+                                            ) : (
+                                                <select
+                                                    value={restaurant.subscription_status}
+                                                    onChange={(e) => handleStatusChange(restaurant.id, e.target.value as any)}
+                                                    className={cn(
+                                                        "px-3 py-1 rounded-full text-xs font-medium border bg-transparent cursor-pointer focus:outline-none",
+                                                        statusColors[restaurant.subscription_status]
+                                                    )}
+                                                >
+                                                    <option value="active" className="bg-slate-800">Active</option>
+                                                    <option value="past_due" className="bg-slate-800">Past Due</option>
+                                                    <option value="cancelled" className="bg-slate-800">Cancelled</option>
+                                                    <option value="trial" className="bg-slate-800">Trial</option>
+                                                </select>
+                                            )}
                                         </td>
                                         <td className="px-6 py-4">
                                             <div className="flex items-center gap-2">
@@ -474,22 +621,23 @@ export default function RestaurantManager() {
                                                             exit={{ opacity: 0, scale: 0.95 }}
                                                             className="absolute right-0 top-full mt-1 w-48 bg-slate-700 rounded-xl border border-slate-600 shadow-xl z-20 overflow-hidden"
                                                         >
-                                                            <button
-                                                                onClick={() => {
-                                                                    setActiveMenu(null);
-                                                                    window.open(`/${restaurant.id}/dashboard/orders`, '_blank');
-                                                                }}
-                                                                className="w-full flex items-center gap-3 px-4 py-3 text-sm text-emerald-400 hover:bg-emerald-500/10 transition-colors"
-                                                            >
-                                                                <ExternalLink className="w-4 h-4" />
-                                                                Enter Dashboard ↗
-                                                            </button>
-                                                            <button
-                                                                onClick={() => openImpersonateModal(restaurant.id)}
+                                                            <Link
+                                                                href={`/admin/impersonate/${restaurant.id}`}
+                                                                onClick={() => setActiveMenu(null)}
                                                                 className="w-full flex items-center gap-3 px-4 py-3 text-sm text-slate-300 hover:bg-slate-600 transition-colors"
                                                             >
                                                                 <LogIn className="w-4 h-4" />
-                                                                Login As Owner
+                                                                Impersonate
+                                                            </Link>
+                                                            <button
+                                                                onClick={() => {
+                                                                    setShowExtendModal(restaurant);
+                                                                    setActiveMenu(null);
+                                                                }}
+                                                                className="w-full flex items-center gap-3 px-4 py-3 text-sm text-slate-300 hover:bg-slate-600 transition-colors"
+                                                            >
+                                                                <Calendar className="w-4 h-4" />
+                                                                Quick Extend
                                                             </button>
                                                             <button
                                                                 onClick={() => openPasswordModal(restaurant.id)}
@@ -509,22 +657,16 @@ export default function RestaurantManager() {
                                                                 Change Tier
                                                             </button>
                                                             <button
-                                                                onClick={() => openDatesModal(restaurant)}
-                                                                className="w-full flex items-center gap-3 px-4 py-3 text-sm text-slate-300 hover:bg-slate-600 transition-colors"
-                                                            >
-                                                                <Calendar className="w-4 h-4" />
-                                                                Subscription Dates
-                                                            </button>
-                                                            <div className="border-t border-slate-600" />
-                                                            <button
                                                                 onClick={() => {
-                                                                    setShowDeleteModal(restaurant.id);
+                                                                    setShowDangerModal({ id: restaurant.id, name: restaurant.name });
+                                                                    setDangerAction(null);
+                                                                    setDangerConfirmText('');
                                                                     setActiveMenu(null);
                                                                 }}
                                                                 className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-400 hover:bg-red-500/10 transition-colors"
                                                             >
                                                                 <Trash2 className="w-4 h-4" />
-                                                                Delete Restaurant
+                                                                Delete / Archive
                                                             </button>
                                                         </motion.div>
                                                     )}
@@ -567,15 +709,63 @@ export default function RestaurantManager() {
                 )}
             </div>
 
-            {/* Delete Confirmation Modal */}
+            {/* Quick Extend Modal */}
             <AnimatePresence>
-                {showDeleteModal && (
+                {showExtendModal && (
                     <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                         className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-                        onClick={() => setShowDeleteModal(null)}
+                        onClick={() => setShowExtendModal(null)}
+                    >
+                        <motion.div
+                            initial={{ scale: 0.95 }}
+                            animate={{ scale: 1 }}
+                            exit={{ scale: 0.95 }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="bg-slate-800 rounded-2xl border border-slate-700 p-6 w-full max-w-md"
+                        >
+                            <h3 className="text-lg font-semibold text-white mb-2">Quick Extend</h3>
+                            <p className="text-slate-400 text-sm mb-6">Extend subscription for {showExtendModal.name}</p>
+                            <div className="grid grid-cols-2 gap-3">
+                                <button
+                                    onClick={() => handleQuickExtend(7)}
+                                    className="px-4 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-xl transition-colors"
+                                >
+                                    +7 Days
+                                </button>
+                                <button
+                                    onClick={() => handleQuickExtend(30)}
+                                    className="px-4 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl transition-colors"
+                                >
+                                    +30 Days
+                                </button>
+                            </div>
+                            <button
+                                onClick={() => setShowExtendModal(null)}
+                                className="w-full mt-4 px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-xl transition-colors"
+                            >
+                                Cancel
+                            </button>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* Double Confirmation Modal */}
+            <AnimatePresence>
+                {showDangerModal && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+                        onClick={() => {
+                            setShowDangerModal(null);
+                            setDangerAction(null);
+                            setDangerConfirmText('');
+                        }}
                     >
                         <motion.div
                             initial={{ scale: 0.95 }}
@@ -589,28 +779,63 @@ export default function RestaurantManager() {
                                     <AlertTriangle className="w-6 h-6 text-red-400" />
                                 </div>
                                 <div>
-                                    <h3 className="text-lg font-semibold text-white">Delete Restaurant</h3>
-                                    <p className="text-slate-400 text-sm">This action cannot be undone</p>
+                                    <h3 className="text-lg font-semibold text-white">Delete / Archive</h3>
+                                    <p className="text-slate-400 text-sm">Double confirmation required</p>
                                 </div>
                             </div>
-                            <p className="text-slate-300 mb-6">
-                                Are you sure you want to delete this restaurant? All data including menu items, orders, and user accounts will be permanently deleted.
-                            </p>
-                            <div className="flex gap-3">
-                                <button
-                                    onClick={() => setShowDeleteModal(null)}
-                                    className="flex-1 px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-xl transition-colors"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    onClick={handleDelete}
-                                    disabled={deleting}
-                                    className="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl transition-colors disabled:opacity-50"
-                                >
-                                    {deleting ? 'Deleting...' : 'Delete'}
-                                </button>
-                            </div>
+
+                            {!dangerAction ? (
+                                <div className="space-y-3">
+                                    <p className="text-slate-300 text-sm">Choose action for {showDangerModal.name}:</p>
+                                    <button
+                                        onClick={() => setDangerAction('archive')}
+                                        className="w-full flex items-center gap-2 px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl transition-colors"
+                                    >
+                                        <Archive className="w-4 h-4" />
+                                        Archive Restaurant
+                                    </button>
+                                    <button
+                                        onClick={() => setDangerAction('delete')}
+                                        className="w-full flex items-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl transition-colors"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                        Delete Permanently
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="space-y-3">
+                                    <p className="text-slate-300 text-sm">
+                                        Type <span className="font-semibold text-white">{dangerAction === 'delete' ? 'DELETE' : 'ARCHIVE'}</span> to confirm.
+                                    </p>
+                                    <input
+                                        value={dangerConfirmText}
+                                        onChange={(e) => setDangerConfirmText(e.target.value)}
+                                        className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
+                                        placeholder={dangerAction === 'delete' ? 'Type DELETE' : 'Type ARCHIVE'}
+                                    />
+                                    <button
+                                        onClick={handleDangerAction}
+                                        disabled={processingDanger}
+                                        className={cn(
+                                            "w-full px-4 py-2.5 text-white rounded-xl transition-colors disabled:opacity-50",
+                                            dangerAction === 'delete' ? 'bg-red-600 hover:bg-red-700' : 'bg-amber-600 hover:bg-amber-700'
+                                        )}
+                                    >
+                                        {processingDanger ? 'Processing...' : 'Confirm'}
+                                    </button>
+                                </div>
+                            )}
+
+                            <button
+                                onClick={() => {
+                                    setShowDangerModal(null);
+                                    setDangerAction(null);
+                                    setDangerConfirmText('');
+                                }}
+                                className="w-full mt-4 px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-xl transition-colors"
+                            >
+                                Cancel
+                            </button>
                         </motion.div>
                     </motion.div>
                 )}
@@ -1062,94 +1287,6 @@ export default function RestaurantManager() {
                                     <button
                                         onClick={() => setShowPasswordModal(null)}
                                         className="w-full px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-xl transition-colors mt-2"
-                                    >
-                                        Cancel
-                                    </button>
-                                </div>
-                            )}
-                        </motion.div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
-
-            {/* Impersonation Modal */}
-            <AnimatePresence>
-                {showImpersonateModal && (
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-                        onClick={() => { setShowImpersonateModal(null); setImpersonationLink(null); }}
-                    >
-                        <motion.div
-                            initial={{ scale: 0.95 }}
-                            animate={{ scale: 1 }}
-                            exit={{ scale: 0.95 }}
-                            onClick={(e) => e.stopPropagation()}
-                            className="bg-slate-800 rounded-2xl border border-slate-700 p-6 w-full max-w-md"
-                        >
-                            <h3 className="text-lg font-semibold text-white mb-4">Login As User</h3>
-
-                            {impersonationLink ? (
-                                <div className="space-y-4">
-                                    <div className="p-4 bg-yellow-500/20 border border-yellow-500/30 rounded-xl">
-                                        <p className="text-yellow-400 text-sm mb-2">Magic Link Generated:</p>
-                                        <p className="text-slate-300 text-xs mb-3">Open this link in an incognito window to login as the user.</p>
-                                        <div className="flex gap-2">
-                                            <button
-                                                onClick={() => copyToClipboard(impersonationLink)}
-                                                className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
-                                            >
-                                                <Copy className="w-4 h-4" />
-                                                Copy Link
-                                            </button>
-                                            <a
-                                                href={impersonationLink}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors"
-                                            >
-                                                <ExternalLink className="w-4 h-4" />
-                                                Open
-                                            </a>
-                                        </div>
-                                    </div>
-                                    <button
-                                        onClick={() => { setShowImpersonateModal(null); setImpersonationLink(null); }}
-                                        className="w-full px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-xl transition-colors"
-                                    >
-                                        Done
-                                    </button>
-                                </div>
-                            ) : showImpersonateModal.users.length === 0 ? (
-                                <div className="text-center py-8">
-                                    <p className="text-slate-400">No users found for this restaurant</p>
-                                    <button
-                                        onClick={() => setShowImpersonateModal(null)}
-                                        className="mt-4 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-xl transition-colors"
-                                    >
-                                        Close
-                                    </button>
-                                </div>
-                            ) : (
-                                <div className="space-y-3">
-                                    {showImpersonateModal.users.map((user) => (
-                                        <button
-                                            key={user.id}
-                                            onClick={() => handleImpersonate(user.id)}
-                                            className="w-full flex items-center justify-between p-4 bg-slate-700/50 hover:bg-slate-700 rounded-xl transition-colors"
-                                        >
-                                            <div className="text-left">
-                                                <p className="text-white font-medium">{user.email}</p>
-                                                <p className="text-slate-400 text-xs capitalize">{user.role}</p>
-                                            </div>
-                                            <LogIn className="w-5 h-5 text-slate-400" />
-                                        </button>
-                                    ))}
-                                    <button
-                                        onClick={() => setShowImpersonateModal(null)}
-                                        className="w-full px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-xl transition-colors"
                                     >
                                         Cancel
                                     </button>
