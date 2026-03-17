@@ -15,7 +15,7 @@ interface SubscriptionGuardProps {
 }
 
 export function SubscriptionGuard({ children }: SubscriptionGuardProps) {
-    const { subscriptionStatus, tenantName, loading } = useAuth();
+    const { subscriptionStatus, tenantName, loading, isImpersonating } = useAuth();
     const { userRole: superAdminRole } = useSuperAdminAuth();
     const isSuperAdmin = superAdminRole === 'super_admin';
 
@@ -25,7 +25,7 @@ export function SubscriptionGuard({ children }: SubscriptionGuardProps) {
     }
 
     // Allow access if status is active/trial OR if user is a Super Admin (God Mode bypass)
-    if (isSuperAdmin || subscriptionStatus === 'active' || subscriptionStatus === 'trial' || !subscriptionStatus) {
+    if (isSuperAdmin || isImpersonating || subscriptionStatus === 'active' || subscriptionStatus === 'trial' || !subscriptionStatus) {
         return <>{children}</>;
     }
 

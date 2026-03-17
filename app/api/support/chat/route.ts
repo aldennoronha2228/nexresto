@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { FieldValue } from 'firebase-admin/firestore';
+import { adminAuth, adminFirestore } from '@/lib/firebase-admin';
 
 type ChatMessage = {
     role: 'user' | 'assistant';
@@ -22,6 +24,23 @@ type DashboardContext = {
         keyAreas?: string[];
     };
     generatedAt?: string;
+};
+
+type Claims = {
+    role?: string;
+    restaurant_id?: string;
+    tenant_id?: string;
+};
+
+type AiTier = 'free' | 'pro';
+
+type AiUsage = {
+    tier: AiTier;
+    used: number;
+    limit: number;
+    remaining: number;
+    isLimitReached: boolean;
+    resetsAt: string;
 };
 
 const SYSTEM_PROMPT = [
@@ -50,6 +69,67 @@ const MODEL_CANDIDATES = [
     'gemini-2.0-flash',
     'gemini-flash-latest',
 ];
+
+function resolveAiTier(subscriptionTierRaw: unknown): AiTier {
+    const tier = String(subscriptionTierRaw || '').trim().toLowerCase();
+    if (tier === 'pro' || tier === '2k' || tier === '2.5k') return 'pro';
+    return 'free';
+}
+
+function getDailyLimit(tier: AiTier): number {
+    return tier === 'pro' ? 30 : 5;
+}
+
+function getTodayYmdUtc(): string {
+    return new Date().toISOString().slice(0, 10);
+}
+
+function getNextUtcMidnightIso(): string {
+    const now = new Date();
+    const next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0, 0));
+    return next.toISOString();
+}
+
+function toNonNegativeInt(value: unknown): number {
+    const n = Number(value);
+    if (!Number.isFinite(n) || n < 0) return 0;
+    return Math.floor(n);
+}
+
+function buildUsage(tier: AiTier, used: number): AiUsage {
+    const limit = getDailyLimit(tier);
+    return {
+        tier,
+        used,
+        limit,
+        remaining: Math.max(0, limit - used),
+        isLimitReached: used >= limit,
+        resetsAt: getNextUtcMidnightIso(),
+    };
+}
+
+async function requireAuthorizedRestaurant(request: NextRequest, restaurantId: string): Promise<{ restaurantId: string } | NextResponse> {
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    if (!restaurantId) {
+        return NextResponse.json({ error: 'restaurantId is required' }, { status: 400 });
+    }
+
+    const token = authHeader.slice(7);
+    const decoded = await adminAuth.verifyIdToken(token);
+    const user = await adminAuth.getUser(decoded.uid);
+    const claims = (user.customClaims || {}) as Claims;
+
+    const claimRestaurantId = String(claims.restaurant_id || claims.tenant_id || '');
+    if (claims.role !== 'super_admin' && claimRestaurantId !== restaurantId) {
+        return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+    }
+
+    return { restaurantId };
+}
 
 function buildContextPrompt(context: DashboardContext | null): string {
     if (!context) return '';
@@ -134,6 +214,48 @@ export async function POST(request: NextRequest) {
 
     try {
         const body = await request.json();
+        const restaurantId = String(body?.restaurantId || '').trim();
+        const auth = await requireAuthorizedRestaurant(request, restaurantId);
+        if (auth instanceof NextResponse) return auth;
+
+        const restaurantRef = adminFirestore.doc(`restaurants/${restaurantId}`);
+        const restaurantSnap = await restaurantRef.get();
+        if (!restaurantSnap.exists) {
+            return NextResponse.json({ error: 'Restaurant not found' }, { status: 404 });
+        }
+
+        const restaurantData = restaurantSnap.data() || {};
+        const usageData = (restaurantData as any).usage || {};
+        const tier = resolveAiTier((restaurantData as any).subscription_tier);
+        const todayYmd = getTodayYmdUtc();
+        let dailyAiCount = toNonNegativeInt(usageData.dailyAiCount);
+        const dailyAiDate = String(usageData.dailyAiDate || '');
+
+        if (dailyAiDate !== todayYmd) {
+            dailyAiCount = 0;
+            await restaurantRef.set(
+                {
+                    usage: {
+                        dailyAiCount: 0,
+                        dailyAiDate: todayYmd,
+                    },
+                },
+                { merge: true },
+            );
+        }
+
+        const currentUsage = buildUsage(tier, dailyAiCount);
+        if (currentUsage.isLimitReached) {
+            return NextResponse.json(
+                {
+                    error: 'Daily AI limit reached for your plan.',
+                    code: 'daily_limit_reached',
+                    usage: currentUsage,
+                },
+                { status: 429 },
+            );
+        }
+
         const messages = sanitizeMessages(body?.messages);
         const dashboardContext = (body?.dashboardContext && typeof body.dashboardContext === 'object'
             ? (body.dashboardContext as DashboardContext)
@@ -150,6 +272,7 @@ export async function POST(request: NextRequest) {
         }));
 
         let geminiResponse: Response | null = null;
+        let selectedModel = '';
         let lastErrorDetails = '';
 
         for (const modelName of MODEL_CANDIDATES) {
@@ -176,6 +299,7 @@ export async function POST(request: NextRequest) {
 
             if (candidateResponse.ok) {
                 geminiResponse = candidateResponse;
+                selectedModel = modelName;
                 break;
             }
 
@@ -224,7 +348,20 @@ export async function POST(request: NextRequest) {
 
         const reply = normalizeAssistantReply(rawReply);
 
-        return NextResponse.json({ reply });
+        const nextUsage = buildUsage(tier, dailyAiCount + 1);
+        await restaurantRef.set(
+            {
+                usage: {
+                    dailyAiCount: FieldValue.increment(1),
+                    dailyAiDate: todayYmd,
+                    lastAiAt: FieldValue.serverTimestamp(),
+                    lastAiModel: selectedModel || MODEL_CANDIDATES[0],
+                },
+            },
+            { merge: true },
+        );
+
+        return NextResponse.json({ reply, usage: nextUsage });
     } catch (error: any) {
         return NextResponse.json({ error: error?.message || 'Support chat request failed.' }, { status: 500 });
     }

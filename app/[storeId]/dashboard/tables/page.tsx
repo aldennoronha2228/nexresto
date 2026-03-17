@@ -136,14 +136,14 @@ function TableManagementModal({
     onClose,
     onAddTable,
     onEditTable,
-    onDeleteTable,
+    onDeleteTables,
     isPro
 }: {
     tables: Table[];
     onClose: () => void;
     onAddTable: (name: string, seats: number) => void;
     onEditTable: (id: string, name: string, seats: number) => void;
-    onDeleteTable: (id: string) => void;
+    onDeleteTables: (ids: string[]) => void;
     isPro: boolean;
 }) {
     const [newTableName, setNewTableName] = useState('');
@@ -152,6 +152,8 @@ function TableManagementModal({
     const [editName, setEditName] = useState('');
     const [editSeats, setEditSeats] = useState(4);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
+    const [selectMode, setSelectMode] = useState(false);
+    const [selectedTableIds, setSelectedTableIds] = useState<string[]>([]);
 
     const handleAdd = () => {
         if (newTableName.trim()) {
@@ -175,8 +177,31 @@ function TableManagementModal({
     };
 
     const confirmDelete = (id: string) => {
-        onDeleteTable(id);
+        onDeleteTables([id]);
         setShowDeleteConfirm(null);
+    };
+
+    const toggleSelectMode = () => {
+        setSelectMode(prev => {
+            const next = !prev;
+            if (!next) setSelectedTableIds([]);
+            return next;
+        });
+        setEditingTable(null);
+        setShowDeleteConfirm(null);
+    };
+
+    const toggleSelectTable = (id: string) => {
+        setSelectedTableIds(prev =>
+            prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+        );
+    };
+
+    const deleteSelected = () => {
+        if (selectedTableIds.length === 0) return;
+        onDeleteTables(selectedTableIds);
+        setSelectedTableIds([]);
+        setSelectMode(false);
     };
 
     return (
@@ -212,7 +237,20 @@ function TableManagementModal({
 
                 {/* Add New Table Section */}
                 <div className="p-5 border-b border-slate-200 bg-slate-50 flex-shrink-0">
-                    <h4 className="text-sm font-semibold text-slate-700 mb-3">Add New Table</h4>
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                        <h4 className="text-sm font-semibold text-slate-700">Add New Table</h4>
+                        <button
+                            onClick={toggleSelectMode}
+                            className={cn(
+                                'h-9 px-3 rounded-lg text-xs font-medium transition-colors border',
+                                selectMode
+                                    ? 'bg-blue-600 text-white border-blue-600'
+                                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                            )}
+                        >
+                            {selectMode ? 'Cancel Select' : 'Select'}
+                        </button>
+                    </div>
                     <div className="flex flex-col sm:flex-row gap-3">
                         <div className="flex-1">
                             <input
@@ -253,6 +291,32 @@ function TableManagementModal({
 
                 {/* Tables List */}
                 <div className="flex-1 overflow-y-auto p-5">
+                    {selectMode && (
+                        <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2">
+                            <p className="text-sm text-blue-700">{selectedTableIds.length} selected</p>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => setSelectedTableIds(tables.map(t => t.id))}
+                                    className="h-8 px-3 rounded-lg text-xs font-medium bg-white text-slate-700 border border-slate-200 hover:bg-slate-50"
+                                >
+                                    Select All
+                                </button>
+                                <button
+                                    onClick={() => setSelectedTableIds([])}
+                                    className="h-8 px-3 rounded-lg text-xs font-medium bg-white text-slate-700 border border-slate-200 hover:bg-slate-50"
+                                >
+                                    Clear
+                                </button>
+                                <button
+                                    onClick={deleteSelected}
+                                    disabled={selectedTableIds.length === 0}
+                                    className="h-8 px-3 rounded-lg text-xs font-medium bg-rose-500 text-white hover:bg-rose-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    Delete Selected
+                                </button>
+                            </div>
+                        </div>
+                    )}
                     <div className="space-y-2">
                         {tables.map((table, index) => (
                             <motion.div
@@ -333,6 +397,14 @@ function TableManagementModal({
                                     /* Normal View */
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-3">
+                                            {selectMode && (
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedTableIds.includes(table.id)}
+                                                    onChange={() => toggleSelectTable(table.id)}
+                                                    className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                                />
+                                            )}
                                             <div className={cn(
                                                 "w-10 h-10 rounded-lg flex items-center justify-center font-bold text-sm",
                                                 table.status === 'available' ? "bg-emerald-100 text-emerald-700" :
@@ -347,19 +419,23 @@ function TableManagementModal({
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-2">
-                                            <button
-                                                onClick={() => startEdit(table)}
-                                                className="h-9 px-3 bg-slate-100 hover:bg-blue-100 text-slate-600 hover:text-blue-600 rounded-lg text-sm transition-colors flex items-center gap-1"
-                                            >
-                                                <Edit3 className="w-3.5 h-3.5" />
-                                                Edit
-                                            </button>
-                                            <button
-                                                onClick={() => setShowDeleteConfirm(table.id)}
-                                                className="h-9 w-9 bg-slate-100 hover:bg-rose-100 text-slate-400 hover:text-rose-600 rounded-lg transition-colors flex items-center justify-center"
-                                            >
-                                                <Trash2 className="w-4 h-4" />
-                                            </button>
+                                            {!selectMode && (
+                                                <>
+                                                    <button
+                                                        onClick={() => startEdit(table)}
+                                                        className="h-9 px-3 bg-slate-100 hover:bg-blue-100 text-slate-600 hover:text-blue-600 rounded-lg text-sm transition-colors flex items-center gap-1"
+                                                    >
+                                                        <Edit3 className="w-3.5 h-3.5" />
+                                                        Edit
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setShowDeleteConfirm(table.id)}
+                                                        className="h-9 w-9 bg-slate-100 hover:bg-rose-100 text-slate-400 hover:text-rose-600 rounded-lg transition-colors flex items-center justify-center"
+                                                    >
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </button>
+                                                </>
+                                            )}
                                         </div>
                                     </div>
                                 )}
@@ -783,8 +859,9 @@ export default function TablesQRCodesPage() {
         setSharedTables(newTables, tenantId || undefined);
     };
 
-    const deleteTable = (id: string) => {
-        const newTables = tables.filter(t => t.id !== id);
+    const deleteTables = (ids: string[]) => {
+        const idSet = new Set(ids);
+        const newTables = tables.filter(t => !idSet.has(t.id));
         setTables(newTables);
         setHasChanges(true);
         localStorage.setItem(scopedKey('hotelmenu_floorplan_tables'), JSON.stringify(newTables));
@@ -932,7 +1009,7 @@ export default function TablesQRCodesPage() {
                         onClose={() => setShowManageModal(false)}
                         onAddTable={addTableWithDetails}
                         onEditTable={editTable}
-                        onDeleteTable={deleteTable}
+                        onDeleteTables={deleteTables}
                         isPro={isPro}
                     />
                 )}

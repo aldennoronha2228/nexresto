@@ -23,11 +23,11 @@ interface ProFeatureGateProps {
  * Shows locked overlay for Starter users, renders children for Pro users.
  */
 export function ProFeatureGate({ feature, description, children, className }: ProFeatureGateProps) {
-    const { subscriptionTier } = useAuth();
+    const { subscriptionTier, isImpersonating } = useAuth();
     const { session: superAdminSession, userRole: superAdminRole } = useSuperAdminAuth();
     // Pro tier can be 'pro', '2k', or '2.5k' (backwards compatibility)
     const isSuperAdmin = !!superAdminSession && superAdminRole === 'super_admin';
-    const isPro = isSuperAdmin || subscriptionTier === 'pro' || subscriptionTier === '2k' || subscriptionTier === '2.5k';
+    const isPro = isSuperAdmin || isImpersonating || subscriptionTier === 'pro' || subscriptionTier === '2k' || subscriptionTier === '2.5k';
 
     if (isPro) {
         return <>{children}</>;
@@ -91,11 +91,11 @@ export function ProFeatureCard({
     description: string; 
     icon: React.ComponentType<{ className?: string }>;
 }) {
-    const { subscriptionTier } = useAuth();
+    const { subscriptionTier, isImpersonating } = useAuth();
     const { session: superAdminSession, userRole: superAdminRole } = useSuperAdminAuth();
     // Pro tier can be 'pro', '2k', or '2.5k' (backwards compatibility)
     const isSuperAdmin = !!superAdminSession && superAdminRole === 'super_admin';
-    const isPro = isSuperAdmin || subscriptionTier === 'pro' || subscriptionTier === '2k' || subscriptionTier === '2.5k';
+    const isPro = isSuperAdmin || isImpersonating || subscriptionTier === 'pro' || subscriptionTier === '2k' || subscriptionTier === '2.5k';
 
     return (
         <div className={cn(

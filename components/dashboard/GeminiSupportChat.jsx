@@ -13,6 +13,28 @@ const STARTER_MESSAGE = {
     content: 'I can help with operations, growth, and technical issues across your dashboard.\n- Ask about menu, orders, QR, or staff and I will keep it concise.',
 };
 
+function toUsageState(payload) {
+    const tier = payload?.tier === 'pro' ? 'pro' : 'free';
+    const limit = Number(payload?.limit) > 0 ? Number(payload.limit) : (tier === 'pro' ? 30 : 5);
+    const usedRaw = Number(payload?.used);
+    const used = Number.isFinite(usedRaw) ? Math.max(0, Math.floor(usedRaw)) : 0;
+    const remaining = Math.max(0, limit - used);
+    return {
+        tier,
+        used,
+        limit,
+        remaining,
+        isLimitReached: Boolean(payload?.isLimitReached) || used >= limit,
+        resetsAt: typeof payload?.resetsAt === 'string' ? payload.resetsAt : null,
+    };
+}
+
+function buildAsciiMeter(used, limit) {
+    const slots = 10;
+    const fill = limit > 0 ? Math.min(slots, Math.round((used / limit) * slots)) : 0;
+    return `[ ${'|'.repeat(fill)}${' '.repeat(slots - fill)} ]`;
+}
+
 function renderInlineMarkdown(text) {
     const parts = text.split(/(\*\*[^*]+\*\*)/g);
     return parts.map((part, idx) => {
@@ -76,6 +98,7 @@ export default function GeminiSupportChat() {
     const [messages, setMessages] = useState([STARTER_MESSAGE]);
     const [isLoading, setIsLoading] = useState(false);
     const [dashboardContext, setDashboardContext] = useState(null);
+    const [usage, setUsage] = useState(toUsageState({ tier: 'free', used: 0, limit: 5 }));
     const [lastContextAt, setLastContextAt] = useState(0);
     const bottomRef = useRef(null);
 
@@ -104,7 +127,10 @@ export default function GeminiSupportChat() {
         bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages, isLoading, isOpen]);
 
-    const canSend = useMemo(() => input.trim().length > 0 && !isLoading, [input, isLoading]);
+    const canSend = useMemo(
+        () => input.trim().length > 0 && !isLoading && !usage.isLimitReached,
+        [input, isLoading, usage.isLimitReached],
+    );
 
     const getActiveToken = async () => {
         if (tenantAuth.currentUser) return tenantAuth.currentUser.getIdToken(true);
@@ -131,6 +157,9 @@ export default function GeminiSupportChat() {
         if (!res.ok) return dashboardContext;
         const payload = await res.json();
         setDashboardContext(payload);
+        if (payload?.usage) {
+            setUsage(toUsageState(payload.usage));
+        }
         setLastContextAt(now);
         return payload;
     };
@@ -166,10 +195,19 @@ export default function GeminiSupportChat() {
 
         try {
             const contextSnapshot = await refreshDashboardContext(false);
+            const token = await getActiveToken();
+            if (!token) {
+                throw new Error('Session expired. Please sign in again.');
+            }
+
             const response = await fetch('/api/support/chat', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`,
+                },
                 body: JSON.stringify({
+                    restaurantId: storeId,
                     messages: nextMessages,
                     dashboardContext: contextSnapshot || dashboardContext || undefined,
                 }),
@@ -177,6 +215,14 @@ export default function GeminiSupportChat() {
 
             const payload = await response.json().catch(() => ({}));
             if (!response.ok) {
+                if (payload?.usage) {
+                    setUsage(toUsageState(payload.usage));
+                }
+
+                if (response.status === 429 && payload?.code === 'daily_limit_reached') {
+                    throw new Error('Daily prompt limit reached. It will reset at midnight.');
+                }
+
                 if (response.status === 429 || payload?.code === 'quota_exceeded') {
                     throw new Error('AI quota reached. Please enable/increase Gemini billing quota, or wait for reset and try again.');
                 }
@@ -187,6 +233,9 @@ export default function GeminiSupportChat() {
             }
 
             const reply = (payload?.reply || '').toString().trim();
+            if (payload?.usage) {
+                setUsage(toUsageState(payload.usage));
+            }
             setMessages((prev) => [
                 ...prev,
                 {
@@ -252,7 +301,7 @@ export default function GeminiSupportChat() {
                                 </div>
                             </div>
 
-                            <div className="h-[calc(100%-56px-76px)] overflow-y-auto px-3 py-3 space-y-2 bg-gradient-to-b from-slate-900/20 to-slate-950/25">
+                            <div className="h-[calc(100%-56px-120px)] overflow-y-auto px-3 py-3 space-y-2 bg-gradient-to-b from-slate-900/20 to-slate-950/25">
                                 <AnimatePresence initial={false}>
                                     {messages.map((msg, idx) => {
                                         const isUser = msg.role === 'user';
@@ -297,21 +346,43 @@ export default function GeminiSupportChat() {
                                 <div ref={bottomRef} />
                             </div>
 
-                            <form onSubmit={sendMessage} className="h-[76px] px-3 py-3 border-t border-white/10 bg-slate-900/40 backdrop-blur-xl flex items-center gap-2">
-                                <input
-                                    value={input}
-                                    onChange={(e) => setInput(e.target.value)}
-                                    placeholder="Ask about menu trends, metrics, QR issues..."
-                                    className="flex-1 h-11 rounded-xl border border-white/15 bg-slate-950/40 px-3 text-sm text-slate-100 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-slate-500"
-                                />
-                                <button
-                                    type="submit"
-                                    disabled={!canSend}
-                                    className="h-11 px-3 rounded-xl bg-gradient-to-r from-[#0f172a] to-[#1e293b] border border-white/10 text-white disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-black/35"
-                                    title="Send"
-                                >
-                                    <Send className="w-4 h-4" />
-                                </button>
+                            <form onSubmit={sendMessage} className="h-[120px] px-3 py-2 border-t border-white/10 bg-slate-900/40 backdrop-blur-xl flex flex-col gap-2">
+                                <div>
+                                    <p className="text-[11px] text-slate-300">
+                                        <span className="font-mono text-slate-200">{buildAsciiMeter(usage.used, usage.limit)}</span> {usage.used} / {usage.limit} prompts used
+                                    </p>
+                                    <div className="mt-1 h-1.5 w-full rounded-full bg-white/10 overflow-hidden">
+                                        <div
+                                            className={usage.isLimitReached ? 'h-full bg-rose-500' : 'h-full bg-gradient-to-r from-cyan-400 to-blue-500'}
+                                            style={{ width: `${Math.min(100, usage.limit > 0 ? (usage.used / usage.limit) * 100 : 0)}%` }}
+                                        />
+                                    </div>
+                                    {usage.tier === 'free' && (
+                                        <a
+                                            href={`/${storeId}/dashboard/account`}
+                                            className="mt-1 inline-block text-[11px] text-blue-300 hover:text-blue-200 underline"
+                                        >
+                                            Get 30 prompts with Pro
+                                        </a>
+                                    )}
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        value={input}
+                                        onChange={(e) => setInput(e.target.value)}
+                                        placeholder="Ask about menu trends, metrics, QR issues..."
+                                        className="flex-1 h-10 rounded-xl border border-white/15 bg-slate-950/40 px-3 text-sm text-slate-100 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-slate-500"
+                                    />
+                                    <button
+                                        type="submit"
+                                        disabled={!canSend}
+                                        className="h-10 px-3 rounded-xl bg-gradient-to-r from-[#0f172a] to-[#1e293b] border border-white/10 text-white disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-black/35 text-xs font-medium"
+                                        title={usage.isLimitReached ? 'Daily limit reached. Resets at 12:00 AM.' : 'Send'}
+                                    >
+                                        {usage.isLimitReached ? 'Limit Reached' : <Send className="w-4 h-4" />}
+                                    </button>
+                                </div>
                             </form>
                         </div>
                     </motion.div>

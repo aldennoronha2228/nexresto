@@ -66,13 +66,18 @@ export async function POST(request: NextRequest) {
         };
         await adminAuth.setCustomUserClaims(owner.uid, nextClaims);
 
-        const customToken = await adminAuth.createCustomToken(owner.uid);
+        const customToken = await adminAuth.createCustomToken(owner.uid, {
+            role: 'owner',
+            restaurant_id: restaurantId,
+            tenant_id: restaurantId,
+            impersonated_by_super_admin: true,
+        });
 
         return NextResponse.json({
             customToken,
             ownerUid: owner.uid,
             ownerEmail: owner.email,
-            redirectTo: `/${restaurantId}/dashboard/orders`,
+            redirectTo: `/${restaurantId}/dashboard`,
         });
     } catch (error: any) {
         return NextResponse.json({ error: error.message || 'Failed to impersonate owner' }, { status: 500 });

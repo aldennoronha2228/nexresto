@@ -62,6 +62,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         subscriptionStatus,
         subscriptionEndDate,
         subscriptionDaysRemaining,
+        isImpersonating,
     } = useAuth();
     const { storeId: activeStoreId, isSuperAdmin, subscriptionTier, tenantName } = useRestaurant();
     const urlStoreId = params?.storeId || '';
@@ -123,7 +124,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }, [activeStoreId, urlStoreId, loading, userRole, isGodMode]);
 
     // Check if user has Pro tier
-    const isPro = subscriptionTier === 'pro' || subscriptionTier === '2k' || subscriptionTier === '2.5k';
+    const isPro = isImpersonating || subscriptionTier === 'pro' || subscriptionTier === '2k' || subscriptionTier === '2.5k';
     const showEndingSoonReminder =
         !isGodMode &&
         !!subscriptionEndDate &&

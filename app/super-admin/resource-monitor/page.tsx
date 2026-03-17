@@ -35,6 +35,9 @@ export interface RestaurantUsage {
     db_writes: number;
     bandwidth_used_bytes: number;
     bandwidth_limit_bytes: number;
+    daily_ai_count: number;
+    daily_ai_limit: number;
+    daily_ai_tier: 'free' | 'pro';
 }
 
 function formatCompact(value: number): string {
@@ -88,6 +91,10 @@ function tierBadgeClass(tier: RestaurantUsage['subscription_tier']): string {
     if (tier === 'pro' || tier === '2k') return 'bg-purple-500/20 text-purple-300 border-purple-500/40';
     if (tier === '2.5k') return 'bg-amber-500/20 text-amber-300 border-amber-500/40';
     return 'bg-slate-500/20 text-slate-300 border-slate-500/40';
+}
+
+function resolveDailyAiTier(tier: RestaurantUsage['subscription_tier']): 'free' | 'pro' {
+    return tier === 'pro' || tier === '2k' || tier === '2.5k' ? 'pro' : 'free';
 }
 
 async function sumStorageBytesRecursive(prefix: string): Promise<number> {
@@ -192,6 +199,9 @@ export default function ResourceMonitorPage() {
                     db_writes: toNumber(d.db_writes, (d as any).usage?.db_writes),
                     bandwidth_used_bytes: toNumber(d.bandwidth_used_bytes, d.bandwidth_used_mb ? Number(d.bandwidth_used_mb) * 1024 * 1024 : 0),
                     bandwidth_limit_bytes: firstPositiveNumber(d.bandwidth_limit_bytes, d.bandwidth_limit_mb ? Number(d.bandwidth_limit_mb) * 1024 * 1024 : 0, 2 * 1024 * 1024 * 1024),
+                    daily_ai_count: toNumber((d as any).usage?.dailyAiCount),
+                    daily_ai_limit: resolveDailyAiTier(((d.subscription_tier as RestaurantUsage['subscription_tier']) || 'starter')) === 'pro' ? 30 : 5,
+                    daily_ai_tier: resolveDailyAiTier(((d.subscription_tier as RestaurantUsage['subscription_tier']) || 'starter')),
                 };
             });
 
@@ -357,6 +367,7 @@ export default function ResourceMonitorPage() {
                                 <th className="text-left px-6 py-4 text-sm font-medium text-slate-400">Restaurant</th>
                                 <th className="text-left px-6 py-4 text-sm font-medium text-slate-400">Firebase Storage</th>
                                 <th className="text-left px-6 py-4 text-sm font-medium text-slate-400">AI Credits</th>
+                                <th className="text-left px-6 py-4 text-sm font-medium text-slate-400">Tier Comparison</th>
                                 <th className="text-left px-6 py-4 text-sm font-medium text-slate-400">Database Ops</th>
                                 <th className="text-left px-6 py-4 text-sm font-medium text-slate-400">Bandwidth</th>
                             </tr>
@@ -366,7 +377,8 @@ export default function ResourceMonitorPage() {
                                 const storagePercent = clampPercent(row.storage_used_bytes, row.storage_limit_bytes);
                                 const aiPercent = clampPercent(row.ai_credits_used, row.ai_credits_limit);
                                 const bandwidthPercent = clampPercent(row.bandwidth_used_bytes, row.bandwidth_limit_bytes);
-                                const nearLimit = storagePercent >= 80 || aiPercent >= 80;
+                                const tierComparePercent = clampPercent(row.daily_ai_count, row.daily_ai_limit);
+                                const nearLimit = storagePercent >= 80 || aiPercent >= 80 || tierComparePercent >= 80;
 
                                 return (
                                     <tr
@@ -450,6 +462,33 @@ export default function ResourceMonitorPage() {
                                                             : 'bg-gradient-to-r from-violet-400 to-purple-500'
                                                     )}
                                                     style={{ width: `${aiPercent}%` }}
+                                                />
+                                            </div>
+                                        </td>
+
+                                        <td className="px-6 py-4 min-w-[220px]">
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <span className={cn(
+                                                    'px-2 py-0.5 rounded-full text-[10px] border uppercase',
+                                                    row.daily_ai_tier === 'pro'
+                                                        ? 'bg-purple-500/20 text-purple-300 border-purple-500/40'
+                                                        : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                                                )}>
+                                                    {row.daily_ai_tier}
+                                                </span>
+                                                <p className="text-slate-200 text-sm">
+                                                    {row.daily_ai_count} / {row.daily_ai_limit}
+                                                </p>
+                                            </div>
+                                            <div className="w-full h-2 rounded-full bg-slate-700/60 overflow-hidden backdrop-blur-sm">
+                                                <div
+                                                    className={cn(
+                                                        'h-full rounded-full transition-all',
+                                                        tierComparePercent >= 80
+                                                            ? 'bg-gradient-to-r from-amber-400 to-orange-500'
+                                                            : 'bg-gradient-to-r from-emerald-400 to-cyan-500'
+                                                    )}
+                                                    style={{ width: `${tierComparePercent}%` }}
                                                 />
                                             </div>
                                         </td>

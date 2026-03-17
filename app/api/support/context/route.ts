@@ -7,6 +7,30 @@ type Claims = {
     tenant_id?: string;
 };
 
+type AiTier = 'free' | 'pro';
+
+function resolveAiTier(subscriptionTierRaw: unknown): AiTier {
+    const tier = String(subscriptionTierRaw || '').trim().toLowerCase();
+    if (tier === 'pro' || tier === '2k' || tier === '2.5k') return 'pro';
+    return 'free';
+}
+
+function getDailyLimit(tier: AiTier): number {
+    return tier === 'pro' ? 30 : 5;
+}
+
+function getNextUtcMidnightIso(): string {
+    const now = new Date();
+    const next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0, 0));
+    return next.toISOString();
+}
+
+function toNonNegativeInt(value: unknown): number {
+    const n = Number(value);
+    if (!Number.isFinite(n) || n < 0) return 0;
+    return Math.floor(n);
+}
+
 async function requireAuthorizedRestaurant(request: NextRequest): Promise<{ restaurantId: string } | NextResponse> {
     const authHeader = request.headers.get('authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -68,6 +92,9 @@ export async function GET(request: NextRequest) {
         ]);
 
         const restaurant = restaurantSnap.exists ? restaurantSnap.data() || {} : {};
+        const aiTier = resolveAiTier((restaurant as any).subscription_tier);
+        const aiLimit = getDailyLimit(aiTier);
+        const aiUsed = toNonNegativeInt((restaurant as any).usage?.dailyAiCount);
         const menuItems = menuSnap.docs.map((d) => d.data() as Record<string, unknown>);
         const layout = layoutSnap.exists ? (layoutSnap.data() || {}) : {};
         const layoutTables = Array.isArray((layout as any).tables) ? (layout as any).tables : [];
@@ -106,6 +133,14 @@ export async function GET(request: NextRequest) {
             },
             uiTips: {
                 keyAreas: ['Live Orders', 'Order History', 'Menu Management', 'Tables & QR', 'Analytics', 'Inventory', 'Branding', 'Account Settings'],
+            },
+            usage: {
+                tier: aiTier,
+                used: aiUsed,
+                limit: aiLimit,
+                remaining: Math.max(0, aiLimit - aiUsed),
+                isLimitReached: aiUsed >= aiLimit,
+                resetsAt: getNextUtcMidnightIso(),
             },
             generatedAt: new Date().toISOString(),
         };

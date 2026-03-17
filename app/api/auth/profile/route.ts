@@ -39,7 +39,17 @@ export async function GET(request: NextRequest) {
 
         // Fetch current claims and record
         const userRecord = await adminAuth.getUser(uid);
-        const claims = userRecord.customClaims || {};
+        const claims = {
+            ...(userRecord.customClaims || {}),
+            role: (decodedToken.role as string) || (userRecord.customClaims?.role as string),
+            restaurant_id: (decodedToken.restaurant_id as string) || (userRecord.customClaims?.restaurant_id as string),
+            tenant_id: (decodedToken.tenant_id as string) || (userRecord.customClaims?.tenant_id as string),
+            must_change_password: Boolean(decodedToken.must_change_password || userRecord.customClaims?.must_change_password),
+            impersonated_by_super_admin: Boolean(
+                decodedToken.impersonated_by_super_admin || userRecord.customClaims?.impersonated_by_super_admin
+            ),
+        };
+        const normalizedUserEmail = String(userRecord.email || '').trim().toLowerCase();
 
         // ─── Environment-based Super Admin Sync ────────────────────────────────
         const superAdminEmail = process.env.SUPER_ADMIN_EMAIL;
@@ -122,6 +132,7 @@ export async function GET(request: NextRequest) {
                     role: claims.role,
                     must_change_password: Boolean(claims.must_change_password),
                     full_name: staffData?.full_name || userRecord.displayName || userRecord.email,
+                    is_impersonating: Boolean(claims.impersonated_by_super_admin),
                     subscription_tier: restData?.subscription_tier || 'starter',
                     subscription_status: effectiveStatus,
                     subscription_end_date: endDate,
@@ -132,12 +143,33 @@ export async function GET(request: NextRequest) {
         }
 
         // No claims set — check if there's a staff document anywhere
-        // Search all restaurants' staff sub-collections for this user
+        // Search all restaurants' staff sub-collections for this user (by uid OR email)
         const restaurantsSnap = await adminFirestore.collection('restaurants').get();
         for (const restDoc of restaurantsSnap.docs) {
-            const staffDoc = await restDoc.ref.collection('staff').doc(uid).get();
-            if (staffDoc.exists) {
-                const staffData = staffDoc.data()!;
+            const byUidDoc = await restDoc.ref.collection('staff').doc(uid).get();
+            const byUidData = byUidDoc.exists ? byUidDoc.data()! : null;
+
+            let matchedStaffData: Record<string, any> | null = byUidData;
+            if (!matchedStaffData && normalizedUserEmail) {
+                const byEmailSnap = await restDoc.ref
+                    .collection('staff')
+                    .where('email', '==', normalizedUserEmail)
+                    .limit(1)
+                    .get();
+                if (!byEmailSnap.empty) {
+                    matchedStaffData = byEmailSnap.docs[0].data() as Record<string, any>;
+                }
+            }
+
+            const restData = restDoc.data();
+            const normalizedOwnerEmail = String(restData?.owner_email || '').trim().toLowerCase();
+
+            // If no staff match, treat owner_email as owner fallback.
+            if (!matchedStaffData && normalizedUserEmail && normalizedOwnerEmail === normalizedUserEmail) {
+                matchedStaffData = { role: 'owner', email: normalizedUserEmail };
+            }
+
+            if (matchedStaffData) {
                 const restData = restDoc.data();
 
                 const endDate = normalizeYmd(restData?.subscription_end_date);
@@ -161,7 +193,7 @@ export async function GET(request: NextRequest) {
 
                 // Set custom claims for faster future lookups
                 const nextClaims: Record<string, unknown> = {
-                    role: staffData.role,
+                    role: String(matchedStaffData.role || 'staff'),
                     restaurant_id: restDoc.id,
                     tenant_id: restDoc.id,
                 };
@@ -176,9 +208,10 @@ export async function GET(request: NextRequest) {
                     profile: {
                         tenant_id: restDoc.id,
                         tenant_name: restData.name || restDoc.id,
-                        role: staffData.role,
+                        role: String(matchedStaffData.role || 'staff'),
                         must_change_password: Boolean(claims.must_change_password),
-                        full_name: staffData.full_name || userRecord.displayName,
+                        full_name: matchedStaffData.full_name || userRecord.displayName || userRecord.email,
+                        is_impersonating: Boolean(claims.impersonated_by_super_admin),
                         subscription_tier: restData.subscription_tier || 'starter',
                         subscription_status: effectiveStatus,
                         subscription_end_date: endDate,

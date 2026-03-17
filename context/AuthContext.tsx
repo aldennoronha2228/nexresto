@@ -47,6 +47,7 @@ interface AuthState {
     subscriptionStatus: SubscriptionStatus | null;
     subscriptionEndDate: string | null;
     subscriptionDaysRemaining: number | null;
+    isImpersonating: boolean;
     mustChangePassword: boolean;
     loading: boolean;
     tenantLoading: boolean;
@@ -74,6 +75,7 @@ async function fetchUserProfile(user: User): Promise<{
     subscription_status: SubscriptionStatus;
     subscription_end_date?: string | null;
     subscription_days_remaining?: number | null;
+    is_impersonating?: boolean;
 } | null> {
     try {
         // [MOD] Force refresh to ensure we have the latest custom claims (e.g. after a reset script)
@@ -83,6 +85,7 @@ async function fetchUserProfile(user: User): Promise<{
         const role = (claims.role as string) || null;
         const tenantId = (claims.restaurant_id as string) || null;
         const mustChangePassword = Boolean(claims.must_change_password);
+        const isImpersonating = Boolean(claims.impersonated_by_super_admin);
 
         // If it's a super_admin, we don't need a restaurant_id or API fallback
         if (role === 'super_admin') {
@@ -95,6 +98,7 @@ async function fetchUserProfile(user: User): Promise<{
                 subscription_status: 'active',
                 subscription_end_date: null,
                 subscription_days_remaining: null,
+                is_impersonating: false,
             };
         }
 
@@ -124,6 +128,7 @@ async function fetchUserProfile(user: User): Promise<{
                 subscription_days_remaining: typeof profile.subscription_days_remaining === 'number'
                     ? profile.subscription_days_remaining
                     : (profile.subscription_end_date ? daysUntilYmd(profile.subscription_end_date) : null),
+                is_impersonating: Boolean(profile.is_impersonating),
             };
         }
 
@@ -165,6 +170,7 @@ async function fetchUserProfile(user: User): Promise<{
             subscription_status: subscriptionStatus,
             subscription_end_date: subscriptionEndDate,
             subscription_days_remaining: subscriptionDaysRemaining,
+            is_impersonating: isImpersonating,
         };
     } catch (err: any) {
         securityLog.error('TENANT_FETCH', { userId: user.uid, message: err.message });
@@ -181,6 +187,7 @@ async function fetchUserProfileFromApi(user: User): Promise<{
     subscription_status: SubscriptionStatus;
     subscription_end_date?: string | null;
     subscription_days_remaining?: number | null;
+    is_impersonating?: boolean;
 } | null> {
     try {
         const idToken = await user.getIdToken(true);
@@ -206,6 +213,7 @@ async function fetchUserProfileFromApi(user: User): Promise<{
             subscription_days_remaining: typeof profile.subscription_days_remaining === 'number'
                 ? profile.subscription_days_remaining
                 : (profile.subscription_end_date ? daysUntilYmd(profile.subscription_end_date) : null),
+            is_impersonating: Boolean(profile.is_impersonating),
         };
     } catch {
         return null;
@@ -226,6 +234,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         subscriptionStatus: null,
         subscriptionEndDate: null,
         subscriptionDaysRemaining: null,
+        isImpersonating: false,
         mustChangePassword: false,
         loading: true,
         tenantLoading: false,
@@ -234,6 +243,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const hasInitialized = useRef(false);
     const hasTenantRef = useRef(false);
+    const resolvedUidRef = useRef<string | null>(null);
     const tenantSyncUnsubRef = useRef<(() => void) | null>(null);
 
     // Refresh tenant info on demand (e.g. after signup completes)
@@ -253,6 +263,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             subscriptionDaysRemaining: typeof profile?.subscription_days_remaining === 'number'
                 ? profile.subscription_days_remaining
                 : prev.subscriptionDaysRemaining,
+            isImpersonating: Boolean(profile?.is_impersonating),
             mustChangePassword: profile ? Boolean(profile.must_change_password) : prev.mustChangePassword,
             tenantLoading: false,
         }));
@@ -290,6 +301,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (!user) {
                 if (isActive) {
                     hasTenantRef.current = false;
+                    resolvedUidRef.current = null;
                     setState({
                         session: null,
                         user: null,
@@ -301,6 +313,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                         subscriptionStatus: null,
                         subscriptionEndDate: null,
                         subscriptionDaysRemaining: null,
+                        isImpersonating: false,
                         mustChangePassword: false,
                         loading: false,
                         tenantLoading: false,
@@ -314,6 +327,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
             // Get ID token for session object
             const idToken = await user.getIdToken();
+            const isSameResolvedUser = resolvedUidRef.current === user.uid;
 
             // Progressive load — set session, but keep loading true if we need profile
             if (isActive) {
@@ -321,8 +335,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     ...prev,
                     session: { user, access_token: idToken },
                     user,
-                    loading: hasTenantRef.current ? false : true,
-                    tenantLoading: hasTenantRef.current ? false : true,
+                    loading: hasTenantRef.current && isSameResolvedUser ? false : true,
+                    tenantLoading: hasTenantRef.current && isSameResolvedUser ? false : true,
+                    userRole: isSameResolvedUser ? prev.userRole : null,
+                    tenantId: isSameResolvedUser ? prev.tenantId : null,
+                    tenantName: isSameResolvedUser ? prev.tenantName : null,
+                    subscriptionTier: isSameResolvedUser ? prev.subscriptionTier : null,
+                    subscriptionStatus: isSameResolvedUser ? prev.subscriptionStatus : null,
+                    subscriptionEndDate: isSameResolvedUser ? prev.subscriptionEndDate : null,
+                    subscriptionDaysRemaining: isSameResolvedUser ? prev.subscriptionDaysRemaining : null,
+                    isImpersonating: isSameResolvedUser ? prev.isImpersonating : false,
+                    mustChangePassword: isSameResolvedUser ? prev.mustChangePassword : false,
                     error: null,
                 }));
                 hasInitialized.current = true;
@@ -330,7 +353,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
 
             // Skip re-fetching tenant if we already have it
-            if (hasTenantRef.current) {
+            if (hasTenantRef.current && isSameResolvedUser) {
                 console.log('[AuthContext] Skipping profile re-fetch - tenant data exists');
                 setState(prev => ({ ...prev, tenantLoading: false }));
                 return;
@@ -345,9 +368,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 const isAdmin = tokenResult.claims.role === 'super_admin';
 
                 if (isActive) {
-                    if (profile?.tenant_id) {
+                    if (profile?.tenant_id || profile?.role) {
                         hasTenantRef.current = true;
                     }
+                    resolvedUidRef.current = user.uid;
 
                     setState(prev => ({
                         ...prev,
@@ -361,6 +385,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                         subscriptionDaysRemaining: typeof profile?.subscription_days_remaining === 'number'
                             ? profile.subscription_days_remaining
                             : null,
+                        isImpersonating: Boolean(profile?.is_impersonating),
                         mustChangePassword: Boolean(profile?.must_change_password),
                         loading: false, // Release loading now
                         tenantLoading: false,
@@ -390,10 +415,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const signOut = async () => {
         hasTenantRef.current = false;
+        resolvedUidRef.current = null;
         setState({
             session: null, user: null, isAdmin: false, userRole: null,
             tenantId: null, tenantName: null, subscriptionTier: null, subscriptionStatus: null,
             subscriptionEndDate: null, subscriptionDaysRemaining: null,
+            isImpersonating: false,
             mustChangePassword: false,
             loading: false, tenantLoading: false, error: null,
         });
@@ -472,6 +499,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 subscriptionDaysRemaining: typeof profile.subscription_days_remaining === 'number'
                     ? profile.subscription_days_remaining
                     : prev.subscriptionDaysRemaining,
+                isImpersonating: Boolean(profile.is_impersonating),
             }));
         };
 
