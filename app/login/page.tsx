@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { memo, useMemo, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, Mail, Lock, AlertCircle, Loader2, ShieldCheck } from 'lucide-react';
@@ -11,7 +11,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useSuperAdminAuth } from '@/context/SuperAdminAuthContext';
 
 
-function GoogleIcon() {
+const GoogleIcon = memo(function GoogleIcon() {
     return (
         <svg className="w-5 h-5" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
@@ -20,32 +20,34 @@ function GoogleIcon() {
             <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
         </svg>
     );
-}
+});
 
-function Background() {
+const ORBS = [
+    { cx: '10%', cy: '20%', r: 300, color: '#1d4ed8', delay: 0 },
+    { cx: '80%', cy: '70%', r: 250, color: '#4f46e5', delay: 2 },
+    { cx: '50%', cy: '90%', r: 200, color: '#0f766e', delay: 4 },
+];
+
+const Background = memo(function Background() {
     return (
         <div className="absolute inset-0 overflow-hidden">
             <div className="absolute inset-0 bg-slate-950" />
-            {[
-                { cx: '10%', cy: '20%', r: 300, color: '#1d4ed8', delay: 0 },
-                { cx: '80%', cy: '70%', r: 250, color: '#4f46e5', delay: 2 },
-                { cx: '50%', cy: '90%', r: 200, color: '#0f766e', delay: 4 },
-            ].map((orb, i) => (
-                <motion.div key={i} animate={{ scale: [1, 1.2, 1], opacity: [0.15, 0.25, 0.15] }} transition={{ duration: 8, delay: orb.delay, repeat: Infinity, ease: 'easeInOut' }} style={{ position: 'absolute', left: orb.cx, top: orb.cy, width: orb.r * 2, height: orb.r * 2, transform: 'translate(-50%, -50%)', borderRadius: '50%', background: `radial-gradient(circle, ${orb.color}55 0%, transparent 70%)`, filter: 'blur(40px)' }} />
+            {ORBS.map((orb, i) => (
+                <motion.div key={i} className="hidden sm:block" animate={{ scale: [1, 1.2, 1], opacity: [0.15, 0.25, 0.15] }} transition={{ duration: 8, delay: orb.delay, repeat: Infinity, ease: 'easeInOut' }} style={{ position: 'absolute', left: orb.cx, top: orb.cy, width: orb.r * 2, height: orb.r * 2, transform: 'translate(-50%, -50%)', borderRadius: '50%', background: `radial-gradient(circle, ${orb.color}55 0%, transparent 70%)`, filter: 'blur(40px)' }} />
             ))}
             <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: 'linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)', backgroundSize: '50px 50px' }} />
         </div>
     );
-}
+});
 
-function PasswordStrength({ password }: { password: string }) {
-    const checks = [
+const PasswordStrength = memo(function PasswordStrength({ password }: { password: string }) {
+    const checks = useMemo(() => [
         { label: '8+ characters', pass: password.length >= 8 },
         { label: 'Uppercase letter', pass: /[A-Z]/.test(password) },
         { label: 'Number', pass: /\d/.test(password) },
         { label: 'Special character', pass: /[^A-Za-z0-9]/.test(password) },
-    ];
-    const score = checks.filter(c => c.pass).length;
+    ], [password]);
+    const score = useMemo(() => checks.filter(c => c.pass).length, [checks]);
     const colors = ['bg-rose-500', 'bg-orange-500', 'bg-amber-500', 'bg-emerald-500'];
     const labels = ['Weak', 'Fair', 'Good', 'Strong'];
     return (
@@ -57,7 +59,7 @@ function PasswordStrength({ password }: { password: string }) {
             </div>
         </div>
     );
-}
+});
 
 type FormMode = 'signin' | 'signup' | 'verify-otp';
 
@@ -87,21 +89,21 @@ export default function LoginPage() {
     useEffect(() => {
         if (!loading && !tenantLoading && !adminLoading && session) {
             if (mustChangePassword) {
-                window.location.href = '/change-password';
+                router.replace('/change-password');
                 return;
             }
 
             if (userRole === 'super_admin') {
                 if (adminSession) {
-                    window.location.href = '/admin';
+                    router.replace('/super-admin');
                 }
                 return;
             }
 
             if (userRole && tenantId) {
-                window.location.href = `/${tenantId}/dashboard/orders`;
+                router.replace(`/${tenantId}/dashboard/orders`);
             } else if (!tenantLoading && !userRole) {
-                window.location.href = '/unauthorized';
+                router.replace('/unauthorized');
             }
         }
     }, [session, loading, tenantLoading, adminLoading, adminSession, userRole, tenantId, mustChangePassword, router]);
@@ -130,30 +132,46 @@ export default function LoginPage() {
                 setMode('verify-otp');
                 setInfo('Check your email for the verification code.');
             } else {
-                // ─── Super Admin .env Sync Flow ────────────────────────────────
-                // We try a special API route first that uses the .env as the source
-                // of truth for both email and password. This allows instant changes.
-                const adminVerifyRes = await fetch('/api/auth/admin-verify', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, password }),
-                });
-
                 let userCredential;
                 let savedCustomToken: string | null = null;
 
-                if (adminVerifyRes.ok) {
+                try {
+                    // Fast path for the majority of users.
+                    userCredential = await signInWithEmail(email, password);
+                } catch (tenantAuthError: any) {
+                    const code = String(tenantAuthError?.code || '');
+                    const isCredentialError =
+                        code === 'auth/invalid-credential' ||
+                        code === 'auth/wrong-password' ||
+                        code === 'auth/user-not-found' ||
+                        code === 'auth/invalid-email';
+
+                    if (!isCredentialError) throw tenantAuthError;
+
+                    // Fallback for super-admin credentials synced via .env route.
+                    const adminVerifyRes = await fetch('/api/auth/admin-verify', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email, password }),
+                    });
+
+                    if (!adminVerifyRes.ok) {
+                        throw tenantAuthError;
+                    }
+
                     const data = await adminVerifyRes.json();
                     savedCustomToken = data.customToken;
+                    if (!savedCustomToken) throw new Error('Admin verification did not return a token.');
+
                     const { signInWithToken } = await import('@/lib/firebase-auth');
-                    userCredential = await signInWithToken(savedCustomToken!);
-                } else {
-                    // Fallback to standard tenant login (for staff/regular users)
-                    userCredential = await signInWithEmail(email, password);
+                    userCredential = await signInWithToken(savedCustomToken);
                 }
 
                 const user = userCredential.user;
-                const idToken = await user.getIdToken(true);
+                const [idToken, tokenResult] = await Promise.all([
+                    user.getIdToken(),
+                    user.getIdTokenResult().catch(() => null),
+                ]);
 
                 // For all users, fetch profile to resolve orientation/dashboard
                 const profileRes = await fetch('/api/auth/profile', {
@@ -163,7 +181,7 @@ export default function LoginPage() {
                 if (profileRes.ok) {
                     const { profile } = await profileRes.json();
                     if (profile?.must_change_password) {
-                        window.location.href = '/change-password';
+                        router.replace('/change-password');
                         return;
                     }
 
@@ -173,28 +191,36 @@ export default function LoginPage() {
                         if (savedCustomToken) {
                             sessionStorage.setItem('pending_admin_token', savedCustomToken);
                         }
-                        // Ensure the latest claims are baked into the current token before navigation.
-                        await user.getIdToken(true).catch(() => { });
-                        window.location.href = '/admin';
+                        router.replace('/super-admin');
                         return;
                     }
                     if (profile?.role && profile?.tenant_id) {
-                        // The profile endpoint may set custom claims on first login.
-                        // Refresh the token to avoid transient Firestore permission errors.
-                        await user.getIdToken(true).catch(() => { });
-                        window.location.href = `/${profile.tenant_id}/dashboard/orders`;
+                        router.replace(`/${profile.tenant_id}/dashboard/orders`);
                         return;
                     }
                 }
 
-                const tokenResult = await user.getIdTokenResult();
-                if (tokenResult.claims.must_change_password) {
-                    window.location.href = '/change-password';
+                if (tokenResult?.claims?.must_change_password) {
+                    router.replace('/change-password');
+                    return;
+                }
+
+                const fallbackRole = tokenResult?.claims?.role as string | undefined;
+                const fallbackTenant = tokenResult?.claims?.tenant_id || tokenResult?.claims?.restaurant_id;
+                if (fallbackRole === 'super_admin') {
+                    if (savedCustomToken) {
+                        sessionStorage.setItem('pending_admin_token', savedCustomToken);
+                    }
+                    router.replace('/super-admin');
+                    return;
+                }
+                if (fallbackRole && fallbackTenant) {
+                    router.replace(`/${fallbackTenant}/dashboard/orders`);
                     return;
                 }
 
                 // If we reach here, no valid dashboard role found
-                window.location.href = '/unauthorized';
+                router.replace('/unauthorized');
             }
         } catch (err: any) {
             const msg = err?.message ?? 'Authentication failed';
@@ -327,7 +353,7 @@ export default function LoginPage() {
             <Background />
             <div className="relative z-10 w-full max-w-md px-4">
                 <motion.div initial={{ opacity: 0, y: 32, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}>
-                    <div className="bg-slate-900/80 backdrop-blur-2xl border border-slate-700/50 rounded-3xl shadow-2xl overflow-hidden">
+                    <div className="bg-slate-900/85 sm:bg-slate-900/80 backdrop-blur-md sm:backdrop-blur-2xl border border-slate-700/50 rounded-3xl shadow-2xl overflow-hidden">
                         <div className="h-1 w-full bg-gradient-to-r from-blue-600 via-indigo-500 to-purple-600" />
                         <div className="p-8">
                             <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="flex flex-col items-center mb-8">
