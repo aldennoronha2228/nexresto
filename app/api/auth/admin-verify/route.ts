@@ -46,35 +46,10 @@ export async function POST(request: NextRequest) {
             updated_at: Timestamp.now(),
         }, { merge: true });
 
-        // 2. Delete any other profile that isn't this one
-        const profilesSnap = await adminFirestore.collection('admin_profiles').get();
-        for (const doc of profilesSnap.docs) {
-            if (doc.id !== user.uid) {
-                console.warn(`[AdminVerify] Deleting stale database profile: ${doc.id}`);
-                await doc.ref.delete();
-            }
-        }
         // ───────────────────────────────────────────────────────────────────
 
         // Set the super_admin claim
         await adminAuth.setCustomUserClaims(user.uid, { role: 'super_admin' });
-
-        // ─── STRICT CLEANUP: Delete any OLD Super Admins ──────────────────────
-        // If the .env was changed, a different user may still have the 
-        // super_admin claim. We find and delete them to satisfy the prompt.
-        try {
-            const usersResult = await adminAuth.listUsers();
-            const staleAdmins = usersResult.users.filter(u =>
-                u.customClaims?.role === 'super_admin' && u.email !== superAdminEmail
-            );
-
-            for (const oldAdmin of staleAdmins) {
-                console.warn(`[AdminVerify] Deleting stale super admin: ${oldAdmin.email}`);
-                await adminAuth.deleteUser(oldAdmin.uid);
-            }
-        } catch (cleanupErr) {
-            console.error('[AdminVerify] Cleanup error (non-blocking):', cleanupErr);
-        }
 
         // Generate a custom token for the frontend to sign in with
         const customToken = await adminAuth.createCustomToken(user.uid);

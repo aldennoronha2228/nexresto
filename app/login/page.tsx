@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, Mail, Lock, AlertCircle, Loader2, ShieldCheck } from 'lucide-react';
 import NexRestoLogo from '@/components/ui/NexRestoLogo';
 import { signInWithEmail, signInWithGoogle, signUpAndCreateTenant } from '@/lib/firebase-auth';
-import { signInWithCredential, GoogleAuthProvider } from 'firebase/auth';
+import { signInWithCredential, GoogleAuthProvider, signInWithEmailAndPassword } from 'firebase/auth';
 import { tenantAuth, adminAuth } from '@/lib/firebase';
 import { useAuth } from '@/context/AuthContext';
 import { useSuperAdminAuth } from '@/context/SuperAdminAuthContext';
@@ -191,6 +191,12 @@ export default function LoginPage() {
                         // sign into its isolated adminAuth instance without blocking login.
                         if (savedCustomToken) {
                             sessionStorage.setItem('pending_admin_token', savedCustomToken);
+                        } else {
+                            try {
+                                await signInWithEmailAndPassword(adminAuth, email, password);
+                            } catch (seedErr) {
+                                console.warn('Could not seed adminAuth instance with email/password:', seedErr);
+                            }
                         }
                         router.replace('/super-admin');
                         return;
@@ -211,6 +217,12 @@ export default function LoginPage() {
                 if (fallbackRole === 'super_admin') {
                     if (savedCustomToken) {
                         sessionStorage.setItem('pending_admin_token', savedCustomToken);
+                    } else {
+                        try {
+                            await signInWithEmailAndPassword(adminAuth, email, password);
+                        } catch (seedErr) {
+                            console.warn('Could not seed adminAuth instance with fallback role:', seedErr);
+                        }
                     }
                     router.replace('/super-admin');
                     return;

@@ -66,16 +66,20 @@ export async function GET(request: NextRequest) {
         }
 
         if (currentRole === 'super_admin' && userEmail !== superAdminEmail) {
-            // This user was previously a super_admin but the ENV changed.
-            // STICKTLY DELETE as requested by the user prompt.
-            console.warn(`[AuthSync] Deleting stale super admin record for: ${userEmail}`);
-
-            // Delete Firestore record
-            await adminFirestore.doc(`admin_profiles/${uid}`).delete().catch(() => { });
-
-            // Delete Auth account
-            await adminAuth.deleteUser(uid);
-            return NextResponse.json({ error: 'User deleted (stale super admin)' }, { status: 401 });
+            // Keep existing super-admin sessions non-destructive even when ENV is updated.
+            // This prevents login loops and accidental account deletion.
+            console.warn(`[AuthSync] Super admin email mismatch for ${userEmail}; preserving access`);
+            return NextResponse.json({
+                profile: {
+                    tenant_id: null,
+                    tenant_name: 'Platform Admin',
+                    role: 'super_admin',
+                    must_change_password: false,
+                    full_name: userRecord.displayName || userRecord.email,
+                    subscription_tier: 'pro',
+                    subscription_status: 'active',
+                },
+            });
         }
         // ───────────────────────────────────────────────────────────────────────
 
