@@ -1,14 +1,20 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 680" role="img" aria-label="NexResto logo">
-  <rect width="680" height="680" fill="#44238f"/>
-  <g transform="translate(340 250)">
-    <g fill="none" stroke="#8f2bff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
-      <circle cx="0" cy="0" r="72"/>
-      <path d="M-50 -20h50c30 0 54 24 54 54"/>
-      <path d="M-50 0h40c22 0 40 18 40 40"/>
-      <path d="M-50 20h26c15 0 28 13 28 28"/>
-      <path d="M-50 -40h62c38 0 68 30 68 68"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 360" role="img" aria-label="NexResto logo">
+  <defs>
+    <linearGradient id="nrLogoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#a855f7"/>
+      <stop offset="100%" stop-color="#6d28d9"/>
+    </linearGradient>
+  </defs>
+
+  <g transform="translate(20 20)">
+    <g fill="none" stroke="url(#nrLogoGradient)" stroke-width="20" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M36 300V36h50l112 138V36h50v264h-50L86 182v118z"/>
+      <path d="M206 238V118"/>
+      <path d="M228 238V118"/>
+      <path d="M182 154h70"/>
+      <path d="M252 118c56-66 128-46 128 10 0 33-20 53-44 64 20 10 36 25 36 48 0 40-34 72-96 66"/>
     </g>
   </g>
-  <text x="340" y="430" font-family="'Segoe UI', Arial, sans-serif" font-size="74" text-anchor="middle" letter-spacing="3" fill="#f8f8ff" font-weight="600">NEXRESTO</text>
-  <text x="340" y="478" font-family="'Segoe UI', Arial, sans-serif" font-size="42" text-anchor="middle" fill="#f8f8ff" opacity="0.95">Restaurant Tech</text>
+
+  <text x="450" y="196" font-family="'Poppins', 'Segoe UI', Arial, sans-serif" font-size="122" font-weight="700" fill="#111827">NexResto</text>
 </svg>

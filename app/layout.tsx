@@ -11,9 +11,9 @@ export const metadata: Metadata = {
   title: 'NexResto — Dashboard',
   description: 'NexResto restaurant management dashboard',
   icons: {
-    icon: '/nexresto-mark.svg',
-    shortcut: '/nexresto-mark.svg',
-    apple: '/nexresto-mark.svg',
+    icon: '/nexresto-logo.png',
+    shortcut: '/nexresto-logo.png',
+    apple: '/nexresto-logo.png',
   },
 };
 
