@@ -4,6 +4,7 @@ import { memo, useMemo, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, Mail, Lock, AlertCircle, Loader2, ShieldCheck } from 'lucide-react';
+import NexRestoLogo from '@/components/ui/NexRestoLogo';
 import { signInWithEmail, signInWithGoogle, signUpAndCreateTenant } from '@/lib/firebase-auth';
 import { signInWithCredential, GoogleAuthProvider } from 'firebase/auth';
 import { tenantAuth, adminAuth } from '@/lib/firebase';
@@ -357,7 +358,9 @@ export default function LoginPage() {
                         <div className="h-1 w-full bg-gradient-to-r from-blue-600 via-indigo-500 to-purple-600" />
                         <div className="p-8">
                             <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="flex flex-col items-center mb-8">
-                                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center mb-4 shadow-lg shadow-blue-500/30"><ShieldCheck className="w-8 h-8 text-white" /></div>
+                                <div className="w-16 h-16 rounded-2xl bg-slate-800/70 border border-slate-700/70 flex items-center justify-center mb-4 shadow-lg shadow-blue-500/20">
+                                    <NexRestoLogo className="w-11 h-11" priority />
+                                </div>
                                 <h1 className="text-2xl font-bold text-white tracking-tight">NexResto Dashboard</h1>
                                 <p className="text-slate-400 text-sm mt-1">Authorized personnel only</p>
                             </motion.div>

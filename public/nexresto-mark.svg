@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="NexResto mark">
+  <defs>
+    <linearGradient id="nrMark" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#b23cff"/>
+      <stop offset="100%" stop-color="#7b21ff"/>
+    </linearGradient>
+  </defs>
+  <g fill="none" stroke="url(#nrMark)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="64" cy="64" r="50"/>
+    <path d="M27 49h36c17 0 30 13 30 30"/>
+    <path d="M27 64h28c13 0 23 10 23 23"/>
+    <path d="M27 79h17c9 0 16 7 16 16"/>
+    <path d="M27 34h45c25 0 45 20 45 45"/>
+  </g>
+</svg>

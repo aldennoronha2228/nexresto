@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 680" role="img" aria-label="NexResto logo">
+  <rect width="680" height="680" fill="#44238f"/>
+  <g transform="translate(340 250)">
+    <g fill="none" stroke="#8f2bff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="0" cy="0" r="72"/>
+      <path d="M-50 -20h50c30 0 54 24 54 54"/>
+      <path d="M-50 0h40c22 0 40 18 40 40"/>
+      <path d="M-50 20h26c15 0 28 13 28 28"/>
+      <path d="M-50 -40h62c38 0 68 30 68 68"/>
+    </g>
+  </g>
+  <text x="340" y="430" font-family="'Segoe UI', Arial, sans-serif" font-size="74" text-anchor="middle" letter-spacing="3" fill="#f8f8ff" font-weight="600">NEXRESTO</text>
+  <text x="340" y="478" font-family="'Segoe UI', Arial, sans-serif" font-size="42" text-anchor="middle" fill="#f8f8ff" opacity="0.95">Restaurant Tech</text>
+</svg>

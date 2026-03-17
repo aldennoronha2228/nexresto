@@ -22,9 +22,10 @@ import { usePathname, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'motion/react';
 import {
     LayoutDashboard, Building2, ScrollText,
-    ChevronLeft, LogOut, Shield, Menu, X, HardDrive
+    ChevronLeft, LogOut, Menu, X, HardDrive
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import NexRestoLogo from '@/components/ui/NexRestoLogo';
 
 
 const navigation = [
@@ -106,7 +107,7 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
                     <div className="h-16 flex items-center px-6 border-b border-slate-700">
                         <motion.div initial={false} animate={{ opacity: collapsed ? 0 : 1 }} className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center shadow-lg shadow-purple-500/20">
-                                <Shield className="w-5 h-5 text-white" />
+                                <NexRestoLogo className="w-7 h-7" priority />
                             </div>
                             {!collapsed && (
                                 <div>
@@ -183,7 +184,7 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
                     </button>
                     <div className="flex items-center gap-2">
                         <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center">
-                            <Shield className="w-4 h-4 text-white" />
+                            <NexRestoLogo className="w-5 h-5" priority />
                         </div>
                         <span className="font-bold text-white">God Mode</span>
                     </div>
@@ -211,7 +212,7 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
                                 <div className="h-16 flex items-center justify-between px-4 border-b border-slate-700">
                                     <div className="flex items-center gap-3">
                                         <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center">
-                                            <Shield className="w-4 h-4 text-white" />
+                                            <NexRestoLogo className="w-5 h-5" priority />
                                         </div>
                                         <span className="font-bold text-white">God Mode</span>
                                     </div>

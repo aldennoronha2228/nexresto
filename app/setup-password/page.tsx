@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'motion/react';
 import { Eye, EyeOff, Lock, Loader2, ShieldCheck, CheckCircle2 } from 'lucide-react';
+import NexRestoLogo from '@/components/ui/NexRestoLogo';
 import { auth } from '@/lib/firebase';
 import { verifyPasswordResetCode, confirmPasswordReset } from 'firebase/auth';
 import { toast } from 'sonner';
@@ -210,7 +211,7 @@ function SetupPasswordContent() {
                             {/* Header */}
                             <div className="flex flex-col items-center mb-8">
                                 <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center mb-4 shadow-lg shadow-blue-500/30">
-                                    <ShieldCheck className="w-8 h-8 text-white" />
+                                    <NexRestoLogo className="w-11 h-11" priority />
                                 </div>
                                 <h1 className="text-2xl font-bold text-white">Reset Password</h1>
                                 {userEmail && (
@@ -303,7 +304,7 @@ function SetupPasswordContent() {
                                         </>
                                     ) : (
                                         <>
-                                            <ShieldCheck className="w-5 h-5" />
+                                            <NexRestoLogo className="w-5 h-5" />
                                             Set Password & Continue
                                         </>
                                     )}

@@ -10,6 +10,11 @@ const inter = Inter({ subsets: ['latin'] });
 export const metadata: Metadata = {
   title: 'NexResto — Dashboard',
   description: 'NexResto restaurant management dashboard',
+  icons: {
+    icon: '/nexresto-mark.svg',
+    shortcut: '/nexresto-mark.svg',
+    apple: '/nexresto-mark.svg',
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

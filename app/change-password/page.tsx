@@ -8,6 +8,7 @@ import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 
 import { tenantAuth } from '@/lib/firebase';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
+import NexRestoLogo from '@/components/ui/NexRestoLogo';
 
 export default function ChangePasswordPage() {
     const router = useRouter();
@@ -126,7 +127,7 @@ export default function ChangePasswordPage() {
                 <div className="p-8">
                     <div className="flex flex-col items-center text-center mb-6">
                         <div className="w-14 h-14 rounded-2xl bg-blue-500/15 flex items-center justify-center mb-3">
-                            <ShieldCheck className="w-7 h-7 text-blue-400" />
+                            <NexRestoLogo className="w-8 h-8" priority />
                         </div>
                         <h1 className="text-2xl font-bold text-white">Set New Password</h1>
                         <p className="text-slate-400 text-sm mt-2">
