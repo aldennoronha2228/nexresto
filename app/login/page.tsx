@@ -146,8 +146,11 @@ export default function LoginPage() {
                         code === 'auth/wrong-password' ||
                         code === 'auth/user-not-found' ||
                         code === 'auth/invalid-email';
+                    const shouldTryAdminFallback =
+                        isCredentialError ||
+                        code === 'auth/internal-error';
 
-                    if (!isCredentialError) throw tenantAuthError;
+                    if (!shouldTryAdminFallback) throw tenantAuthError;
 
                     // Fallback for super-admin credentials synced via .env route.
                     const adminVerifyRes = await fetch('/api/auth/admin-verify', {
@@ -239,6 +242,8 @@ export default function LoginPage() {
             const msg = err?.message ?? 'Authentication failed';
             if (msg.includes('auth/invalid-credential') || msg.includes('auth/wrong-password') || msg.includes('auth/user-not-found')) {
                 setError('Incorrect email or password. Please try again.');
+            } else if (msg.includes('auth/internal-error')) {
+                setError('Firebase authentication temporarily failed. Please try again in a few seconds. If this continues, confirm Email/Password sign-in is enabled in Firebase Auth and this account exists.');
             } else if (msg.includes('auth/email-already-in-use') || msg.includes('already registered')) {
                 setError('This email is already registered. Try signing in instead.');
             } else if (msg.includes('auth/too-many-requests')) {

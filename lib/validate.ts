@@ -35,9 +35,9 @@ function isValidId(v: unknown): v is string {
     return typeof v === 'string' && /^[a-zA-Z0-9_\-]+$/.test(v) && v.length >= 10 && v.length <= 50;
 }
 
-/** Table IDs follow the pattern T-01 through T-99 or are arbitrary short strings, or empty if not provided */
+/** Table IDs follow the pattern T-01 through T-99 or are arbitrary short strings */
 function isTableId(v: unknown): v is string {
-    return typeof v === 'string' && (/^[A-Za-z0-9\-_]{1,20}$/.test(v) || v === '');
+    return typeof v === 'string' && /^[A-Za-z0-9\-_]{1,20}$/.test(v);
 }
 
 function isEmail(v: unknown): v is string {
@@ -103,7 +103,7 @@ export function validateMenuItemPayload(raw: unknown): ValidationResult<ValidMen
 
     if (!isNonEmptyString(p.name, 200)) return { ok: false, error: 'Menu item name is required (max 200 chars)' };
     if (!isPositiveNumber(p.price, 100_000)) return { ok: false, error: 'Price must be a positive number' };
-    if (!isValidId(p.category_id)) return { ok: false, error: 'category_id must be a valid ID' };
+    if (!isValidId(p.category_id)) return { ok: false, error: 'category_id must be a valid UUID or ID' };
     if (p.type !== 'veg' && p.type !== 'non-veg') return { ok: false, error: 'type must be "veg" or "non-veg"' };
 
     if (p.image_url !== undefined && p.image_url !== null && p.image_url !== '') {
