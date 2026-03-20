@@ -231,7 +231,7 @@ export async function sendSubscriptionReminderEmail(params: {
     endDate: string;
     reminderType: 'ending_soon' | 'ended';
     daysRemaining?: number;
-}): Promise<{ success: boolean; error?: string }> {
+}): Promise<{ success: boolean; error?: string; providerMessageId?: string }> {
     if (!process.env.RESEND_API_KEY) {
         console.error('[EMAIL] RESEND_API_KEY not configured');
         return { success: false, error: 'Email service not configured' };
@@ -263,7 +263,7 @@ export async function sendSubscriptionReminderEmail(params: {
         : `Your NexResto subscription for <strong>${params.restaurantName}</strong> ended on <strong>${params.endDate}</strong>. Please renew to restore full dashboard access.`;
 
     try {
-        const { error } = await getResendClient().emails.send({
+        const { data, error } = await getResendClient().emails.send({
             from,
             to: [params.to],
             subject,
@@ -291,7 +291,7 @@ export async function sendSubscriptionReminderEmail(params: {
             return { success: false, error: error.message };
         }
 
-        return { success: true };
+        return { success: true, providerMessageId: data?.id };
     } catch (err) {
         console.error('[EMAIL] Failed to send subscription reminder email:', err);
         return { success: false, error: err instanceof Error ? err.message : 'Failed to send email' };

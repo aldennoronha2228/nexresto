@@ -94,6 +94,9 @@ export interface SubscriptionReminderEmailRow {
     last_reminder_sent_on: string | null;
     last_reminder_sent_at: string | null;
     last_reminder_error: string | null;
+    last_reminder_to: string | null;
+    last_reminder_provider_id: string | null;
+    last_reminder_source: string | null;
 }
 
 function normalizeYmd(value: unknown): string | null {
@@ -418,6 +421,9 @@ export async function getSubscriptionReminderEmailRows(): Promise<SubscriptionRe
                 last_reminder_sent_on: d.last_subscription_reminder_sent_on ? String(d.last_subscription_reminder_sent_on) : null,
                 last_reminder_sent_at: sentAt ? sentAt.toISOString() : null,
                 last_reminder_error: d.last_subscription_reminder_error ? String(d.last_subscription_reminder_error) : null,
+                last_reminder_to: d.last_subscription_reminder_to ? String(d.last_subscription_reminder_to) : null,
+                last_reminder_provider_id: d.last_subscription_reminder_provider_id ? String(d.last_subscription_reminder_provider_id) : null,
+                last_reminder_source: d.last_subscription_reminder_source ? String(d.last_subscription_reminder_source) : null,
             };
         });
     } catch (error) {
@@ -452,12 +458,6 @@ export async function sendManualSubscriptionReminderEmail(
         }
 
         const daysRemaining = daysUntilYmd(endDate);
-        if (daysRemaining < 0 || daysRemaining > 2) {
-            return {
-                success: false,
-                error: `Manual send allowed only in the final 2 days before expiry (current: ${daysRemaining})`,
-            };
-        }
 
         const ownerEmail = await getOwnerEmailForRestaurant(restaurantId, restaurant.owner_email);
         if (!ownerEmail) {
@@ -465,11 +465,12 @@ export async function sendManualSubscriptionReminderEmail(
         }
 
         const restaurantName = String(restaurant.name || restaurantId).trim();
+        const reminderType: 'ending_soon' | 'ended' = daysRemaining < 0 ? 'ended' : 'ending_soon';
         const emailResult = await sendSubscriptionReminderEmail({
             to: ownerEmail,
             restaurantName,
             endDate,
-            reminderType: 'ending_soon',
+            reminderType,
             daysRemaining,
         });
 
@@ -477,17 +478,21 @@ export async function sendManualSubscriptionReminderEmail(
             await restaurantRef.update({
                 last_subscription_reminder_error: emailResult.error || 'Email send failed',
                 last_subscription_reminder_error_at: FieldValue.serverTimestamp(),
+                last_subscription_reminder_to: ownerEmail,
+                last_subscription_reminder_source: 'manual',
             });
             return { success: false, error: emailResult.error || 'Email send failed' };
         }
 
         const todayYmd = new Date().toISOString().slice(0, 10);
         await restaurantRef.update({
-            last_subscription_reminder_kind: 'ending_soon',
+            last_subscription_reminder_kind: reminderType,
             last_subscription_reminder_for: endDate,
             last_subscription_reminder_sent_on: todayYmd,
             last_subscription_reminder_sent_at: FieldValue.serverTimestamp(),
             last_subscription_reminder_source: 'manual',
+            last_subscription_reminder_to: ownerEmail,
+            last_subscription_reminder_provider_id: emailResult.providerMessageId || FieldValue.delete(),
             last_subscription_reminder_error: FieldValue.delete(),
         });
 

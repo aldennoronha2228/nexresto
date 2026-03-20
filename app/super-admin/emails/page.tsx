@@ -160,6 +160,7 @@ export default function SuperAdminEmailsPage() {
                                     <th className="text-left px-5 py-3 text-slate-400 text-xs font-semibold">End Date</th>
                                     <th className="text-left px-5 py-3 text-slate-400 text-xs font-semibold">Status</th>
                                     <th className="text-left px-5 py-3 text-slate-400 text-xs font-semibold">Last Sent</th>
+                                    <th className="text-left px-5 py-3 text-slate-400 text-xs font-semibold">Delivery</th>
                                     <th className="text-left px-5 py-3 text-slate-400 text-xs font-semibold">Last Error</th>
                                     <th className="text-right px-5 py-3 text-slate-400 text-xs font-semibold">Actions</th>
                                 </tr>
@@ -168,7 +169,8 @@ export default function SuperAdminEmailsPage() {
                                 {rows.map((row) => {
                                     const isBusy = busyId === row.id;
                                     const inReminderWindow = row.days_remaining !== null && row.days_remaining >= 0 && row.days_remaining <= 2;
-                                    const canManualSend = inReminderWindow && row.reminders_enabled && !row.account_temporarily_disabled;
+                                    const hasEndDate = Boolean(row.subscription_end_date);
+                                    const canManualSend = hasEndDate && row.reminders_enabled && !row.account_temporarily_disabled;
 
                                     return (
                                         <tr key={row.id} className="border-b border-slate-700/60">
@@ -217,6 +219,13 @@ export default function SuperAdminEmailsPage() {
                                             </td>
                                             <td className="px-5 py-4 text-slate-300 text-sm">
                                                 {row.last_reminder_sent_at ? formatDate(row.last_reminder_sent_at) : 'Never'}
+                                            </td>
+                                            <td className="px-5 py-4 text-xs text-slate-300">
+                                                <div className="space-y-0.5">
+                                                    <p>To: {row.last_reminder_to || 'N/A'}</p>
+                                                    <p>ID: {row.last_reminder_provider_id || 'N/A'}</p>
+                                                    <p>Source: {row.last_reminder_source || 'N/A'}</p>
+                                                </div>
                                             </td>
                                             <td className="px-5 py-4 text-xs text-rose-300 max-w-[260px] truncate" title={row.last_reminder_error || ''}>
                                                 {row.last_reminder_error || 'None'}

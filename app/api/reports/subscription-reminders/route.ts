@@ -103,6 +103,12 @@ async function handleSubscriptionReminders(request: NextRequest) {
 
             if (!emailResult.success) {
                 errors.push({ restaurantId, error: emailResult.error || 'Email send failed' });
+                await restaurantDoc.ref.update({
+                    last_subscription_reminder_error: emailResult.error || 'Email send failed',
+                    last_subscription_reminder_error_at: FieldValue.serverTimestamp(),
+                    last_subscription_reminder_to: ownerEmail,
+                    last_subscription_reminder_source: 'cron',
+                }).catch(() => { });
                 continue;
             }
 
@@ -111,6 +117,9 @@ async function handleSubscriptionReminders(request: NextRequest) {
                 last_subscription_reminder_for: endDate,
                 last_subscription_reminder_sent_on: todayYmd,
                 last_subscription_reminder_sent_at: FieldValue.serverTimestamp(),
+                last_subscription_reminder_to: ownerEmail,
+                last_subscription_reminder_source: 'cron',
+                last_subscription_reminder_provider_id: emailResult.providerMessageId || FieldValue.delete(),
                 last_subscription_reminder_error: FieldValue.delete(),
             });
 
