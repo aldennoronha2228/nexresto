@@ -39,7 +39,7 @@ const PUBLIC_PATHS = ['/login', '/auth', '/customer', '/unauthorized', '/_next',
 
 // ─── Security headers ─────────────────────────────────────────────────────────
 
-function buildSecurityHeaders(nonce: string): Record<string, string> {
+function buildSecurityHeaders(nonce: string, allowCamera: boolean): Record<string, string> {
     const firebaseHost = `${FIREBASE_PROJECT_ID}.firebaseapp.com`;
 
     // Content Security Policy
@@ -58,8 +58,8 @@ function buildSecurityHeaders(nonce: string): Record<string, string> {
         // No iframes
         `frame-ancestors 'none'`,
         `frame-src 'none'`,
-        // Media
-        `media-src 'none'`,
+        // Media (camera review modal requires local media stream support on tables dashboard)
+        allowCamera ? `media-src 'self' blob: data:` : `media-src 'none'`,
         // Object/embed
         `object-src 'none'`,
         // Form submissions
@@ -76,7 +76,7 @@ function buildSecurityHeaders(nonce: string): Record<string, string> {
         'X-Content-Type-Options': 'nosniff',
         'Referrer-Policy': 'strict-origin-when-cross-origin',
         'Permissions-Policy': [
-            'camera=()',
+            allowCamera ? 'camera=(self)' : 'camera=()',
             'microphone=()',
             'geolocation=()',
             'payment=()',
@@ -129,7 +129,8 @@ export default function proxy(request: NextRequest) {
     }
 
     const nonce = generateNonce();
-    const securityHeaders = buildSecurityHeaders(nonce);
+    const isTablesRoute = /^\/[^/]+\/dashboard\/tables(?:\/.*)?$/.test(pathname);
+    const securityHeaders = buildSecurityHeaders(nonce, isTablesRoute);
 
     const isDashboard = pathname.match(/^\/[^/]+\/dashboard(\/.*)?$/);
     const isProtected = isDashboard || PROTECTED_PREFIXES.some(p => pathname.startsWith(p));
