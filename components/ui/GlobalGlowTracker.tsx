@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { usePathname } from "next/navigation";
 
 function isBlockCandidate(el: Element): el is HTMLElement {
   if (!(el instanceof HTMLElement)) return false;
@@ -35,7 +36,17 @@ function isBlockCandidate(el: Element): el is HTMLElement {
 }
 
 export default function GlobalGlowTracker() {
+  const pathname = usePathname();
+  const path = pathname || "";
+  const disableGlow =
+    path.includes("/dashboard") ||
+    path.startsWith("/admin") ||
+    path.startsWith("/super-admin") ||
+    path.startsWith("/customer");
+
   useEffect(() => {
+    if (disableGlow) return;
+
     let rafId = 0;
     let refreshId = 0;
     let targets: HTMLElement[] = [];
@@ -113,7 +124,7 @@ export default function GlobalGlowTracker() {
       document.removeEventListener("visibilitychange", collectTargets);
       document.removeEventListener("pointerleave", onPointerLeave);
     };
-  }, []);
+  }, [disableGlow]);
 
   return null;
 }

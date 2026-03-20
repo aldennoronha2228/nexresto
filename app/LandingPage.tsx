@@ -210,7 +210,7 @@ export default function LandingPage() {
       </motion.div>
 
       <header className="fixed inset-x-0 top-5 z-40 flex justify-center px-4">
-        <div className="nexo-glow-border global-glow-track flex w-full max-w-3xl items-center justify-between rounded-full border border-white/15 bg-black/20 px-5 py-3 backdrop-blur-md">
+        <div className="nexo-glow-border flex w-full max-w-3xl items-center justify-between rounded-full border border-white/15 bg-black/20 px-5 py-3 backdrop-blur-md">
           <GlowLogic />
           <div className="text-sm font-semibold tracking-[0.22em] text-white/90">NEXRESTO</div>
           <nav className="hidden items-center gap-7 text-xs text-white/75 md:flex">
@@ -248,7 +248,7 @@ export default function LandingPage() {
 
             <motion.div style={{ opacity: ribbonOpacity }} className="mt-10 grid w-full max-w-4xl grid-cols-2 gap-3 md:grid-cols-4">
               {METRICS.map((item) => (
-                <div key={item.label} className="nexo-glow-border global-glow-track rounded-2xl border border-white/10 bg-black/35 px-4 py-4 shadow-[0_0_20px_rgba(148,163,184,0.18)]">
+                <div key={item.label} className="nexo-glow-border rounded-2xl border border-white/10 bg-black/35 px-4 py-4 shadow-[0_0_20px_rgba(148,163,184,0.18)]">
                   <GlowLogic />
                   <p className="text-lg font-semibold text-white">{item.value}</p>
                   <p className="mt-1 text-xs text-white/65">{item.label}</p>
@@ -259,7 +259,7 @@ export default function LandingPage() {
         </section>
 
         <section id="features" className="relative mx-auto max-w-6xl px-6 pb-20 md:px-10">
-          <motion.div style={{ opacity: bentoOpacity }} className="nexo-glow-border global-glow-track relative overflow-hidden rounded-3xl border border-white/10 bg-black/35 p-6 backdrop-blur-md md:p-8">
+          <motion.div style={{ opacity: bentoOpacity }} className="nexo-glow-border relative overflow-hidden rounded-3xl border border-white/10 bg-black/35 p-6 backdrop-blur-md md:p-8">
             <GlowLogic />
             <motion.div
               style={{ top: scanY, opacity: bentoGlow }}
@@ -315,7 +315,7 @@ export default function LandingPage() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ delay: index * 0.12 }}
-                className="nexo-glow-border global-glow-track rounded-2xl border border-white/10 bg-black/35 p-5"
+                className="nexo-glow-border rounded-2xl border border-white/10 bg-black/35 p-5"
               >
                 <GlowLogic />
                 <div className="text-xs uppercase tracking-[0.24em] text-white/45">Step {index + 1}</div>
@@ -331,13 +331,13 @@ export default function LandingPage() {
         </section>
 
         <section className="mx-auto max-w-6xl px-6 py-14 md:px-10">
-          <div className="nexo-glow-border global-glow-track mb-6 rounded-3xl border border-white/10 bg-black/40 p-6 md:p-8">
+          <div className="nexo-glow-border mb-6 rounded-3xl border border-white/10 bg-black/40 p-6 md:p-8">
             <GlowLogic />
             <h3 className="text-3xl font-semibold leading-tight">Your Entire Restaurant in Your Pocket.</h3>
             <p className="mt-3 max-w-3xl text-sm text-white/70 md:text-base">
               Manage menus, track sales, and optimize floor plans from a single, beautiful dashboard.
             </p>
-            <div className="nexo-glow-border global-glow-track mt-5 rounded-2xl border border-white/10 bg-black/40 p-4">
+            <div className="nexo-glow-border mt-5 rounded-2xl border border-white/10 bg-black/40 p-4">
               <GlowLogic />
               <p className="text-xs uppercase tracking-[0.22em] text-white/45">Live Layer</p>
               <p className="mt-2 text-sm text-white/75">Hovering notifications and insights float over core operations to keep owners instantly aware.</p>
@@ -354,7 +354,7 @@ export default function LandingPage() {
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true, margin: '-80px' }}
                   transition={{ duration: 0.5, delay: index * 0.08 }}
-                  className="nexo-glow-border global-glow-track relative min-h-[280px] overflow-hidden rounded-3xl border border-white/12 bg-[#05070f]/90 p-5"
+                  className="nexo-glow-border relative min-h-[280px] overflow-hidden rounded-3xl border border-white/12 bg-[#05070f]/90 p-5"
                 >
                   <GlowLogic />
                   <div className="absolute inset-0 bg-[linear-gradient(to_bottom_right,rgba(148,163,184,0.08),rgba(15,23,42,0.24),rgba(2,6,23,0.8))]" />
@@ -398,7 +398,7 @@ export default function LandingPage() {
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            className="nexo-glow-border global-glow-track rounded-3xl border border-white/10 bg-black/45 p-6 md:p-8"
+            className="nexo-glow-border rounded-3xl border border-white/10 bg-black/45 p-6 md:p-8"
           >
             <GlowLogic />
             <p className="text-xs uppercase tracking-[0.24em] text-white/45">The 3D Advantage</p>
@@ -411,7 +411,7 @@ export default function LandingPage() {
         </section>
 
         <section className="mx-auto max-w-6xl px-6 py-10 md:px-10">
-          <div className="nexo-glow-border global-glow-track rounded-3xl border border-white/10 bg-black/45 p-6 md:p-8">
+          <div className="nexo-glow-border rounded-3xl border border-white/10 bg-black/45 p-6 md:p-8">
             <GlowLogic />
             <div className="mb-5 flex items-center justify-between gap-4">
               <h3 className="text-2xl font-semibold">Why teams switch to NexResto</h3>
@@ -427,7 +427,7 @@ export default function LandingPage() {
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}
                   transition={{ duration: 0.45, delay: index * 0.08 }}
-                  className="nexo-glow-border global-glow-track rounded-2xl border border-white/10 bg-white/[0.04] p-5"
+                  className="nexo-glow-border rounded-2xl border border-white/10 bg-white/[0.04] p-5"
                 >
                   <GlowLogic />
                   <p className="text-sm leading-relaxed text-white/80">“{item.quote}”</p>
@@ -440,12 +440,12 @@ export default function LandingPage() {
         </section>
 
         <section className="mx-auto max-w-6xl px-6 py-10 md:px-10">
-          <div className="nexo-glow-border global-glow-track rounded-3xl border border-white/10 bg-black/45 p-6 md:p-8">
+          <div className="nexo-glow-border rounded-3xl border border-white/10 bg-black/45 p-6 md:p-8">
             <GlowLogic />
             <h3 className="text-2xl font-semibold">Frequently asked</h3>
             <div className="mt-5 space-y-3">
               {FAQS.map((item) => (
-                <div key={item.q} className="nexo-glow-border global-glow-track rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                <div key={item.q} className="nexo-glow-border rounded-2xl border border-white/10 bg-white/[0.03] p-4">
                   <GlowLogic />
                   <p className="text-sm font-semibold text-white">{item.q}</p>
                   <p className="mt-1 text-sm text-white/65">{item.a}</p>
@@ -466,7 +466,7 @@ export default function LandingPage() {
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
-              className="nexo-glow-border global-glow-track rounded-3xl border border-white/12 bg-black/50 p-6"
+              className="nexo-glow-border rounded-3xl border border-white/12 bg-black/50 p-6"
             >
               <GlowLogic />
               <p className="text-sm font-semibold text-white">Basic</p>
@@ -484,7 +484,7 @@ export default function LandingPage() {
               viewport={{ once: true }}
               onHoverStart={() => setIsProHovered(true)}
               onHoverEnd={() => setIsProHovered(false)}
-              className="nexo-glow-border global-glow-track relative rounded-3xl border border-lime-300/40 bg-black/50 p-6 shadow-[0_0_22px_rgba(163,230,53,0.34)]"
+              className="nexo-glow-border relative rounded-3xl border border-lime-300/40 bg-black/50 p-6 shadow-[0_0_22px_rgba(163,230,53,0.34)]"
             >
               <GlowLogic />
               <div className="absolute -top-3 right-5 rounded-full border border-lime-300/45 bg-lime-300/15 px-3 py-1 text-xs font-medium text-lime-100 shadow-[0_0_14px_rgba(163,230,53,0.4)]">
@@ -502,7 +502,7 @@ export default function LandingPage() {
         </section>
 
         <section id="ready" className="mx-auto max-w-6xl px-6 pb-24 pt-8 text-center md:px-10">
-          <div className="nexo-glow-border global-glow-track rounded-3xl border border-white/10 bg-black/45 p-8 shadow-[0_0_30px_rgba(148,163,184,0.2)]">
+          <div className="nexo-glow-border rounded-3xl border border-white/10 bg-black/45 p-8 shadow-[0_0_30px_rgba(148,163,184,0.2)]">
             <GlowLogic />
             <h3 className="text-3xl font-semibold">Join the 100+ Smart Restaurants in Manipal. Get Started Today.</h3>
             <p className="mx-auto mt-3 max-w-2xl text-sm text-white/70">
