@@ -1192,7 +1192,6 @@ function DraggableTable({
             offsetX: e.clientX - rect.left,
             offsetY: e.clientY - rect.top,
         };
-        onPlaceAtPoint(table.id, e.clientX, e.clientY, dragAnchorRef.current);
     };
 
     const moveDrag = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -2611,11 +2610,6 @@ export default function TablesQRCodesPage() {
                                                                             x: rect.left + rect.width / 2 - e.clientX,
                                                                             y: rect.top + rect.height / 2 - e.clientY,
                                                                         };
-                                                                        placeDetectedTableAtPoint(
-                                                                            table.id,
-                                                                            e.clientX + detectedDragOffsetRef.current.x,
-                                                                            e.clientY + detectedDragOffsetRef.current.y
-                                                                        );
                                                                     }}
                                                                     onPointerMove={(e) => {
                                                                         if (draggingDetectedId !== table.id) return;
