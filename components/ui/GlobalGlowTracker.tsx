@@ -27,8 +27,7 @@ function isBlockCandidate(el: Element): el is HTMLElement {
     el.tagName === "ARTICLE" ||
     el.tagName === "SECTION" ||
     el.tagName === "ASIDE" ||
-    el.tagName === "LI" ||
-    el.tagName === "BUTTON";
+    el.tagName === "LI";
 
   if (!isLikelyContainer) return false;
 
@@ -42,6 +41,10 @@ export default function GlobalGlowTracker() {
     let targets: HTMLElement[] = [];
 
     const collectTargets = () => {
+      for (const el of targets) {
+        el.classList.remove("global-glow-track");
+      }
+
       targets = Array.from(document.querySelectorAll("body *")).filter(isBlockCandidate);
       for (const el of targets) {
         el.classList.add("global-glow-track");

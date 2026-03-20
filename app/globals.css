@@ -245,7 +245,7 @@
 
   .global-glow-track {
     position: relative;
-    overflow: hidden;
+    overflow: visible;
     isolation: isolate;
     --active: 1;
     --start: 0;

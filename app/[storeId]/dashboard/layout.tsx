@@ -18,6 +18,7 @@ import { GlobalSearch } from '@/components/dashboard/GlobalSearch';
 import { NotificationBell } from '@/components/dashboard/NotificationBell';
 import { UpgradeModal } from '@/components/dashboard/UpgradeModal';
 import { SubscriptionGuard } from '@/components/dashboard/SubscriptionGuard';
+import NexRestoLogo from '@/components/ui/NexRestoLogo';
 import GeminiSupportChat from '@/components/dashboard/GeminiSupportChat';
 import { hasPermission, type PermissionType } from '@/components/dashboard/RoleGuard';
 import { tenantAuth, adminAuth } from '@/lib/firebase';
@@ -676,8 +677,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         {/* Logo */}
                             <div className="h-16 flex items-center px-6 border-b border-white/10">
                             <motion.div initial={false} animate={{ opacity: collapsed ? 0 : 1 }} className="flex items-center gap-2">
-                                    <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#ff4757] to-[#ff6b81] flex items-center justify-center shadow-lg shadow-rose-500/40">
-                                    <span className="text-white font-bold text-sm">{(displayTenantName?.[0] ?? 'R').toUpperCase()}</span>
+                                    <div className="w-8 h-8 rounded-xl bg-white/10 ring-1 ring-white/20 flex items-center justify-center shadow-lg shadow-amber-500/30">
+                                    <NexRestoLogo variant="mark" className="w-5 h-5" priority />
                                 </div>
                                     {!collapsed && <span className="font-semibold text-slate-100 truncate max-w-[140px]" title={displayTenantName}>{displayTenantName}</span>}
                             </motion.div>
@@ -740,8 +741,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <aside className="hidden md:flex lg:hidden fixed left-0 top-0 h-full w-20 premium-sidebar border-r border-white/10 z-30">
                     <div className="flex flex-col h-full w-full">
                         <div className="h-16 flex items-center justify-center border-b border-white/10">
-                            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#ff4757] to-[#ff6b81] flex items-center justify-center shadow-lg shadow-rose-500/40">
-                                <span className="text-white font-bold text-sm">{(displayTenantName?.[0] ?? 'R').toUpperCase()}</span>
+                            <div className="w-8 h-8 rounded-xl bg-white/10 ring-1 ring-white/20 flex items-center justify-center shadow-lg shadow-amber-500/30">
+                                <NexRestoLogo variant="mark" className="w-5 h-5" priority />
                             </div>
                         </div>
 
@@ -789,8 +790,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                 <div className="flex flex-col h-full">
                                         <div className="h-16 flex items-center justify-between px-6 border-b border-white/10 premium-sidebar">
                                         <div className="flex items-center gap-2">
-                                                <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#ff4757] to-[#ff6b81] flex items-center justify-center shadow-lg shadow-rose-500/40">
-                                                <span className="text-white font-bold text-sm">{(displayTenantName?.[0] ?? 'R').toUpperCase()}</span>
+                                            <div className="w-8 h-8 rounded-xl bg-white/10 ring-1 ring-white/20 flex items-center justify-center shadow-lg shadow-amber-500/30">
+                                            <NexRestoLogo variant="mark" className="w-5 h-5" priority />
                                             </div>
                                                 <span className="font-semibold text-slate-100 truncate max-w-[170px]" title={displayTenantName}>{displayTenantName}</span>
                                         </div>
