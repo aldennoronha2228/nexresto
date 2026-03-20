@@ -85,6 +85,7 @@ type ParsedAction =
     | { type: 'add_table'; seats: number; name?: string }
     | { type: 'add_menu_item'; name: string; price: number; category: string; foodType: 'veg' | 'non-veg'; imageUrl?: string }
     | { type: 'arrange_tables_square' }
+    | { type: 'keep_first_tables'; count: number }
     | { type: 'unknown' };
 
 type ActionExecution = {
@@ -204,13 +205,24 @@ function parseActionFromText(text: string): ParsedAction {
         return { type: 'arrange_tables_square' };
     }
 
+    const keepFirstMatch =
+        lower.match(/\bkeep\b.*\bfirst\b\s*(\d{1,3})\s*\btable(s)?\b.*\b(remove|delete)\b/i) ||
+        lower.match(/\bkeep\b.*\bonly\b\s*(\d{1,3})\s*\btable(s)?\b/i) ||
+        lower.match(/\bremove\b.*\ball\b.*\bexcept\b.*\bfirst\b\s*(\d{1,3})\b/i);
+    if (keepFirstMatch) {
+        const count = Number(keepFirstMatch[1]);
+        if (Number.isFinite(count) && count > 0) {
+            return { type: 'keep_first_tables', count: Math.min(999, Math.floor(count)) };
+        }
+    }
+
     return { type: 'unknown' };
 }
 
 function looksLikeControlIntent(text: string): boolean {
     const normalized = text.trim().toLowerCase();
     if (!normalized) return false;
-    return /(add|create|insert|update|edit|delete|remove|arrange|make|set|organize|place)\b/.test(normalized)
+    return /(add|create|insert|update|edit|delete|remove|arrange|make|set|organize|place|keep)\b/.test(normalized)
         && /(table|tables|menu item|item|menu|floor plan|layout|square)\b/.test(normalized);
 }
 
@@ -391,6 +403,52 @@ async function executeAction(action: ParsedAction, auth: AuthorizedRestaurant): 
             ok: true,
             message: `Done. Arranged ${nextTables.length} tables in a square layout.`,
             data: { arrangedCount: nextTables.length },
+        };
+    }
+
+    if (action.type === 'keep_first_tables') {
+        const layoutRef = adminFirestore.doc(`restaurants/${auth.restaurantId}/settings/floor_layout`);
+        const layoutSnap = await layoutRef.get();
+        const currentTables = Array.isArray(layoutSnap.data()?.tables) ? layoutSnap.data()?.tables : [];
+
+        if (currentTables.length === 0) {
+            return {
+                ok: false,
+                message: 'No tables exist yet, so there is nothing to prune.',
+            };
+        }
+
+        const sortedTables = [...currentTables].sort((a: any, b: any) => {
+            const aNum = Number(String(a?.id || '').match(/(\d+)/)?.[1] || NaN);
+            const bNum = Number(String(b?.id || '').match(/(\d+)/)?.[1] || NaN);
+
+            if (Number.isFinite(aNum) && Number.isFinite(bNum)) {
+                return aNum - bNum;
+            }
+
+            return String(a?.id || '').localeCompare(String(b?.id || ''));
+        });
+
+        const keepCount = Math.min(action.count, sortedTables.length);
+        const nextTables = sortedTables.slice(0, keepCount);
+        const removedCount = sortedTables.length - nextTables.length;
+
+        await layoutRef.set(
+            {
+                tables: nextTables,
+                updatedAt: FieldValue.serverTimestamp(),
+                updatedBy: auth.uid,
+            },
+            { merge: true }
+        );
+
+        return {
+            ok: true,
+            message: `Done. Kept the first ${nextTables.length} tables and removed ${removedCount}.`,
+            data: {
+                kept: nextTables.length,
+                removed: removedCount,
+            },
         };
     }
 
@@ -703,7 +761,7 @@ export async function POST(request: NextRequest) {
         if (looksLikeControlIntent(latestUserMessage)) {
             return NextResponse.json({
                 reply:
-                    'I can execute that right away. Try: "add table 4 seats", "add menu item name=Margherita Pizza, price=299, category=Pizza, type=veg", or "arrange tables in a square".',
+                    'I can execute that right away. Try: "add table 4 seats", "arrange tables in a square", "keep only first 10 tables, remove all rest", or "add menu item name=Margherita Pizza, price=299, category=Pizza, type=veg".',
                 usage: currentUsage,
                 action: {
                     type: 'clarification',

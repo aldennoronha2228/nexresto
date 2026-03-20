@@ -147,23 +147,49 @@ function CameraModal({
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const streamRef = useRef<MediaStream | null>(null);
     const [cameraError, setCameraError] = useState<string | null>(null);
+    const [isStartingCamera, setIsStartingCamera] = useState(false);
 
     useEffect(() => {
         if (!open) return;
 
         let active = true;
 
+        const stopExistingStream = () => {
+            if (streamRef.current) {
+                streamRef.current.getTracks().forEach((t) => t.stop());
+                streamRef.current = null;
+            }
+        };
+
         const startCamera = async () => {
+            setCameraError(null);
+            setIsStartingCamera(true);
+
+            if (!window.isSecureContext) {
+                setCameraError('Live camera requires a secure context (HTTPS or localhost). Please use HTTPS or choose photo upload.');
+                setIsStartingCamera(false);
+                return;
+            }
+
             if (!navigator?.mediaDevices?.getUserMedia) {
                 setCameraError('Camera access is not available in this browser/session. Use photo upload instead.');
+                setIsStartingCamera(false);
                 return;
             }
 
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: { ideal: 'environment' } },
-                    audio: false,
-                });
+                stopExistingStream();
+                let stream: MediaStream;
+
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia({
+                        video: { facingMode: { ideal: 'environment' } },
+                        audio: false,
+                    });
+                } catch {
+                    // Retry with broad constraints for browsers/devices that reject facingMode.
+                    stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                }
 
                 if (!active) {
                     stream.getTracks().forEach((t) => t.stop());
@@ -173,12 +199,28 @@ function CameraModal({
                 streamRef.current = stream;
                 if (videoRef.current) {
                     videoRef.current.srcObject = stream;
-                    await videoRef.current.play().catch(() => {
-                        // no-op: user gesture may be required in some browsers
-                    });
+                    const v = videoRef.current;
+                    v.onloadedmetadata = () => {
+                        v.play().catch(() => {
+                            // no-op: user gesture may be required in some browsers
+                        });
+                    };
                 }
-            } catch {
-                setCameraError('Camera permission denied or unavailable. You can continue with photo upload.');
+            } catch (error: any) {
+                const code = String(error?.name || '').trim();
+                if (code === 'NotAllowedError' || code === 'PermissionDeniedError') {
+                    setCameraError('Camera permission is blocked. Allow camera access in browser settings, then try again.');
+                } else if (code === 'NotFoundError' || code === 'DevicesNotFoundError') {
+                    setCameraError('No camera device was found on this system. You can continue with photo upload.');
+                } else if (code === 'NotReadableError' || code === 'TrackStartError') {
+                    setCameraError('Camera is currently in use by another app. Close that app and retry.');
+                } else {
+                    setCameraError('Camera failed to start. You can retry or continue with photo upload.');
+                }
+            } finally {
+                if (active) {
+                    setIsStartingCamera(false);
+                }
             }
         };
 
@@ -243,16 +285,31 @@ function CameraModal({
 
                 <div className="relative aspect-video bg-black">
                     <video ref={videoRef} className={cn('w-full h-full object-cover', cameraError && 'opacity-30')} playsInline muted autoPlay />
+                    {isStartingCamera && !cameraError && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-slate-900/35">
+                            <div className="px-3 py-2 rounded-lg bg-slate-950/85 border border-white/10 text-white text-sm">
+                                Starting camera...
+                            </div>
+                        </div>
+                    )}
                     {cameraError && (
                         <div className="absolute inset-0 flex items-center justify-center p-4">
                             <div className="max-w-md w-full rounded-xl border border-amber-300 bg-amber-50 text-amber-800 p-4 text-center">
                                 <p className="text-sm font-medium">{cameraError}</p>
-                                <button
-                                    onClick={onUseUpload}
-                                    className="mt-3 px-3 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium"
-                                >
-                                    Use Photo Upload
-                                </button>
+                                <div className="mt-3 flex items-center justify-center gap-2">
+                                    <button
+                                        onClick={onClose}
+                                        className="px-3 py-2 rounded-lg border border-amber-400 text-amber-800 text-sm font-medium hover:bg-amber-100"
+                                    >
+                                        Close
+                                    </button>
+                                    <button
+                                        onClick={onUseUpload}
+                                        className="px-3 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium"
+                                    >
+                                        Use Photo Upload
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     )}
@@ -837,9 +894,12 @@ export default function TablesQRCodesPage() {
             throw new Error(payload?.error || 'Failed to save table layout');
         }
     }, [tenantId, getActiveToken]);
+    // Normalize tier to avoid casing/spacing mismatches from profile docs.
+    const normalizedTier = String(subscriptionTier || '').trim().toLowerCase();
     // Pro tier can be 'pro', '2k', or '2.5k' (backwards compatibility)
-    const isPro = subscriptionTier === 'pro' || subscriptionTier === '2k' || subscriptionTier === '2.5k';
-    const isSpatialPro = subscriptionTier === '2k' || subscriptionTier === '2.5k';
+    const isPro = normalizedTier === 'pro' || normalizedTier === '2k' || normalizedTier === '2.5k';
+    // 3D spatial mapping should be available to all Pro users.
+    const isSpatialPro = isPro;
     const userSubscription = useMemo(() => (isPro ? 'pro' : 'starter'), [isPro]);
     const reviewGridRef = useRef<HTMLDivElement | null>(null);
 
