@@ -247,8 +247,11 @@ export async function sendSubscriptionReminderEmail(params: {
     }
 
     const isEndingSoon = params.reminderType === 'ending_soon';
+    const daysLabel = typeof params.daysRemaining === 'number'
+        ? (params.daysRemaining <= 0 ? 'today' : `in ${params.daysRemaining} day${params.daysRemaining === 1 ? '' : 's'}`)
+        : 'soon';
     const subject = isEndingSoon
-        ? `${params.restaurantName}: subscription expires in ${params.daysRemaining ?? 2} days`
+        ? `${params.restaurantName}: subscription expires ${daysLabel}`
         : `${params.restaurantName}: subscription has ended`;
 
     const headline = isEndingSoon

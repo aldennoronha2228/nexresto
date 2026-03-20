@@ -33,8 +33,8 @@ function daysUntilYmd(endDateYmd: string): number {
 
 /**
  * Sends owner reminder emails for:
- * - expiring in exactly 2 days
- * - already ended (first day after end)
+ * - expiring in 2 days or less (until end date)
+ * - at most one reminder email per restaurant per day
  */
 async function handleSubscriptionReminders(request: NextRequest) {
     if (!isAuthorizedCronRequest(request)) {
@@ -47,6 +47,7 @@ async function handleSubscriptionReminders(request: NextRequest) {
     let sent = 0;
     let skipped = 0;
     const errors: Array<{ restaurantId: string; error: string }> = [];
+    const todayYmd = new Date().toISOString().slice(0, 10);
 
     for (const restaurantDoc of restaurantsSnap.docs) {
         scanned += 1;
@@ -59,6 +60,11 @@ async function handleSubscriptionReminders(request: NextRequest) {
                 continue;
             }
 
+            if (restaurant.subscription_reminder_emails_enabled === false) {
+                skipped += 1;
+                continue;
+            }
+
             const endDate = normalizeYmd(restaurant.subscription_end_date);
             if (!endDate) {
                 skipped += 1;
@@ -66,22 +72,15 @@ async function handleSubscriptionReminders(request: NextRequest) {
             }
 
             const daysRemaining = daysUntilYmd(endDate);
-            let reminderType: 'ending_soon' | 'ended' | null = null;
-
-            if (daysRemaining === 2) {
-                reminderType = 'ending_soon';
-            } else if (daysRemaining < 0) {
-                reminderType = 'ended';
-            }
-
-            if (!reminderType) {
+            if (daysRemaining < 0 || daysRemaining > 2) {
                 skipped += 1;
                 continue;
             }
 
-            const alreadySentKind = String(restaurant.last_subscription_reminder_kind || '').trim();
-            const alreadySentFor = String(restaurant.last_subscription_reminder_for || '').trim();
-            if (alreadySentKind === reminderType && alreadySentFor === endDate) {
+            const reminderType: 'ending_soon' = 'ending_soon';
+
+            const alreadySentOn = String(restaurant.last_subscription_reminder_sent_on || '').trim();
+            if (alreadySentOn === todayYmd) {
                 skipped += 1;
                 continue;
             }
@@ -110,6 +109,7 @@ async function handleSubscriptionReminders(request: NextRequest) {
             await restaurantDoc.ref.update({
                 last_subscription_reminder_kind: reminderType,
                 last_subscription_reminder_for: endDate,
+                last_subscription_reminder_sent_on: todayYmd,
                 last_subscription_reminder_sent_at: FieldValue.serverTimestamp(),
                 last_subscription_reminder_error: FieldValue.delete(),
             });

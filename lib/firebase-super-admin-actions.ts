@@ -12,6 +12,8 @@ import { revalidatePath } from 'next/cache';
 import { FieldValue } from 'firebase-admin/firestore';
 import { getApps } from 'firebase-admin/app';
 import { getStorage } from 'firebase-admin/storage';
+import { getOwnerEmailForRestaurant } from './reports';
+import { sendSubscriptionReminderEmail } from './email';
 
 // Types
 export interface PlatformStats {
@@ -33,6 +35,7 @@ export interface RestaurantWithOwner {
     subscription_start_date: string | null;
     subscription_end_date: string | null;
     account_temporarily_disabled?: boolean;
+    subscription_reminder_emails_enabled?: boolean;
     team_count: number;
     team_roles?: { role: string; count: number }[];
 }
@@ -76,6 +79,33 @@ export interface ResourceMonitorSummary {
     total_global_storage_mb: number;
     total_ai_cost_inr: number;
     hotels_near_limit: number;
+}
+
+export interface SubscriptionReminderEmailRow {
+    id: string;
+    name: string;
+    owner_email: string | null;
+    subscription_end_date: string | null;
+    days_remaining: number | null;
+    account_temporarily_disabled: boolean;
+    reminders_enabled: boolean;
+    last_reminder_kind: string | null;
+    last_reminder_for: string | null;
+    last_reminder_sent_on: string | null;
+    last_reminder_sent_at: string | null;
+    last_reminder_error: string | null;
+}
+
+function normalizeYmd(value: unknown): string | null {
+    const raw = String(value || '').trim();
+    return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : null;
+}
+
+function daysUntilYmd(endDateYmd: string): number {
+    const endDate = new Date(`${endDateYmd}T00:00:00Z`);
+    const todayYmd = new Date().toISOString().slice(0, 10);
+    const today = new Date(`${todayYmd}T00:00:00Z`);
+    return Math.round((endDate.getTime() - today.getTime()) / 86400000);
 }
 
 // ─── Verify Super Admin ──────────────────────────────────────────────────────
@@ -292,6 +322,7 @@ export async function getAllRestaurants(
                 subscription_start_date: d.subscription_start_date || null,
                 subscription_end_date: d.subscription_end_date || null,
                 account_temporarily_disabled: Boolean(d.account_temporarily_disabled),
+                subscription_reminder_emails_enabled: d.subscription_reminder_emails_enabled !== false,
                 team_count: staffSnap.size,
                 team_roles: teamRoles,
             };
@@ -335,6 +366,143 @@ export async function setRestaurantTemporaryAccess(
         return { success: true };
     } catch (error: any) {
         return { success: false, error: error.message };
+    }
+}
+
+// ─── Subscription Reminder Email Control ───────────────────────────────────
+
+export async function setRestaurantReminderEmailsEnabled(
+    restaurantId: string,
+    enabled: boolean
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        await adminFirestore.doc(`restaurants/${restaurantId}`).update({
+            subscription_reminder_emails_enabled: enabled,
+            subscription_reminder_emails_updated_at: FieldValue.serverTimestamp(),
+        });
+
+        await logActivity(
+            enabled ? 'SUBSCRIPTION_REMINDER_EMAILS_ENABLED' : 'SUBSCRIPTION_REMINDER_EMAILS_DISABLED',
+            enabled ? 'Subscription reminder emails enabled' : 'Subscription reminder emails disabled',
+            'info',
+            { restaurant_id: restaurantId, enabled },
+            restaurantId
+        );
+
+        revalidatePath('/super-admin');
+        return { success: true };
+    } catch (error: any) {
+        return { success: false, error: error.message };
+    }
+}
+
+export async function getSubscriptionReminderEmailRows(): Promise<SubscriptionReminderEmailRow[]> {
+    try {
+        const snapshot = await adminFirestore.collection('restaurants').orderBy('created_at', 'desc').get();
+
+        return snapshot.docs.map((doc) => {
+            const d = doc.data() || {};
+            const endDate = normalizeYmd(d.subscription_end_date);
+            const sentAt = d.last_subscription_reminder_sent_at?.toDate?.();
+
+            return {
+                id: doc.id,
+                name: String(d.name || doc.id),
+                owner_email: d.owner_email ? String(d.owner_email) : null,
+                subscription_end_date: endDate,
+                days_remaining: endDate ? daysUntilYmd(endDate) : null,
+                account_temporarily_disabled: Boolean(d.account_temporarily_disabled),
+                reminders_enabled: d.subscription_reminder_emails_enabled !== false,
+                last_reminder_kind: d.last_subscription_reminder_kind ? String(d.last_subscription_reminder_kind) : null,
+                last_reminder_for: d.last_subscription_reminder_for ? String(d.last_subscription_reminder_for) : null,
+                last_reminder_sent_on: d.last_subscription_reminder_sent_on ? String(d.last_subscription_reminder_sent_on) : null,
+                last_reminder_sent_at: sentAt ? sentAt.toISOString() : null,
+                last_reminder_error: d.last_subscription_reminder_error ? String(d.last_subscription_reminder_error) : null,
+            };
+        });
+    } catch (error) {
+        console.error('Error loading reminder email rows:', error);
+        return [];
+    }
+}
+
+export async function sendManualSubscriptionReminderEmail(
+    restaurantId: string
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const restaurantRef = adminFirestore.doc(`restaurants/${restaurantId}`);
+        const restaurantSnap = await restaurantRef.get();
+
+        if (!restaurantSnap.exists) {
+            return { success: false, error: 'Restaurant not found' };
+        }
+
+        const restaurant = restaurantSnap.data() || {};
+        if (Boolean(restaurant.account_temporarily_disabled)) {
+            return { success: false, error: 'Restaurant is temporarily disabled' };
+        }
+
+        if (restaurant.subscription_reminder_emails_enabled === false) {
+            return { success: false, error: 'Reminder emails are disabled for this restaurant' };
+        }
+
+        const endDate = normalizeYmd(restaurant.subscription_end_date);
+        if (!endDate) {
+            return { success: false, error: 'Subscription end date is not set' };
+        }
+
+        const daysRemaining = daysUntilYmd(endDate);
+        if (daysRemaining < 0 || daysRemaining > 2) {
+            return {
+                success: false,
+                error: `Manual send allowed only in the final 2 days before expiry (current: ${daysRemaining})`,
+            };
+        }
+
+        const ownerEmail = await getOwnerEmailForRestaurant(restaurantId, restaurant.owner_email);
+        if (!ownerEmail) {
+            return { success: false, error: 'Owner email not found' };
+        }
+
+        const restaurantName = String(restaurant.name || restaurantId).trim();
+        const emailResult = await sendSubscriptionReminderEmail({
+            to: ownerEmail,
+            restaurantName,
+            endDate,
+            reminderType: 'ending_soon',
+            daysRemaining,
+        });
+
+        if (!emailResult.success) {
+            await restaurantRef.update({
+                last_subscription_reminder_error: emailResult.error || 'Email send failed',
+                last_subscription_reminder_error_at: FieldValue.serverTimestamp(),
+            });
+            return { success: false, error: emailResult.error || 'Email send failed' };
+        }
+
+        const todayYmd = new Date().toISOString().slice(0, 10);
+        await restaurantRef.update({
+            last_subscription_reminder_kind: 'ending_soon',
+            last_subscription_reminder_for: endDate,
+            last_subscription_reminder_sent_on: todayYmd,
+            last_subscription_reminder_sent_at: FieldValue.serverTimestamp(),
+            last_subscription_reminder_source: 'manual',
+            last_subscription_reminder_error: FieldValue.delete(),
+        });
+
+        await logActivity(
+            'SUBSCRIPTION_REMINDER_EMAIL_SENT_MANUAL',
+            'Manual subscription reminder email sent',
+            'success',
+            { restaurant_id: restaurantId, end_date: endDate, days_remaining: daysRemaining },
+            restaurantId
+        );
+
+        revalidatePath('/super-admin/emails');
+        return { success: true };
+    } catch (error: any) {
+        return { success: false, error: error.message || 'Failed to send manual reminder' };
     }
 }
 

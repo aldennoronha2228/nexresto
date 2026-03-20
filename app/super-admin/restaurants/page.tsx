@@ -11,7 +11,7 @@ import {
     Search, MoreVertical, Building2, User, CreditCard,
     ChevronLeft, ChevronRight, LogIn, KeyRound,
     Trash2, AlertTriangle, Check, X, Copy, FileText, Calendar,
-    Eye, EyeOff, RefreshCw, Shield, Users, Filter, DollarSign, TrendingUp, Clock3, Archive
+    Eye, EyeOff, RefreshCw, Shield, Users, Filter, DollarSign, TrendingUp, Clock3, Archive, Mail, MailX
 } from 'lucide-react';
 import Link from 'next/link';
 import { DayPicker } from 'react-day-picker';
@@ -21,6 +21,7 @@ import {
     updateRestaurantSubscription,
     updateRestaurantStatus,
     setRestaurantTemporaryAccess,
+    setRestaurantReminderEmailsEnabled,
     archiveRestaurant,
     deleteRestaurant,
     resetUserPassword,
@@ -198,6 +199,19 @@ export default function RestaurantManager() {
             loadRestaurants();
         } else {
             setActionMessage({ type: 'error', text: result.error || 'Failed to update access' });
+        }
+    };
+
+    const handleReminderEmailsToggle = async (restaurantId: string, enabled: boolean) => {
+        const result = await setRestaurantReminderEmailsEnabled(restaurantId, enabled);
+        if (result.success) {
+            setActionMessage({
+                type: 'success',
+                text: enabled ? 'Subscription reminder emails enabled' : 'Subscription reminder emails disabled',
+            });
+            loadRestaurants();
+        } else {
+            setActionMessage({ type: 'error', text: result.error || 'Failed to update reminder email setting' });
         }
     };
 
@@ -494,7 +508,11 @@ export default function RestaurantManager() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {restaurants.map((restaurant) => (
+                                {restaurants.map((restaurant, index) => {
+                                    // Open the action menu upward for bottom rows so items stay in viewport.
+                                    // This prevents the last rows from rendering an inaccessible menu below the fold.
+                                    const shouldOpenUp = index >= restaurants.length - 2;
+                                    return (
                                     <tr
                                         key={restaurant.id}
                                         className="border-b border-slate-700/50 hover:bg-slate-700/30 transition-colors"
@@ -509,6 +527,9 @@ export default function RestaurantManager() {
                                                     <p className="text-slate-400 text-xs">{restaurant.id}</p>
                                                     {restaurant.account_temporarily_disabled && (
                                                         <p className="text-[10px] text-amber-300 font-semibold mt-0.5">Temporarily Disabled</p>
+                                                    )}
+                                                    {restaurant.subscription_reminder_emails_enabled === false && (
+                                                        <p className="text-[10px] text-rose-300 font-semibold mt-0.5">Reminder Emails Off</p>
                                                     )}
                                                 </div>
                                             </div>
@@ -636,7 +657,10 @@ export default function RestaurantManager() {
                                                             initial={{ opacity: 0, scale: 0.95 }}
                                                             animate={{ opacity: 1, scale: 1 }}
                                                             exit={{ opacity: 0, scale: 0.95 }}
-                                                            className="absolute right-0 top-full mt-1 w-48 bg-slate-700 rounded-xl border border-slate-600 shadow-xl z-20 overflow-hidden"
+                                                            className={cn(
+                                                                'absolute right-0 w-48 bg-slate-700 rounded-xl border border-slate-600 shadow-xl z-30 overflow-hidden',
+                                                                shouldOpenUp ? 'bottom-full mb-1' : 'top-full mt-1'
+                                                            )}
                                                         >
                                                             <Link
                                                                 href={`/super-admin/impersonate/${restaurant.id}`}
@@ -690,6 +714,24 @@ export default function RestaurantManager() {
                                                             </button>
                                                             <button
                                                                 onClick={() => {
+                                                                    handleReminderEmailsToggle(
+                                                                        restaurant.id,
+                                                                        restaurant.subscription_reminder_emails_enabled === false
+                                                                    );
+                                                                    setActiveMenu(null);
+                                                                }}
+                                                                className={cn(
+                                                                    'w-full flex items-center gap-3 px-4 py-3 text-sm transition-colors',
+                                                                    restaurant.subscription_reminder_emails_enabled === false
+                                                                        ? 'text-emerald-300 hover:bg-emerald-500/10'
+                                                                        : 'text-amber-300 hover:bg-amber-500/10'
+                                                                )}
+                                                            >
+                                                                {restaurant.subscription_reminder_emails_enabled === false ? <Mail className="w-4 h-4" /> : <MailX className="w-4 h-4" />}
+                                                                {restaurant.subscription_reminder_emails_enabled === false ? 'Enable Reminder Emails' : 'Disable Reminder Emails'}
+                                                            </button>
+                                                            <button
+                                                                onClick={() => {
                                                                     setShowDangerModal({ id: restaurant.id, name: restaurant.name });
                                                                     setDangerAction(null);
                                                                     setDangerConfirmText('');
@@ -706,7 +748,8 @@ export default function RestaurantManager() {
                                             </div>
                                         </td>
                                     </tr>
-                                ))}
+                                    );
+                                })}
                             </tbody>
                         </table>
                     </div>
