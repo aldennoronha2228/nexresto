@@ -858,9 +858,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     <motion.div initial={false} animate={{ paddingLeft: collapsed ? 80 : 240 }} className="hidden lg:block" />
 
                     {/* Top Navbar */}
-                    <header className="h-16 sticky top-0 z-20 bg-white/45 backdrop-blur-xl border-b border-white/30">
-                        <div className="h-full px-4 lg:px-6 flex items-center justify-between gap-4">
-                            <div className="md:hidden text-sm font-semibold text-slate-800">Dashboard</div>
+                    <header className="h-14 md:h-16 sticky top-0 z-20 bg-white/75 backdrop-blur-xl border-b border-white/40">
+                        <div className="h-full px-3 md:px-4 lg:px-6 flex items-center justify-between gap-3">
+                            <div className="md:hidden text-[17px] font-bold tracking-tight text-slate-800">Dashboard</div>
                             <div className="hidden md:block flex-1 max-w-md">
                                 <GlobalSearch />
                             </div>
@@ -898,7 +898,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                     </button>
                                 )}
                                 <NotificationBell />
-                                <button onClick={() => setMobileMenuOpen(true)} className="md:hidden p-2 hover:bg-slate-100 rounded-lg transition-colors" title="Open settings">
+                                <button onClick={() => setMobileMenuOpen(true)} className="md:hidden w-10 h-10 flex items-center justify-center hover:bg-slate-100 rounded-xl transition-colors" title="Open settings">
                                     <Menu className="w-5 h-5 text-slate-600" />
                                 </button>
                                 <div className="relative">
@@ -953,7 +953,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     )}
 
                     {/* Page Content */}
-                    <div className="p-6 lg:p-8 pb-24 lg:pb-8" key={pathname}>
+                    <div className="p-4 sm:p-5 lg:p-8 pb-[calc(6.25rem+env(safe-area-inset-bottom))] lg:pb-8" key={pathname}>
                         {isGrandHotel && isDemoMode && (
                             <div className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
                                 Demo Mode is ON for The Grand. Dashboard data and actions are simulated.
@@ -1002,8 +1002,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 </div>
 
                 {/* Mobile Bottom Navigation - Shows top allowed features */}
-                <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white/70 backdrop-blur-xl border-t border-slate-200/60 z-30">
-                    <div className="h-full px-2 flex items-center justify-around">
+                <nav className="md:hidden fixed bottom-0 left-0 right-0 h-[72px] pb-[env(safe-area-inset-bottom)] bg-white/85 backdrop-blur-xl border-t border-slate-200/70 shadow-[0_-6px_18px_rgba(15,23,42,0.08)] z-30">
+                    <div className="h-full px-2 flex items-center justify-around gap-1">
                         {mobilePrimaryNavigation.map((item) => {
                             const isActive = pathname === item.href;
                             return (
@@ -1014,10 +1014,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                 >
                                     <motion.div
                                         whileTap={{ scale: 0.95 }}
-                                        className={cn("flex flex-col items-center justify-center gap-1 py-2 transition-all", isActive ? "text-blue-600" : "text-slate-600")}
+                                        className={cn(
+                                            "mx-auto w-full max-w-[104px] rounded-xl flex flex-col items-center justify-center gap-1 py-2 transition-all",
+                                            isActive ? "text-blue-600 bg-blue-50/90" : "text-slate-600"
+                                        )}
                                     >
-                                        <item.icon className="w-5 h-5" />
-                                        <span className="text-[10px] font-medium">{item.shortName}</span>
+                                        <item.icon className={cn("w-5 h-5", isActive && "drop-shadow-[0_0_6px_rgba(37,99,235,0.3)]")} />
+                                        <span className={cn("text-[11px] font-medium", isActive && "font-semibold")}>{item.shortName}</span>
                                     </motion.div>
                                 </button>
                             );

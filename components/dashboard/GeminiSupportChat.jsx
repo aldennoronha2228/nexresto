@@ -387,7 +387,7 @@ export default function GeminiSupportChat() {
                 whileHover={{ scale: 1.06 }}
                 whileTap={{ scale: 0.94 }}
                 onClick={() => setIsOpen((v) => !v)}
-                className="fixed bottom-20 right-4 md:bottom-8 md:right-8 z-[61] w-14 h-14 rounded-2xl bg-gradient-to-r from-[#0b1226] to-[#101a36] border border-white/10 text-white shadow-2xl shadow-black/40 flex items-center justify-center"
+                className="fixed bottom-[calc(5.75rem+env(safe-area-inset-bottom))] right-4 md:bottom-8 md:right-8 z-[61] w-[52px] h-[52px] md:w-14 md:h-14 rounded-2xl bg-gradient-to-r from-[#0b1226] to-[#101a36] border border-white/10 text-white shadow-2xl shadow-black/40 flex items-center justify-center"
                 aria-label="Toggle Nexo"
                 title="Nexo"
             >

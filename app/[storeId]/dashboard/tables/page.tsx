@@ -170,22 +170,25 @@ function QRPreviewModal({ table, onClose, baseUrl, restaurantId }: { table: Tabl
                     >
                         {url}
                     </a>
-                    <div className="flex gap-3 mt-6 w-full">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3 mt-6 w-full">
                         <motion.a
                             whileHover={{ scale: 1.03 }}
                             whileTap={{ scale: 0.97 }}
                             href={url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="flex-1 flex items-center justify-center gap-2 h-11 border border-blue-200 rounded-xl text-sm font-medium text-blue-600 hover:bg-blue-50 transition-colors"
+                            className="flex items-center justify-center gap-1.5 px-3 h-11 border border-blue-200 rounded-xl text-sm font-medium leading-none text-blue-600 hover:bg-blue-50 transition-colors"
                         >
-                            <ZoomIn className="w-4 h-4" />Open Link
+                            <ZoomIn className="w-4 h-4 shrink-0" />
+                            <span className="whitespace-nowrap">Open Link</span>
                         </motion.a>
-                        <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={() => navigator.clipboard?.writeText(url)} className="flex-1 flex items-center justify-center gap-2 h-11 border border-slate-200 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors">
-                            <Share2 className="w-4 h-4" />Copy URL
+                        <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={() => navigator.clipboard?.writeText(url)} className="flex items-center justify-center gap-1.5 px-3 h-11 border border-slate-200 rounded-xl text-sm font-medium leading-none text-slate-600 hover:bg-slate-50 transition-colors">
+                            <Share2 className="w-4 h-4 shrink-0" />
+                            <span className="whitespace-nowrap">Copy URL</span>
                         </motion.button>
-                        <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={downloadQR} className="flex-1 flex items-center justify-center gap-2 h-11 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl text-sm font-medium shadow-lg shadow-blue-500/25">
-                            <Download className="w-4 h-4" />Download PNG
+                        <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={downloadQR} className="flex items-center justify-center gap-1.5 px-3 h-11 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl text-sm font-medium leading-none shadow-lg shadow-blue-500/25">
+                            <Download className="w-4 h-4 shrink-0" />
+                            <span className="whitespace-nowrap">Download PNG</span>
                         </motion.button>
                     </div>
                 </div>
@@ -572,12 +575,14 @@ function QRCard({ table, onPreview, baseUrl, restaurantId }: { table: Table; onP
                     <span className="text-xs text-slate-500 capitalize">{table.status}</span>
                 </div>
             </div>
-            <div className="px-4 pb-4 flex gap-2">
-                <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={e => { e.stopPropagation(); onPreview(table); }} className="flex-1 flex items-center justify-center gap-1.5 h-9 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-xl text-xs font-medium transition-colors">
-                    <ZoomIn className="w-3.5 h-3.5" />Preview
+            <div className="px-4 pb-4 grid grid-cols-1 min-[420px]:grid-cols-2 gap-2">
+                <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={e => { e.stopPropagation(); onPreview(table); }} className="min-w-0 flex items-center justify-center gap-1 px-2 h-9 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-xl text-xs font-medium leading-none transition-colors">
+                    <ZoomIn className="w-3.5 h-3.5 shrink-0" />
+                    <span className="whitespace-nowrap">Preview</span>
                 </motion.button>
-                <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={downloadQR} className="flex-1 flex items-center justify-center gap-1.5 h-9 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl text-xs font-medium shadow-md shadow-blue-500/25 transition-all">
-                    <Download className="w-3.5 h-3.5" />Download
+                <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={downloadQR} className="min-w-0 flex items-center justify-center gap-1 px-2 h-9 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl text-xs font-medium leading-none shadow-md shadow-blue-500/25 transition-all">
+                    <Download className="w-3.5 h-3.5 shrink-0" />
+                    <span className="whitespace-nowrap">Download</span>
                 </motion.button>
             </div>
         </motion.div>
