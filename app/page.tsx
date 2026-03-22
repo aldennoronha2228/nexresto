@@ -2,6 +2,9 @@
 import { useEffect } from 'react';
 
 const NUM_FRAMES = 48;
+const UHD_WIDTH = 3840;
+const UHD_HEIGHT = 2160;
+const UHD_PIXELS = UHD_WIDTH * UHD_HEIGHT;
 
 export default function RootPage() {
   useEffect(() => {
@@ -65,8 +68,24 @@ export default function RootPage() {
 
       function resizeCanvas() {
         if (!canvas) return;
-        cw = canvas.width = window.innerWidth;
-        ch = canvas.height = window.innerHeight;
+        const viewportW = window.innerWidth;
+        const viewportH = window.innerHeight;
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        const viewportPixels = viewportW * viewportH * dpr * dpr;
+
+        // Keep desktop scroll playback crisp by targeting at least a 4K render surface.
+        const targetPixels = viewportW >= 1024 ? Math.max(viewportPixels, UHD_PIXELS) : viewportPixels;
+        const renderScale = Math.sqrt(targetPixels / (viewportW * viewportH));
+
+        cw = canvas.width = Math.round(viewportW * renderScale);
+        ch = canvas.height = Math.round(viewportH * renderScale);
+        canvas.style.width = `${viewportW}px`;
+        canvas.style.height = `${viewportH}px`;
+
+        if (ctx) {
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
+        }
         drawFrame(currentIdx);
       }
 
@@ -74,6 +93,7 @@ export default function RootPage() {
         if (!ctx) return;
         const img = frameImgs[Math.max(0, Math.min(idx, NUM_FRAMES - 1))];
         if (!img?.complete || !img.naturalWidth) return;
+        ctx.clearRect(0, 0, cw, ch);
         const scale = Math.max(cw / img.naturalWidth, ch / img.naturalHeight);
         ctx.drawImage(img, (cw - img.naturalWidth * scale) / 2, (ch - img.naturalHeight * scale) / 2, img.naturalWidth * scale, img.naturalHeight * scale);
       }
@@ -83,53 +103,49 @@ export default function RootPage() {
 
       const spacerEl = document.getElementById('spacer');
       const spacerEnd = spacerEl ? spacerEl.offsetHeight : window.innerHeight * 6;
-      const totalH = document.body.scrollHeight - window.innerHeight;
-      const prog  = document.getElementById('prog')  as HTMLElement | null;
       const hint  = document.getElementById('hint')  as HTMLElement | null;
       const phone = document.getElementById('phone') as HTMLElement | null;
 
-      /* Frame scrub — instant, no decode lag */
-      ScrollTrigger.create({
-        start: 0, end: spacerEnd,
-        onUpdate: (self: any) => {
-          const idx = Math.min(Math.floor(self.progress * NUM_FRAMES), NUM_FRAMES - 1);
-          if (idx !== currentIdx) { currentIdx = idx; drawFrame(idx); }
-        }
-      });
-
-      /* Progress bar */
-      ScrollTrigger.create({ start: 0, end: () => totalH, onUpdate: (self: any) => { if (prog) prog.style.width = (self.progress * 100) + '%'; } });
+      /* Keep hero visual stable during scroll */
+      currentIdx = 0;
+      drawFrame(currentIdx);
 
       /* Hint */
       ScrollTrigger.create({ start: 100, end: 200, onEnter: () => { if (hint) hint.style.opacity = '0'; }, onLeaveBack: () => { if (hint) hint.style.opacity = '1'; } });
 
       /* Cards & phone */
       const seg = spacerEnd / 5;
+      const overlap = seg * 0.12;
       const cards = ['c1','c2','c3','c4'].map(id => document.getElementById(id) as HTMLElement | null);
       const show = (el: HTMLElement | null) => { if (el) gsap.to(el, { opacity: 1, duration: 0.5 }); };
       const hide = (el: HTMLElement | null) => { if (el) gsap.to(el, { opacity: 0, duration: 0.3 }); };
+      const showExclusive = (index: number) => {
+        cards.forEach((el, i) => { if (i === index) show(el); else hide(el); });
+      };
 
-      ScrollTrigger.create({ start: seg * 0, end: seg * 1, onEnter: () => show(cards[0]), onLeaveBack: () => hide(cards[0]), onLeave: () => hide(cards[0]) });
-      ScrollTrigger.create({ start: seg * 1, end: seg * 2, onEnter: () => show(cards[1]), onLeaveBack: () => hide(cards[1]), onLeave: () => hide(cards[1]) });
+      ScrollTrigger.create({ start: seg * 0, end: seg * 1 + overlap, onEnter: () => showExclusive(0), onEnterBack: () => showExclusive(0), onLeaveBack: () => hide(cards[0]), onLeave: () => hide(cards[0]) });
+      ScrollTrigger.create({ start: seg * 1 - overlap, end: seg * 2 + overlap, onEnter: () => showExclusive(1), onEnterBack: () => showExclusive(1), onLeaveBack: () => hide(cards[1]), onLeave: () => hide(cards[1]) });
 
       let phoneIv: ReturnType<typeof setInterval> | null = null;
       ScrollTrigger.create({
-        start: seg * 2, end: seg * 3,
+        start: seg * 2 - overlap, end: seg * 3 + overlap,
         onEnter: () => {
-          show(cards[2]); if (phone) gsap.to(phone, { x: 0, opacity: 1, duration: 0.7, ease: 'power3.out' });
+          showExclusive(2); if (phone) gsap.to(phone, { x: 0, opacity: 1, duration: 0.7, ease: 'power3.out' });
           const screens = ['s0','s1','s2','s3']; let si = 0;
           const next = () => { document.querySelectorAll('.scr').forEach(s => s.classList.remove('on')); const el = document.getElementById(screens[si]); if (el) el.classList.add('on'); si = (si + 1) % screens.length; };
           next(); if (!phoneIv) phoneIv = setInterval(next, 1800);
         },
+        onEnterBack: () => { showExclusive(2); if (phone) gsap.to(phone, { x: 0, opacity: 1, duration: 0.7, ease: 'power3.out' }); },
         onLeave: () => { hide(cards[2]); if (phone) gsap.to(phone, { x: '140%', opacity: 0, duration: 0.5 }); if (phoneIv) { clearInterval(phoneIv); phoneIv = null; } },
         onLeaveBack: () => { hide(cards[2]); if (phone) gsap.to(phone, { x: '140%', opacity: 0, duration: 0.5 }); if (phoneIv) { clearInterval(phoneIv); phoneIv = null; } },
       });
       ScrollTrigger.create({
-        start: seg * 3, end: seg * 4,
+        start: seg * 3 - overlap, end: seg * 5,
         onEnter: () => {
-          show(cards[3]);
+          showExclusive(3);
           if (phone) { gsap.to(phone, { x: 0, opacity: 1, duration: 0.7, ease: 'power3.out' }); document.querySelectorAll('.scr').forEach(s => s.classList.remove('on')); const d = document.getElementById('s4'); if (d) d.classList.add('on'); }
         },
+        onEnterBack: () => { showExclusive(3); if (phone) gsap.to(phone, { x: 0, opacity: 1, duration: 0.7, ease: 'power3.out' }); },
         onLeave: () => { hide(cards[3]); if (phone) gsap.to(phone, { x: '140%', opacity: 0, duration: 0.5 }); },
         onLeaveBack: () => { hide(cards[3]); if (phone) gsap.to(phone, { x: '140%', opacity: 0, duration: 0.5 }); },
       });
@@ -143,6 +159,30 @@ export default function RootPage() {
         }});
       });
 
+      /* Premium scroll animation pass */
+      const premiumTargets = gsap.utils.toArray('#sec-stats .titem, #sec-bento .bcard, #sec-advantage .acard, #sec-cta .ctacard') as HTMLElement[];
+      premiumTargets.forEach((el) => {
+        gsap.fromTo(el,
+          {
+            opacity: 0,
+            y: 56,
+            scale: 0.98,
+          },
+          {
+            opacity: 1,
+            y: 0,
+            scale: 1,
+            ease: 'power2.out',
+            scrollTrigger: {
+              trigger: el,
+              start: 'top 88%',
+              end: 'top 62%',
+              scrub: true,
+            }
+          }
+        );
+      });
+
       /* Reveal */
       document.querySelectorAll('.rv').forEach(el => { ScrollTrigger.create({ trigger: el, start: 'top 85%', onEnter: () => el.classList.add('in') }); });
     }
@@ -153,22 +193,24 @@ export default function RootPage() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300&family=DM+Sans:wght@200;300;400;500&display=swap');
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-        :root{--neon:#39ff6e;--coral:#e8927c;--mint:#7ec8b8;--white:#f0ede8;--glass:rgba(6,8,10,0.65);--gb:rgba(255,255,255,0.09)}
-        body{margin:0;padding:0;background:#000;color:var(--white);font-family:'DM Sans',sans-serif;overflow-x:hidden}
-        #stage{position:fixed;inset:0;z-index:0;overflow:hidden}
-        #stage canvas{display:block;width:100%;height:100%;background:#000}
+        :root{--neon:#2563eb;--coral:#60a5fa;--mint:#38bdf8;--white:#e2e8f0;--glass:rgba(15,23,42,0.72);--gb:rgba(59,130,246,0.22)}
+        body{margin:0;padding:0;background-color:#020617;color:var(--white);font-family:'DM Sans',sans-serif;overflow-x:hidden;background-image:linear-gradient(rgba(148,163,184,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(148,163,184,.08) 1px,transparent 1px);background-size:52px 52px;background-attachment:fixed}
+        body::before,body::after{content:'';position:fixed;border-radius:50%;pointer-events:none;z-index:-1;filter:blur(42px);opacity:.28}
+        body::before{width:460px;height:460px;left:-120px;top:-120px;background:radial-gradient(circle,#1d4ed8 0%,rgba(29,78,216,0) 70%)}
+        body::after{width:420px;height:420px;right:-110px;bottom:-140px;background:radial-gradient(circle,#4f46e5 0%,rgba(79,70,229,0) 72%)}
+        #stage{position:fixed;inset:0;z-index:0;overflow:hidden;filter:none!important;opacity:1!important}
+        #stage canvas{display:block;width:100%;height:100%;background:#000;filter:none!important;opacity:1!important}
         #vig{position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at 50% 40%,transparent 30%,rgba(0,0,0,.55) 100%)}
         #bt,#bb{position:fixed;left:0;right:0;height:52px;background:#000;z-index:2}
         #bt{top:0}#bb{bottom:0}
         #spacer{height:600vh}
-        #prog{position:fixed;top:52px;left:0;height:2px;width:0;background:linear-gradient(90deg,var(--neon),var(--mint));z-index:10;box-shadow:0 0 8px var(--neon)}
-        #nav{position:fixed;top:0;left:0;right:0;height:52px;z-index:5;display:flex;align-items:center;justify-content:space-between;padding:0 40px}
+        #nav{position:fixed;top:0;left:0;right:0;height:52px;z-index:5;display:flex;align-items:center;padding:0 40px}
         .logo{font-family:'Cormorant Garamond',serif;font-size:1.35rem;font-weight:600;letter-spacing:.22em;pointer-events:none}
         .logo b{color:var(--neon)}
         .tagline{font-size:.58rem;letter-spacing:.24em;text-transform:uppercase;color:var(--mint);opacity:.7;pointer-events:none}
-        .nav-right{display:flex;align-items:center;gap:20px}
+        .nav-right{position:fixed;top:8px;right:40px;z-index:6;display:flex;align-items:center}
         .btn-start{padding:8px 20px;background:var(--neon);color:#000;border:none;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:.72rem;font-weight:500;letter-spacing:.14em;text-transform:uppercase;cursor:pointer;text-decoration:none;box-shadow:0 2px 14px rgba(57,255,110,.3);transition:all .25s}
-        .btn-start:hover{background:#fff;box-shadow:0 2px 24px rgba(57,255,110,.5);transform:translateY(-1px)}
+        .btn-start:hover{background:#fff;box-shadow:0 2px 24px rgba(57,255,110,.5)}
         #hint{position:fixed;bottom:66px;left:50%;transform:translateX(-50%);z-index:5;text-align:center;transition:opacity .5s;pointer-events:none}
         #hint p{font-size:.55rem;letter-spacing:.22em;text-transform:uppercase;color:rgba(255,255,255,.35);margin-bottom:6px}
         .hline{width:1px;height:28px;background:linear-gradient(180deg,rgba(255,255,255,.4),transparent);margin:0 auto;animation:pulse 2s ease-in-out infinite}
@@ -295,8 +337,40 @@ export default function RootPage() {
         .fcopy{font-size:.6rem;letter-spacing:.12em;color:rgba(255,255,255,.22)}
         .rv{opacity:0;transform:translateY(28px);transition:opacity .65s ease,transform .65s ease}.rv.in{opacity:1;transform:translateY(0)}
         .rv2{transition-delay:.12s}.rv3{transition-delay:.24s}.rv4{transition-delay:.36s}
-        @media(max-width:768px){#phone{display:none!important}#bt,#bb{height:44px}#prog{top:44px}#nav{height:44px;padding:0 22px}.logo{font-size:1.1rem}.tagline{display:none}.card{left:16px!important;right:16px!important;bottom:58px!important;top:auto!important;transform:none!important;max-width:none!important;padding:20px 22px}.bgrid{grid-template-columns:1fr}.sec-in{padding:56px 24px}.acard,.ctacard{padding:36px 28px}.fin{flex-direction:column;text-align:center}}
-        @media(max-width:480px){#bt,#bb{height:40px}#prog{top:40px}#nav{height:40px;padding:0 16px}.logo{font-size:1rem}.card{left:12px!important;right:12px!important;bottom:50px!important;padding:18px 20px}.sec-in{padding:40px 16px}.acard,.ctacard{padding:28px 20px}.atitle{font-size:1.6rem}.ctatitle{font-size:1.7rem}.ctabtns{flex-direction:column;align-items:center}.btnp,.btng{width:100%;max-width:280px}}
+
+        /* Premium matte theme overrides */
+        body{background:#000;background-image:none}
+        body::before,body::after{display:none}
+        #stage canvas,#bt,#bb,#nav,#sec-stats,#sec-bento,#sec-advantage,#sec-cta,#footer{background:#000}
+        #vig{background:radial-gradient(ellipse at 50% 42%,transparent 42%,rgba(0,0,0,.36) 100%)}
+        #nav{border-bottom:1px solid rgba(255,255,255,.08);backdrop-filter:none}
+        .logo{color:#f3f4f6}
+        .logo b{color:#93c5fd}
+        .tagline{color:#cbd5e1;opacity:.72}
+        .btn-start{background:linear-gradient(180deg,#3757c8,#2b43a6);color:#eef2ff;border:1px solid rgba(147,197,253,.22);box-shadow:0 6px 18px rgba(18,31,89,.38)}
+        .btn-start:hover{background:linear-gradient(180deg,#3f62da,#304db9);box-shadow:0 8px 22px rgba(18,31,89,.45)}
+        #hint p{color:rgba(226,232,240,.66)}
+        .hline{background:linear-gradient(180deg,rgba(148,163,184,.8),transparent)}
+        .card,.bcard,.acard,.ctacard,.pshell,.pscreen,.mh,.tr.a,.qi,.mi,.mi.h,.ds{background:#000!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+        .card{background:rgba(6,8,12,.5)!important;border:1px solid rgba(148,163,184,.36);backdrop-filter:blur(10px)!important;-webkit-backdrop-filter:blur(10px)!important}
+        .card,.bcard,.acard,.ctacard,.pshell,.qi,.mi,.mi.h,.ds{border:1px solid rgba(148,163,184,.22)}
+        .card,.bcard,.acard,.ctacard{box-shadow:0 10px 30px rgba(0,0,0,.62)}
+        .ctag,.ctatag{color:#cbd5e1}
+        .ctag::before,.ctatag::before,.ctatag::after{background:#94a3b8;box-shadow:none}
+        .card p,.bdesc,.adesc,.ctadesc,.aft span,.fcopy{color:#9ca3af}
+        .sv,.tval,.dv,.trval{color:#dbeafe}
+        .sl,.tlbl,.trlbl,.bbadge,.atag,.ctl{color:#6b7280}
+        .btitle,.bname,.atitle,.ctatitle,.flogo{color:#f3f4f6}
+        .bicon{background:#05070a;border:1px solid rgba(148,163,184,.2)}
+        .bicon svg{stroke:#d1d5db}
+        .btnp,.cbtn{background:linear-gradient(180deg,#3a58c5,#2d46ac);color:#eef2ff;border:1px solid rgba(147,197,253,.25);box-shadow:0 8px 20px rgba(18,31,89,.36)}
+        .btnp:hover{background:linear-gradient(180deg,#4567dc,#3553c0);box-shadow:0 10px 24px rgba(18,31,89,.42)}
+        .btng{color:#d1d5db;border-color:rgba(148,163,184,.28);background:#05070a}
+        .btng:hover{border-color:rgba(226,232,240,.55);color:#f3f4f6}
+        #sec-stats,#footer{border-top:1px solid rgba(255,255,255,.08)}
+        .ma,.aftd,.td.g{background:#9ca3af;box-shadow:none}
+        @media(max-width:768px){#phone{display:none!important}#bt,#bb{height:44px}#nav{height:44px;padding:0 22px}.nav-right{top:6px;right:22px}.logo{font-size:1.1rem}.tagline{display:none}.card{left:16px!important;right:16px!important;bottom:58px!important;top:auto!important;transform:none!important;max-width:none!important;padding:20px 22px}.bgrid{grid-template-columns:1fr}.sec-in{padding:56px 24px}.acard,.ctacard{padding:36px 28px}.fin{flex-direction:column;text-align:center}}
+        @media(max-width:480px){#bt,#bb{height:40px}#nav{height:40px;padding:0 16px}.nav-right{top:4px;right:16px}.logo{font-size:1rem}.card{left:12px!important;right:12px!important;bottom:50px!important;padding:18px 20px}.sec-in{padding:40px 16px}.acard,.ctacard{padding:28px 20px}.atitle{font-size:1.6rem}.ctatitle{font-size:1.7rem}.ctabtns{flex-direction:column;align-items:center}.btnp,.btng{width:100%;max-width:280px}}
       `}</style>
 
       <div id="loader">
@@ -313,7 +387,6 @@ export default function RootPage() {
       <div id="bt"></div>
       <div id="bb"></div>
       <div id="spacer"></div>
-      <div id="prog"></div>
 
       <div id="nav">
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>

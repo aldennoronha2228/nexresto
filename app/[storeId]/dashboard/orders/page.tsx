@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Clock, X, Plus, Trash2, Search, RefreshCw, AlertCircle, Lock, Sparkles } from 'lucide-react';
+import { Canvas } from '@react-three/fiber';
+import { ContactShadows, OrbitControls } from '@react-three/drei';
 import { cn } from '@/lib/utils';
 import { getDefaultTables, getTables, menuItems, type Table } from '@/data/sharedData';
 import { fetchActiveOrders, updateOrderStatus, deleteOrder, subscribeToOrders } from '@/lib/firebase-api';
@@ -25,6 +27,218 @@ const tableStatusConfig = {
     reserved: { color: 'bg-amber-50', border: 'border-amber-400', text: 'text-amber-700' },
 };
 
+const FLOOR_SOURCE_WIDTH = 1000;
+const FLOOR_SOURCE_HEIGHT = 600;
+const FLOOR_WORLD_WIDTH = 14;
+const FLOOR_WORLD_DEPTH = 8.4;
+
+function floorToWorld(x: number, y: number) {
+    const nx = Math.max(0, Math.min(FLOOR_SOURCE_WIDTH, x)) / FLOOR_SOURCE_WIDTH;
+    const ny = Math.max(0, Math.min(FLOOR_SOURCE_HEIGHT, y)) / FLOOR_SOURCE_HEIGHT;
+    return {
+        x: (nx - 0.5) * FLOOR_WORLD_WIDTH,
+        z: (ny - 0.5) * FLOOR_WORLD_DEPTH,
+    };
+}
+
+function seatOffsets(seats: number) {
+    const count = Math.max(2, Math.min(12, seats));
+    const radius = 0.78;
+    return Array.from({ length: count }).map((_, i) => {
+        const angle = (Math.PI * 2 * i) / count;
+        return [Math.cos(angle) * radius, 0, Math.sin(angle) * radius] as [number, number, number];
+    });
+}
+
+function occupiedSeatIndexes(seatCount: number, occupantCount: number) {
+    if (seatCount <= 0 || occupantCount <= 0) return new Set<number>();
+    const safeCount = Math.min(seatCount, occupantCount);
+    const picks = Array.from({ length: safeCount }).map((_, idx) => Math.floor((idx * seatCount) / safeCount));
+    return new Set(picks);
+}
+
+function tableStatusMaterial(status: Table['status']) {
+    if (status === 'busy') return { top: '#fecdd3', edge: '#e11d48', glow: '#fb7185' };
+    if (status === 'reserved') return { top: '#fde68a', edge: '#d97706', glow: '#f59e0b' };
+    return { top: '#bbf7d0', edge: '#16a34a', glow: '#4ade80' };
+}
+
+function LiveOrdersFloor3D({
+    tables,
+    selectedTableId,
+    onSelectTable,
+}: {
+    tables: Table[];
+    selectedTableId: string | null;
+    onSelectTable: (id: string | null) => void;
+}) {
+    return (
+        <Canvas
+            shadows
+            camera={{ position: [7.6, 7.2, 8.2], fov: 44 }}
+            className="h-full w-full"
+            onPointerMissed={() => onSelectTable(null)}
+        >
+            <color attach="background" args={['#f1f5f9']} />
+            <ambientLight intensity={0.62} />
+            <directionalLight
+                position={[6, 10, 5]}
+                intensity={1}
+                castShadow
+                shadow-mapSize-width={2048}
+                shadow-mapSize-height={2048}
+                shadow-camera-near={1}
+                shadow-camera-far={35}
+                shadow-camera-left={-12}
+                shadow-camera-right={12}
+                shadow-camera-top={12}
+                shadow-camera-bottom={-12}
+            />
+
+            <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+                <planeGeometry args={[FLOOR_WORLD_WIDTH, FLOOR_WORLD_DEPTH]} />
+                <meshStandardMaterial color="#cbd5e1" roughness={0.9} metalness={0.05} />
+            </mesh>
+
+            <gridHelper args={[FLOOR_WORLD_WIDTH, 28, '#64748b', '#94a3b8']} position={[0, 0.01, 0]} />
+
+            <ContactShadows
+                opacity={0.34}
+                scale={Math.max(FLOOR_WORLD_WIDTH, FLOOR_WORLD_DEPTH) * 1.08}
+                blur={2.3}
+                far={9}
+                resolution={1024}
+                color="#0f172a"
+                position={[0, 0.02, 0]}
+            />
+
+            {tables.map((table) => {
+                const pos = floorToWorld(table.x, table.y);
+                const selected = selectedTableId === table.id;
+                const material = tableStatusMaterial(table.status);
+                const chairs = seatOffsets(table.seats);
+                const busyOccupantCount = table.status === 'busy' ? Math.max(1, Math.min(4, Math.ceil(table.seats / 3))) : 0;
+                const occupiedIndexes = occupiedSeatIndexes(chairs.length, busyOccupantCount);
+
+                return (
+                    <group
+                        key={`live-floor-${table.id}`}
+                        position={[pos.x, 0, pos.z]}
+                        onPointerDown={(e) => {
+                            e.stopPropagation();
+                            onSelectTable(selected ? null : table.id);
+                        }}
+                    >
+                        <mesh castShadow receiveShadow position={[0, 0.34, 0]}>
+                            <cylinderGeometry args={[0.72, 0.72, 0.14, 44]} />
+                            <meshStandardMaterial color={material.edge} roughness={0.42} metalness={0.08} />
+                        </mesh>
+                        <mesh castShadow receiveShadow position={[0, 0.4, 0]}>
+                            <cylinderGeometry args={[0.62, 0.62, 0.05, 36]} />
+                            <meshStandardMaterial color={material.top} roughness={0.52} metalness={0.05} />
+                        </mesh>
+                        <mesh castShadow receiveShadow position={[0, 0.18, 0]}>
+                            <cylinderGeometry args={[0.17, 0.2, 0.34, 20]} />
+                            <meshStandardMaterial color="#7c3f1d" roughness={0.56} metalness={0.1} />
+                        </mesh>
+
+                        {chairs.map((offset, idx) => {
+                            const lookAtCenter = Math.atan2(-offset[0], -offset[2]);
+                            return (
+                                <group key={`${table.id}-seat-${idx}`} position={offset} rotation={[0, lookAtCenter, 0]}>
+                                    <mesh castShadow receiveShadow position={[0, 0.2, 0]}>
+                                        <boxGeometry args={[0.26, 0.05, 0.24]} />
+                                        <meshStandardMaterial color="#7f4a2b" roughness={0.5} metalness={0.08} />
+                                    </mesh>
+                                    <mesh castShadow receiveShadow position={[0, 0.42, -0.1]}>
+                                        <boxGeometry args={[0.26, 0.34, 0.05]} />
+                                        <meshStandardMaterial color="#5b2d15" roughness={0.48} metalness={0.08} />
+                                    </mesh>
+                                    {[
+                                        [0.1, 0.08],
+                                        [-0.1, 0.08],
+                                        [0.1, -0.08],
+                                        [-0.1, -0.08],
+                                    ].map((leg, legIdx) => (
+                                        <mesh key={`leg-${legIdx}`} castShadow receiveShadow position={[leg[0], 0.08, leg[1]]}>
+                                            <boxGeometry args={[0.03, 0.16, 0.03]} />
+                                            <meshStandardMaterial color="#3b1d0f" roughness={0.58} metalness={0.1} />
+                                        </mesh>
+                                    ))}
+
+                                    {occupiedIndexes.has(idx) && (
+                                        <group position={[0, 0.26, -0.01]}>
+                                            <mesh castShadow receiveShadow position={[0, 0.09, 0]}>
+                                                <boxGeometry args={[0.11, 0.16, 0.08]} />
+                                                <meshStandardMaterial color="#1e293b" roughness={0.52} metalness={0.18} />
+                                            </mesh>
+                                            <mesh castShadow receiveShadow position={[0, 0.22, 0.015]}>
+                                                <sphereGeometry args={[0.055, 18, 18]} />
+                                                <meshStandardMaterial color="#cbd5e1" roughness={0.4} metalness={0.08} />
+                                            </mesh>
+                                            <mesh castShadow receiveShadow position={[0.022, 0.23, 0.064]}>
+                                                <sphereGeometry args={[0.007, 10, 10]} />
+                                                <meshStandardMaterial color="#22d3ee" emissive="#22d3ee" emissiveIntensity={0.6} />
+                                            </mesh>
+                                            <mesh castShadow receiveShadow position={[-0.022, 0.23, 0.064]}>
+                                                <sphereGeometry args={[0.007, 10, 10]} />
+                                                <meshStandardMaterial color="#22d3ee" emissive="#22d3ee" emissiveIntensity={0.6} />
+                                            </mesh>
+                                            <mesh castShadow receiveShadow position={[0.04, 0.14, 0]} rotation={[0, 0, -0.25]}>
+                                                <cylinderGeometry args={[0.012, 0.012, 0.1, 10]} />
+                                                <meshStandardMaterial color="#0f172a" roughness={0.5} metalness={0.2} />
+                                            </mesh>
+                                            <mesh castShadow receiveShadow position={[-0.04, 0.14, 0]} rotation={[0, 0, 0.25]}>
+                                                <cylinderGeometry args={[0.012, 0.012, 0.1, 10]} />
+                                                <meshStandardMaterial color="#0f172a" roughness={0.5} metalness={0.2} />
+                                            </mesh>
+                                        </group>
+                                    )}
+                                </group>
+                            );
+                        })}
+
+                        {table.status === 'reserved' && (
+                            <group>
+                                <mesh position={[0, 0.5, 0]}>
+                                    <cylinderGeometry args={[0.02, 0.02, 0.22, 10]} />
+                                    <meshStandardMaterial color="#f59e0b" roughness={0.4} metalness={0.25} />
+                                </mesh>
+                                <mesh position={[0, 0.67, 0]} rotation={[0, Math.PI / 4, 0]}>
+                                    <boxGeometry args={[0.1, 0.1, 0.1]} />
+                                    <meshStandardMaterial color="#fbbf24" emissive="#f59e0b" emissiveIntensity={0.42} />
+                                </mesh>
+                                <mesh position={[0, 0.52, 0]} rotation={[Math.PI / 2, 0, 0]}>
+                                    <torusGeometry args={[0.92, 0.018, 10, 56]} />
+                                    <meshBasicMaterial color="#f59e0b" />
+                                </mesh>
+                            </group>
+                        )}
+
+                        {selected && (
+                            <mesh position={[0, 0.47, 0]}>
+                                <torusGeometry args={[0.88, 0.02, 12, 64]} />
+                                <meshBasicMaterial color={material.glow} />
+                            </mesh>
+                        )}
+                    </group>
+                );
+            })}
+
+            <OrbitControls
+                enablePan
+                enableZoom
+                enableRotate
+                target={[0, 0.35, 0]}
+                minDistance={5.2}
+                maxDistance={22}
+                minPolarAngle={Math.PI / 6}
+                maxPolarAngle={Math.PI / 2.05}
+            />
+        </Canvas>
+    );
+}
+
 export default function LiveOrdersPage() {
     const [orders, setOrders] = useState<DashboardOrder[]>([]);
     const [floorTables, setFloorTables] = useState<Table[]>([]);
@@ -35,6 +249,7 @@ export default function LiveOrdersPage() {
     const [error, setError] = useState<string | null>(null);
     const [actionLoading, setActionLoading] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
+    const [floorViewMode, setFloorViewMode] = useState<'2d' | '3d'>('2d');
     const [useServerFallback, setUseServerFallback] = useState(true);
     const updateQueue = useRef<Record<string, Promise<void>>>({});
 
@@ -332,7 +547,9 @@ export default function LiveOrdersPage() {
                     activeTableIds.has(numStr.toLowerCase()) ||
                     activeTableIds.has(`table ${numStr}`);
 
-                const targetStatus = hasActiveOrder ? 'busy' : 'available';
+                const targetStatus: Table['status'] = hasActiveOrder
+                    ? 'busy'
+                    : (t.status === 'reserved' ? 'reserved' : 'available');
 
                 if (t.status !== targetStatus) {
                     changed = true;
@@ -416,6 +633,27 @@ export default function LiveOrdersPage() {
         }));
     };
 
+    const toggleTableReserved = useCallback(async (tableId: string) => {
+        const nextTables = floorTables.map((table) => {
+            if (table.id !== tableId) return table;
+            if (table.status === 'busy') return table;
+            return {
+                ...table,
+                status: (table.status === 'reserved' ? 'available' : 'reserved') as Table['status'],
+            };
+        });
+
+        setFloorTables(nextTables);
+
+        try {
+            const { setTables } = await import('@/data/sharedData');
+            setTables(nextTables, tenantId || undefined);
+            await syncTablesToServer(nextTables);
+        } catch {
+            // keep UI responsive even if reservation sync fails
+        }
+    }, [floorTables, tenantId, syncTablesToServer]);
+
     const filteredMenuItems = liveMenuItems.filter(item => item.name.toLowerCase().includes(searchQuery.toLowerCase()));
     const activeOrders = orders.filter(o => ['new', 'preparing'].includes(o.status));
     const readyToServeOrders = orders.filter(o => o.status === 'done');
@@ -450,6 +688,19 @@ export default function LiveOrdersPage() {
                 oTable === `table ${numStr}`;
         })
         : readyToServeOrders;
+
+    const getOrdersForTable = useCallback((table: Table) => {
+        return activeOrders.filter((o) => {
+            const oTable = (o.table || '').toString().trim().toLowerCase();
+            const strippedId = table.id.replace('T-', '');
+            const numStr = parseInt(strippedId, 10).toString();
+            return oTable === table.id.toLowerCase() ||
+                oTable === table.name.toLowerCase() ||
+                oTable === strippedId.toLowerCase() ||
+                oTable === numStr.toLowerCase() ||
+                oTable === `table ${numStr}`;
+        });
+    }, [activeOrders]);
 
     if ((loading || waitingForTenant) && !orders.length) return (
         <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6 text-center p-6">
@@ -534,86 +785,163 @@ export default function LiveOrdersPage() {
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="premium-glass p-5 lg:p-7">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-3">
                             <h2 className="text-base lg:text-lg font-semibold text-slate-900">Floor Overview</h2>
-                            <div className="flex items-center gap-3 lg:gap-4 text-xs">
-                                {Object.entries(tableStatusConfig).map(([key, cfg]) => (
-                                    <div key={key} className="flex items-center gap-2">
-                                        <div className={cn('w-3 h-3 rounded border', cfg.color, cfg.border)} />
-                                        <span className="text-slate-600 capitalize">{key}</span>
-                                    </div>
-                                ))}
+                            <div className="flex items-center gap-3 lg:gap-4 flex-wrap justify-end">
+                                <div className="flex items-center rounded-lg border border-slate-200 bg-white p-1">
+                                    <button
+                                        onClick={() => setFloorViewMode('2d')}
+                                        className={cn(
+                                            'px-2.5 py-1 text-xs rounded-md transition-colors',
+                                            floorViewMode === '2d' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
+                                        )}
+                                    >
+                                        2D
+                                    </button>
+                                    <button
+                                        onClick={() => setFloorViewMode('3d')}
+                                        className={cn(
+                                            'px-2.5 py-1 text-xs rounded-md transition-colors',
+                                            floorViewMode === '3d' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
+                                        )}
+                                    >
+                                        3D
+                                    </button>
+                                </div>
+                                <div className="flex items-center gap-3 lg:gap-4 text-xs">
+                                    {Object.entries(tableStatusConfig).map(([key, cfg]) => (
+                                        <div key={key} className="flex items-center gap-2">
+                                            <div className={cn('w-3 h-3 rounded border', cfg.color, cfg.border)} />
+                                            <span className="text-slate-600 capitalize">{key}</span>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         </div>
-                        <div className="rounded-2xl border border-white/30 overflow-x-auto overflow-y-hidden">
-                            <div
-                                className="relative bg-gradient-to-br from-slate-900/[0.03] to-emerald-500/[0.04] p-3 lg:p-5 min-w-max"
-                                style={{
-                                    height: 420,
-                                    minWidth: 700,
-                                    backgroundImage: 'radial-gradient(circle, #94a3b8 1px, transparent 1px)',
-                                    backgroundSize: '22px 22px'
-                                }}
-                            >
-                                {floorTables.map(table => {
-                                const config = tableStatusConfig[table.status];
-                                const isSelected = selectedTableId === table.id;
+                        <div className="rounded-2xl border border-white/30 overflow-x-auto overflow-y-visible">
+                            {floorViewMode === '2d' ? (
+                                <div
+                                    className="relative bg-gradient-to-br from-slate-900/[0.03] to-emerald-500/[0.04] p-3 lg:p-5 min-w-max"
+                                    style={{
+                                        height: 420,
+                                        minWidth: 700,
+                                        backgroundImage: 'radial-gradient(circle, #94a3b8 1px, transparent 1px)',
+                                        backgroundSize: '22px 22px'
+                                    }}
+                                >
+                                    {floorTables.map(table => {
+                                        const config = tableStatusConfig[table.status];
+                                        const isSelected = selectedTableId === table.id;
+                                        const tableOrders = getOrdersForTable(table);
 
-                                // Find all orders for this specific table to show in the tooltip
-                                const tableOrders = activeOrders.filter(o => {
-                                    const oTable = (o.table || '').toString().trim().toLowerCase();
-                                    const strippedId = table.id.replace('T-', '');
-                                    const numStr = parseInt(strippedId, 10).toString();
-                                    return oTable === table.id.toLowerCase() ||
-                                        oTable === table.name.toLowerCase() ||
-                                        oTable === strippedId.toLowerCase() ||
-                                        oTable === numStr.toLowerCase() ||
-                                        oTable === `table ${numStr}`;
-                                });
+                                        const tableItems = tableOrders.flatMap(o => o.items);
 
-                                // Flatten items across all orders for this table
-                                const tableItems = tableOrders.flatMap(o => o.items);
-
-                                return (
-                                    <div
-                                        key={table.id}
-                                        style={{ position: 'absolute', left: table.x * 0.7, top: table.y * 0.7 }}
-                                        className={cn('relative', isSelected ? 'z-[70]' : 'z-10')}
-                                    >
-                                        <motion.div onClick={() => setSelectedTableId(isSelected ? null : table.id)} whileHover={{ scale: 1.1 }} className={cn('w-12 h-12 lg:w-16 lg:h-16 rounded-2xl border-2 flex flex-col items-center justify-center cursor-pointer transition-all shadow-sm relative', config.color, config.border, config.text, isSelected && 'ring-4 ring-rose-400/30', table.status === 'busy' && 'drop-shadow-[0_0_16px_rgba(244,63,94,0.45)]', table.status === 'available' && 'drop-shadow-[0_0_14px_rgba(46,213,115,0.38)]', table.status === 'reserved' && 'drop-shadow-[0_0_12px_rgba(245,158,11,0.35)]')}>
-                                            <span className="text-[10px] lg:text-xs font-semibold">{table.id}</span>
-                                            <span className="text-[8px] lg:text-[10px] opacity-70">{table.seats}</span>
-                                        </motion.div>
-
-                                        <AnimatePresence>
-                                            {isSelected && (
-                                                <motion.div
-                                                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                                                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                                                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                                                    className="absolute top-full left-1/2 -translate-x-1/2 mt-3 w-48 bg-white/95 backdrop-blur-md rounded-xl shadow-xl border border-slate-200/60 p-3 z-[80]"
-                                                >
-                                                    <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-4 h-4 bg-white/95 border-l border-t border-slate-200/60 rotate-45" />
-                                                    <div className="relative z-10">
-                                                        <h4 className="text-xs font-bold text-slate-800 mb-2 border-b border-slate-100 pb-1">Table {table.id} Orders</h4>
-                                                        {tableItems.length > 0 ? (
-                                                            <ul className="space-y-1.5 max-h-32 overflow-y-auto">
-                                                                {tableItems.map((item, idx) => (
-                                                                    <li key={`${item.id}-${idx}`} className="text-[10px] flex justify-between">
-                                                                        <span className="text-slate-600 truncate mr-2">{item.name}</span>
-                                                                        <span className="font-semibold text-slate-900">x{item.quantity}</span>
-                                                                    </li>
-                                                                ))}
-                                                            </ul>
-                                                        ) : (
-                                                            <p className="text-[10px] text-slate-400 italic">No active orders</p>
-                                                        )}
-                                                    </div>
+                                        return (
+                                            <div
+                                                key={table.id}
+                                                style={{ position: 'absolute', left: table.x * 0.7, top: table.y * 0.7 }}
+                                                className={cn('relative', isSelected ? 'z-[70]' : 'z-10')}
+                                            >
+                                                <motion.div onClick={() => setSelectedTableId(isSelected ? null : table.id)} whileHover={{ scale: 1.1 }} className={cn('w-12 h-12 lg:w-16 lg:h-16 rounded-2xl border-2 flex flex-col items-center justify-center cursor-pointer transition-all shadow-sm relative', config.color, config.border, config.text, isSelected && 'ring-4 ring-rose-400/30', table.status === 'busy' && 'drop-shadow-[0_0_16px_rgba(244,63,94,0.45)]', table.status === 'available' && 'drop-shadow-[0_0_14px_rgba(46,213,115,0.38)]', table.status === 'reserved' && 'drop-shadow-[0_0_12px_rgba(245,158,11,0.35)]')}>
+                                                    <span className="text-[10px] lg:text-xs font-semibold">{table.id}</span>
+                                                    <span className="text-[8px] lg:text-[10px] opacity-70">{table.seats}</span>
                                                 </motion.div>
-                                            )}
-                                        </AnimatePresence>
-                                    </div>
-                                );
-                                })}
-                            </div>
+
+                                                <AnimatePresence>
+                                                    {isSelected && (
+                                                        <motion.div
+                                                            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                                                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                                                            exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                                                            className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 w-48 bg-white/95 backdrop-blur-md rounded-xl shadow-xl border border-slate-200/60 p-3 z-[80]"
+                                                        >
+                                                            <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-4 h-4 bg-white/95 border-r border-b border-slate-200/60 rotate-45" />
+                                                            <div className="relative z-10">
+                                                                <h4 className="text-xs font-bold text-slate-800 mb-2 border-b border-slate-100 pb-1">Table {table.id} Orders</h4>
+                                                                {tableItems.length > 0 ? (
+                                                                    <ul className="space-y-1.5 max-h-32 overflow-y-auto">
+                                                                        {tableItems.map((item, idx) => (
+                                                                            <li key={`${item.id}-${idx}`} className="text-[10px] flex justify-between">
+                                                                                <span className="text-slate-600 truncate mr-2">{item.name}</span>
+                                                                                <span className="font-semibold text-slate-900">x{item.quantity}</span>
+                                                                            </li>
+                                                                        ))}
+                                                                    </ul>
+                                                                ) : (
+                                                                    <p className="text-[10px] text-slate-400 italic">No active orders</p>
+                                                                )}
+                                                                <button
+                                                                    onClick={() => toggleTableReserved(table.id)}
+                                                                    disabled={table.status === 'busy'}
+                                                                    className={cn(
+                                                                        'mt-2 w-full h-7 rounded-md text-[10px] font-semibold border transition-colors',
+                                                                        table.status === 'reserved'
+                                                                            ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                                                                            : 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100',
+                                                                        table.status === 'busy' && 'opacity-50 cursor-not-allowed'
+                                                                    )}
+                                                                >
+                                                                    {table.status === 'busy'
+                                                                        ? 'Busy: cannot reserve'
+                                                                        : table.status === 'reserved'
+                                                                            ? 'Remove Reservation'
+                                                                            : 'Reserve Table'}
+                                                                </button>
+                                                            </div>
+                                                        </motion.div>
+                                                    )}
+                                                </AnimatePresence>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            ) : (
+                                <div className="relative h-[420px] min-w-[700px] bg-slate-100">
+                                    <LiveOrdersFloor3D
+                                        tables={floorTables}
+                                        selectedTableId={selectedTableId}
+                                        onSelectTable={setSelectedTableId}
+                                    />
+
+                                    {selectedTableId && (() => {
+                                        const table = floorTables.find((t) => t.id === selectedTableId);
+                                        if (!table) return null;
+                                        const tableItems = getOrdersForTable(table).flatMap((o) => o.items);
+                                        return (
+                                            <div className="absolute right-3 top-3 w-52 bg-white/95 backdrop-blur-md rounded-xl shadow-xl border border-slate-200/70 p-3 z-20">
+                                                <h4 className="text-xs font-bold text-slate-800 mb-2 border-b border-slate-100 pb-1">Table {table.id} Orders</h4>
+                                                {tableItems.length > 0 ? (
+                                                    <ul className="space-y-1.5 max-h-32 overflow-y-auto">
+                                                        {tableItems.map((item, idx) => (
+                                                            <li key={`${item.id}-3d-${idx}`} className="text-[10px] flex justify-between">
+                                                                <span className="text-slate-600 truncate mr-2">{item.name}</span>
+                                                                <span className="font-semibold text-slate-900">x{item.quantity}</span>
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                ) : (
+                                                    <p className="text-[10px] text-slate-400 italic">No active orders</p>
+                                                )}
+                                                <button
+                                                    onClick={() => toggleTableReserved(table.id)}
+                                                    disabled={table.status === 'busy'}
+                                                    className={cn(
+                                                        'mt-2 w-full h-7 rounded-md text-[10px] font-semibold border transition-colors',
+                                                        table.status === 'reserved'
+                                                            ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                                                            : 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100',
+                                                        table.status === 'busy' && 'opacity-50 cursor-not-allowed'
+                                                    )}
+                                                >
+                                                    {table.status === 'busy'
+                                                        ? 'Busy: cannot reserve'
+                                                        : table.status === 'reserved'
+                                                            ? 'Remove Reservation'
+                                                            : 'Reserve Table'}
+                                                </button>
+                                            </div>
+                                        );
+                                    })()}
+                                </div>
+                            )}
                         </div>
                     </motion.div>
                 ) : (

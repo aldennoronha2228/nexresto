@@ -7,6 +7,7 @@
 
 import { motion } from 'motion/react';
 import { AlertTriangle } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { useSuperAdminAuth } from '@/context/SuperAdminAuthContext';
 
@@ -15,8 +16,9 @@ interface SubscriptionGuardProps {
 }
 
 export function SubscriptionGuard({ children }: SubscriptionGuardProps) {
-    const { subscriptionStatus, tenantName, loading, isImpersonating } = useAuth();
+    const { subscriptionStatus, tenantName, loading, isImpersonating, signOut } = useAuth();
     const { userRole: superAdminRole } = useSuperAdminAuth();
+    const router = useRouter();
     const isSuperAdmin = superAdminRole === 'super_admin';
 
     // Don't block while loading
@@ -71,6 +73,16 @@ export function SubscriptionGuard({ children }: SubscriptionGuardProps) {
                                 <p className="text-sm text-slate-200 font-medium">Please contact the owner to renew the plan.</p>
                             </div>
                         </div>
+
+                        <button
+                            onClick={async () => {
+                                await signOut();
+                                router.replace('/login');
+                            }}
+                            className="w-full px-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-sm text-white font-medium transition-colors"
+                        >
+                            Back to Login
+                        </button>
 
                         <div className="pt-4 border-t border-slate-700">
                             <p className="text-xs text-slate-500 text-center">

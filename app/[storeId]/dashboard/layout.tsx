@@ -478,6 +478,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         router.push('/login');
     };
 
+    const handleBackToLogin = async () => {
+        await handleSignOut();
+    };
+
     if (loading || superAdminLoading) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-[#F8FAFC]">
@@ -846,6 +850,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                             </div>
                                         </button>
 
+                                        <button
+                                            onClick={() => { setMobileMenuOpen(false); handleBackToLogin(); }}
+                                            className="w-full text-left"
+                                        >
+                                            <div className="flex items-center gap-3 px-3 py-2.5 rounded-full transition-all duration-200 premium-sidebar-text hover:bg-white/5 hover:text-white">
+                                                <LogIn className="w-5 h-5 flex-shrink-0" />
+                                                <span className="text-sm font-medium flex-1">Back to Login</span>
+                                            </div>
+                                        </button>
+
                                     </nav>
                                 </div>
                             </motion.div>
@@ -932,6 +946,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                                 <button onClick={handleSignOut} className="w-full flex items-center gap-3 px-4 py-3 text-sm text-rose-600 hover:bg-rose-50 transition-colors">
                                                     <LogOut className="w-4 h-4" />
                                                     Sign Out
+                                                </button>
+                                                <button onClick={handleBackToLogin} className="w-full flex items-center gap-3 px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 transition-colors border-t border-slate-100">
+                                                    <LogIn className="w-4 h-4" />
+                                                    Back to Login
                                                 </button>
                                             </motion.div>
                                         )}

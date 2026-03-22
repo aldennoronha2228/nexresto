@@ -2,10 +2,10 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef, Suspense, Component, type ErrorInfo, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Download, QrCode, Trash2, Minus, Check, FolderOpen, Save, X, ZoomIn, Share2, Lock, Sparkles, Edit3, Users, Camera, ScanLine, Video, Upload } from 'lucide-react';
+import { Plus, Download, QrCode, Trash2, Minus, Check, FolderOpen, Save, X, ZoomIn, Share2, Lock, Sparkles, Edit3, Users, ScanLine, Upload } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 import { Canvas } from '@react-three/fiber';
-import { ContactShadows, Line, OrbitControls, TransformControls } from '@react-three/drei';
+import { ContactShadows, OrbitControls, TransformControls } from '@react-three/drei';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as THREE from 'three';
 import { toast } from 'sonner';
@@ -67,7 +67,15 @@ interface Wall { id: string; x: number; y: number; width: number; height: number
 interface Desk { id: string; x: number; y: number; width: number; height: number }
 interface FloorPlan { id: string; name: string; tables: Table[]; walls: Wall[]; desks: Desk[] }
 type AiLayoutTable = { id: string; type: 'standard' | 'booth' | 'high-top'; x: number; y: number };
-type DetectedTable3D = AiLayoutTable & { seats: number; elevation?: number; rotationY?: number };
+type TableShape = 'round' | 'rectangle';
+type TableColor = '#8b5e3c' | '#334155' | '#1f3b5c' | '#4f6f52' | '#6b2d3e';
+type DetectedTable3D = AiLayoutTable & {
+    seats: number;
+    elevation?: number;
+    rotationY?: number;
+    tableShape?: TableShape;
+    tableColor?: TableColor;
+};
 type ValidatedLayoutItem = {
     id: string;
     shape: 'round' | 'rectangle';
@@ -92,6 +100,31 @@ const VALIDATED_LAYOUT_JSON: { metadata: { status: 'success'; error: null; gridS
         { id: 'T7', shape: 'round', capacity: 8, coordinates: { x: 84, y: 20 }, clearance_buffer: 10 },
     ],
 };
+
+const TABLE_COLOR_OPTIONS: Array<{ value: TableColor; label: string }> = [
+    { value: '#8b5e3c', label: 'Walnut' },
+    { value: '#334155', label: 'Charcoal' },
+    { value: '#1f3b5c', label: 'Navy' },
+    { value: '#4f6f52', label: 'Sage' },
+    { value: '#6b2d3e', label: 'Burgundy' },
+];
+
+function resolveTableShape(table: DetectedTable3D): TableShape {
+    if (table.tableShape) return table.tableShape;
+    return table.type === 'booth' ? 'rectangle' : 'round';
+}
+
+function resolveTableColor(table: DetectedTable3D): TableColor {
+    return table.tableColor ?? '#8b5e3c';
+}
+
+function hexToRgba(hex: string, alpha: number) {
+    const clean = hex.replace('#', '');
+    const r = parseInt(clean.slice(0, 2), 16);
+    const g = parseInt(clean.slice(2, 4), 16);
+    const b = parseInt(clean.slice(4, 6), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
 
 function QRPreviewModal({ table, onClose, baseUrl, restaurantId }: { table: Table; onClose: () => void; baseUrl: string; restaurantId?: string | null }) {
     const url = getTableMenuUrl(baseUrl, table.id, restaurantId);
@@ -160,752 +193,6 @@ function QRPreviewModal({ table, onClose, baseUrl, restaurantId }: { table: Tabl
         </motion.div>
     );
 }
-
-function CameraModal({
-    open,
-    onClose,
-    onScanComplete,
-    onUseUpload,
-}: {
-    open: boolean;
-    onClose: () => void;
-    onScanComplete: (payload: { previewUrl: string; detectedTables: DetectedTable3D[] }) => void;
-    onUseUpload: () => void;
-}) {
-    const videoRef = useRef<HTMLVideoElement | null>(null);
-    const overlayCanvasRef = useRef<HTMLCanvasElement | null>(null);
-    const processingCanvasRef = useRef<HTMLCanvasElement | null>(null);
-    const streamRef = useRef<MediaStream | null>(null);
-    const rafRef = useRef<number | null>(null);
-    const frameNumberRef = useRef(0);
-    const lastDrawRef = useRef(0);
-    const previousEnergyFrameRef = useRef<Uint8Array | null>(null);
-    const cameraPoseRef = useRef<{ x: number; z: number }>({ x: 0, z: 0 });
-    const lastCentroidRef = useRef<{ x: number; y: number } | null>(null);
-    const trackingMapRef = useRef<Map<string, {
-        id: string;
-        cx: number;
-        cy: number;
-        w: number;
-        h: number;
-        worldX: number;
-        worldZ: number;
-        samples: number;
-        locked: boolean;
-        seats: number;
-        confidence: number;
-        stableFrames: number;
-        aspectRatio: number;
-        hitStreak: number;
-        misses: number;
-        lastSeenTick: number;
-    }>>(new Map());
-    // Guard: only 1 YOLO request in-flight at a time to prevent concurrent miss-storms
-    const yoloInFlightRef = useRef(false);
-    const lastYoloMissTickRef = useRef(0);
-
-    const [cameraError, setCameraError] = useState<string | null>(null);
-    const [isStartingCamera, setIsStartingCamera] = useState(false);
-    const [lockedTableCount, setLockedTableCount] = useState(0);
-    const [scanPath, setScanPath] = useState<Array<[number, number, number]>>([[0, 0.02, 0]]);
-    const [miniMapTables, setMiniMapTables] = useState<Array<{ id: string; x: number; z: number; locked: boolean }>>([]);
-    const [scanLabel, setScanLabel] = useState('Initializing sensors...');
-
-    const SCAN_WORLD_WIDTH = 12;
-    const SCAN_WORLD_DEPTH = 8;
-    // FRAME_SKIP=3: call YOLO every 3rd frame (~10x/sec at 30fps)
-    // yolov8n at imgsz=640 responds in ~120ms — 1 request at a time
-    const FRAME_SKIP = 3;
-
-    const syncMiniMapFromTracking = useCallback(() => {
-        const all = Array.from(trackingMapRef.current.values());
-        setMiniMapTables(all.map((t) => ({ id: t.id, x: t.worldX, z: t.worldZ, locked: t.locked })));
-        setLockedTableCount(all.filter((t) => t.locked).length);
-    }, []);
-
-    const drawTracingOverlay = useCallback((ctx: CanvasRenderingContext2D, width: number, height: number, now: number) => {
-        ctx.clearRect(0, 0, width, height);
-
-        // Cyberpunk scanner grid and crosshair.
-        ctx.save();
-        ctx.strokeStyle = 'rgba(56,189,248,0.12)';
-        ctx.lineWidth = 1;
-        for (let x = 0; x < width; x += 36) {
-            ctx.beginPath();
-            ctx.moveTo(x, 0);
-            ctx.lineTo(x, height);
-            ctx.stroke();
-        }
-        for (let y = 0; y < height; y += 36) {
-            ctx.beginPath();
-            ctx.moveTo(0, y);
-            ctx.lineTo(width, y);
-            ctx.stroke();
-        }
-        const cx = width / 2;
-        const cy = height / 2;
-        ctx.strokeStyle = 'rgba(34,211,238,0.35)';
-        ctx.beginPath();
-        ctx.moveTo(cx - 24, cy);
-        ctx.lineTo(cx + 24, cy);
-        ctx.moveTo(cx, cy - 24);
-        ctx.lineTo(cx, cy + 24);
-        ctx.stroke();
-        ctx.restore();
-
-        const flicker = now % 500 < 280;
-        for (const tracked of trackingMapRef.current.values()) {
-            const neon = tracked.locked ? 'rgba(74,222,128,0.95)' : 'rgba(249,115,22,0.95)';
-            ctx.save();
-            ctx.strokeStyle = neon;
-            ctx.shadowColor = neon;
-            ctx.shadowBlur = tracked.locked ? 15 : 10;
-            ctx.lineWidth = 2;
-
-            const x = tracked.cx - tracked.w / 2;
-            const y = tracked.cy - tracked.h / 2;
-            ctx.strokeRect(x, y, tracked.w, tracked.h);
-
-            // Corner accents for wireframe feel.
-            const corner = 12;
-            ctx.beginPath();
-            ctx.moveTo(x, y + corner); ctx.lineTo(x, y); ctx.lineTo(x + corner, y);
-            ctx.moveTo(x + tracked.w - corner, y); ctx.lineTo(x + tracked.w, y); ctx.lineTo(x + tracked.w, y + corner);
-            ctx.moveTo(x, y + tracked.h - corner); ctx.lineTo(x, y + tracked.h); ctx.lineTo(x + corner, y + tracked.h);
-            ctx.moveTo(x + tracked.w - corner, y + tracked.h); ctx.lineTo(x + tracked.w, y + tracked.h); ctx.lineTo(x + tracked.w, y + tracked.h - corner);
-            ctx.stroke();
-
-            if (flicker) {
-                ctx.fillStyle = neon;
-                ctx.font = '12px ui-monospace, SFMono-Regular, Menlo, monospace';
-                ctx.fillText(
-                    `${tracked.id}  x:${tracked.worldX.toFixed(2)} z:${tracked.worldZ.toFixed(2)}  s:${tracked.samples}`,
-                    x,
-                    Math.max(14, y - 8)
-                );
-            }
-
-            ctx.restore();
-        }
-    }, []);
-
-    const detectFrameCandidates = useCallback((
-        imageData: ImageData,
-        width: number,
-        height: number,
-        tick: number
-    ) => {
-        // Deterministic lightweight detector: edge + texture variance in floor ROI.
-        const pixels = imageData.data;
-        const sample = new Uint8Array(64);
-        let sampleIndex = 0;
-        for (let i = 0; i < pixels.length && sampleIndex < sample.length; i += Math.floor(pixels.length / 64)) {
-            sample[sampleIndex++] = pixels[i] || 0;
-        }
-
-        let energy = 0;
-        const prev = previousEnergyFrameRef.current;
-        if (prev) {
-            for (let i = 0; i < sample.length; i++) energy += Math.abs(sample[i] - prev[i]);
-            energy /= sample.length;
-        }
-        previousEnergyFrameRef.current = sample;
-
-        const roiTop = Math.floor(height * 0.44);
-        const block = Math.max(18, Math.floor(Math.min(width, height) / 26));
-        const raw: Array<{ cx: number; cy: number; w: number; h: number; score: number; confidence: number }> = [];
-
-        for (let y = roiTop; y < height - block; y += block) {
-            for (let x = 0; x < width - block; x += block) {
-                let sum = 0;
-                let sq = 0;
-                let edge = 0;
-                let edgeX = 0;
-                let edgeY = 0;
-                let n = 0;
-
-                for (let py = y; py < y + block; py += 2) {
-                    for (let px = x; px < x + block; px += 2) {
-                        const i = (py * width + px) * 4;
-                        const l = 0.2126 * (pixels[i] || 0) + 0.7152 * (pixels[i + 1] || 0) + 0.0722 * (pixels[i + 2] || 0);
-                        const ir = (py * width + Math.min(px + 2, width - 1)) * 4;
-                        const id = (Math.min(py + 2, height - 1) * width + px) * 4;
-                        const lr = 0.2126 * (pixels[ir] || 0) + 0.7152 * (pixels[ir + 1] || 0) + 0.0722 * (pixels[ir + 2] || 0);
-                        const ld = 0.2126 * (pixels[id] || 0) + 0.7152 * (pixels[id + 1] || 0) + 0.0722 * (pixels[id + 2] || 0);
-
-                        const gradX = Math.abs(l - lr);
-                        const gradY = Math.abs(l - ld);
-                        edge += gradX + gradY;
-                        edgeX += gradX;
-                        edgeY += gradY;
-                        sum += l;
-                        sq += l * l;
-                        n += 1;
-                    }
-                }
-
-                if (!n) continue;
-                const mean = sum / n;
-                const variance = Math.max(0, sq / n - mean * mean);
-                const edgeNorm = edge / n;
-                if (x < width * 0.06 || x + block > width * 0.94) continue;
-                if (edgeNorm < 26 || variance < 170 || variance > 4600) continue;
-
-                const score = edgeNorm * 0.68 + Math.min(variance, 4000) * 0.32;
-                const confidence = Math.max(0, Math.min(1, (edgeNorm - 26) / 40 + (variance - 170) / 5200));
-                const shapeBias = Math.max(0.72, Math.min(1.85, (edgeX + 1) / (edgeY + 1)));
-                if (shapeBias < 0.65 || shapeBias > 1.9) continue;
-                const size = Math.max(56, Math.min(148, block * (1.6 + variance / 5200)));
-                const widthScale = shapeBias >= 1.15 ? 1.22 : shapeBias <= 0.9 ? 0.92 : 1.04;
-                const heightScale = shapeBias <= 0.9 ? 1.24 : shapeBias >= 1.15 ? 0.82 : 0.98;
-                const widthSize = Math.max(50, Math.min(170, size * widthScale));
-                const heightSize = Math.max(42, Math.min(160, size * heightScale));
-
-                raw.push({
-                    cx: x + block / 2,
-                    cy: y + block / 2,
-                    w: widthSize,
-                    h: heightSize,
-                    score,
-                    confidence,
-                });
-            }
-        }
-
-        raw.sort((a, b) => b.score - a.score);
-        const minDist = Math.max(72, block * 2.4);
-        const picked: Array<{ cx: number; cy: number; w: number; h: number; confidence: number; aspectRatio: number }> = [];
-
-        for (const c of raw) {
-            if (picked.length >= 8) break;
-            if (c.confidence < 0.54) continue;
-            const tooClose = picked.some((p) => Math.hypot(p.cx - c.cx, p.cy - c.cy) < minDist);
-            if (!tooClose) picked.push({ cx: c.cx, cy: c.cy, w: c.w, h: c.h, confidence: c.confidence, aspectRatio: c.w / Math.max(c.h, 1) });
-        }
-
-        if (picked.length > 0) {
-            const centroid = picked.reduce((acc, c) => ({ x: acc.x + c.cx, y: acc.y + c.cy }), { x: 0, y: 0 });
-            centroid.x /= picked.length;
-            centroid.y /= picked.length;
-
-            const prevCentroid = lastCentroidRef.current;
-            if (prevCentroid) {
-                const dx = (centroid.x - prevCentroid.x) / Math.max(width, 1);
-                const dy = (centroid.y - prevCentroid.y) / Math.max(height, 1);
-                cameraPoseRef.current.x = Math.max(-SCAN_WORLD_WIDTH / 2, Math.min(SCAN_WORLD_WIDTH / 2, cameraPoseRef.current.x - dx * 2.2));
-                cameraPoseRef.current.z = Math.max(-SCAN_WORLD_DEPTH / 2, Math.min(SCAN_WORLD_DEPTH / 2, cameraPoseRef.current.z + dy * 2.2));
-            }
-            lastCentroidRef.current = centroid;
-        }
-
-        const pose = cameraPoseRef.current;
-        setScanPath((prevPath) => {
-            const last = prevPath[prevPath.length - 1];
-            const next: [number, number, number] = [Number(pose.x.toFixed(3)), 0.02, Number(pose.z.toFixed(3))];
-            if (!last || Math.hypot(last[0] - next[0], last[2] - next[2]) > 0.08) {
-                const merged = [...prevPath, next];
-                return merged.slice(Math.max(0, merged.length - 240));
-            }
-            return prevPath;
-        });
-
-        return picked.map((c) => ({
-            cx: c.cx,
-            cy: c.cy,
-            w: c.w,
-            h: c.h,
-            worldX: Math.max(-SCAN_WORLD_WIDTH / 2, Math.min(SCAN_WORLD_WIDTH / 2, pose.x + ((c.cx / width) - 0.5) * 6.2)),
-            worldZ: Math.max(-SCAN_WORLD_DEPTH / 2, Math.min(SCAN_WORLD_DEPTH / 2, pose.z + ((c.cy / height) - 0.66) * 4.8)),
-            confidence: c.confidence,
-            aspectRatio: c.aspectRatio,
-        }));
-    }, []);
-
-    const ingestDetections = useCallback((
-        detections: Array<{ cx: number; cy: number; w: number; h: number; worldX: number; worldZ: number; confidence: number; aspectRatio: number }>,
-        tick: number
-    ) => {
-        const threshold = 62;
-
-        for (const tracked of trackingMapRef.current.values()) {
-            tracked.misses += 1;
-            tracked.confidence = tracked.confidence * 0.985;
-        }
-
-        for (const detection of detections) {
-            let closest: { key: string; distance: number } | null = null;
-
-            for (const [key, tracked] of trackingMapRef.current.entries()) {
-                const distance = Math.hypot(tracked.cx - detection.cx, tracked.cy - detection.cy);
-                if (distance <= threshold && (!closest || distance < closest.distance)) {
-                    closest = { key, distance };
-                }
-            }
-
-            if (!closest) {
-                // Lower threshold to 0.22 so YOLO detections (conf ~0.25+) register
-                if (detection.confidence < 0.22 || trackingMapRef.current.size >= 30) {
-                    continue;
-                }
-                const id = `T-${String(trackingMapRef.current.size + 1).padStart(2, '0')}`;
-                trackingMapRef.current.set(id, {
-                    id,
-                    cx: detection.cx,
-                    cy: detection.cy,
-                    w: detection.w,
-                    h: detection.h,
-                    worldX: detection.worldX,
-                    worldZ: detection.worldZ,
-                    samples: 1,
-                    locked: false,
-                    seats: 4,
-                    confidence: detection.confidence,
-                    stableFrames: 1,
-                    aspectRatio: detection.aspectRatio,
-                    hitStreak: 1,
-                    misses: 0,
-                    lastSeenTick: tick,
-                });
-                continue;
-            }
-
-            const tracked = trackingMapRef.current.get(closest.key);
-            if (!tracked) continue;
-
-            const pxDistance = Math.hypot(tracked.cx - detection.cx, tracked.cy - detection.cy);
-            const sizeDelta = Math.abs(tracked.w - detection.w) / Math.max(tracked.w, 1) + Math.abs(tracked.h - detection.h) / Math.max(tracked.h, 1);
-            const isStableHit = pxDistance <= 20 && sizeDelta <= 0.5;
-            const n = tracked.samples + 1;
-            const alpha = tracked.locked ? 0.22 : 0.32;
-            tracked.cx = tracked.cx * (1 - alpha) + detection.cx * alpha;
-            tracked.cy = tracked.cy * (1 - alpha) + detection.cy * alpha;
-            tracked.w = tracked.w * (1 - alpha) + detection.w * alpha;
-            tracked.h = tracked.h * (1 - alpha) + detection.h * alpha;
-            tracked.worldX = tracked.worldX * (1 - alpha) + detection.worldX * alpha;
-            tracked.worldZ = tracked.worldZ * (1 - alpha) + detection.worldZ * alpha;
-            tracked.samples = n;
-            tracked.confidence = tracked.confidence * 0.75 + detection.confidence * 0.25;
-            tracked.stableFrames = isStableHit ? tracked.stableFrames + 1 : Math.max(0, tracked.stableFrames - 1);
-            tracked.hitStreak = isStableHit ? tracked.hitStreak + 1 : Math.max(0, tracked.hitStreak - 1);
-            tracked.aspectRatio = (tracked.aspectRatio * (n - 1) + detection.aspectRatio) / n;
-            tracked.misses = 0;
-            tracked.lastSeenTick = tick;
-
-            // Lock after just 2 consecutive hits so tables lock within ~300ms
-            if (!tracked.locked && tracked.hitStreak >= 2 && tracked.stableFrames >= 1 && tracked.samples >= 2 && tracked.confidence >= 0.25) {
-                tracked.locked = true;
-                navigator.vibrate?.(35);
-            }
-        }
-
-        for (const [key, tracked] of trackingMapRef.current.entries()) {
-            if (tracked.locked && tracked.misses > 22) {
-                trackingMapRef.current.delete(key);
-                continue;
-            }
-            if (!tracked.locked) {
-                // Only age out if truly stale — give tracks plenty of time to stabilize
-                const stale = tracked.misses > 20;
-                const weak = tracked.samples >= 8 && tracked.confidence < 0.15;
-                const tooBrief = tracked.samples < 2 && tracked.misses > 10;
-                if (stale || weak || tooBrief) {
-                    trackingMapRef.current.delete(key);
-                }
-            }
-        }
-
-        // Remove duplicate nearby locks by keeping the stronger, older track.
-        const locked = Array.from(trackingMapRef.current.values())
-            .filter((t) => t.locked)
-            .sort((a, b) => (b.confidence + b.samples * 0.01) - (a.confidence + a.samples * 0.01));
-        for (let i = 0; i < locked.length; i++) {
-            for (let j = i + 1; j < locked.length; j++) {
-                const a = locked[i];
-                const b = locked[j];
-                const worldDistance = Math.hypot(a.worldX - b.worldX, a.worldZ - b.worldZ);
-                const screenDistance = Math.hypot(a.cx - b.cx, a.cy - b.cy);
-                if (worldDistance < 0.62 || screenDistance < 44) {
-                    trackingMapRef.current.delete(b.id);
-                }
-            }
-        }
-
-        syncMiniMapFromTracking();
-    }, [syncMiniMapFromTracking]);
-
-    const stopStream = useCallback(() => {
-        if (rafRef.current !== null) {
-            cancelAnimationFrame(rafRef.current);
-            rafRef.current = null;
-        }
-
-        if (streamRef.current) {
-            streamRef.current.getTracks().forEach((t) => t.stop());
-            streamRef.current = null;
-        }
-    }, []);
-
-    useEffect(() => {
-        if (!open) return;
-
-        let active = true;
-
-        const startCamera = async () => {
-            setCameraError(null);
-            setIsStartingCamera(true);
-            setScanLabel('Initializing sensors...');
-            trackingMapRef.current.clear();
-            setMiniMapTables([]);
-            setLockedTableCount(0);
-            setScanPath([[0, 0.02, 0]]);
-            frameNumberRef.current = 0;
-            lastDrawRef.current = 0;
-            previousEnergyFrameRef.current = null;
-            cameraPoseRef.current = { x: 0, z: 0 };
-            lastCentroidRef.current = null;
-
-            if (!window.isSecureContext) {
-                setCameraError('Live camera requires a secure context (HTTPS or localhost). Please use HTTPS or choose photo upload.');
-                setIsStartingCamera(false);
-                return;
-            }
-
-            if (!navigator?.mediaDevices?.getUserMedia) {
-                setCameraError('Camera access is not available in this browser/session. Use photo upload instead.');
-                setIsStartingCamera(false);
-                return;
-            }
-
-            try {
-                stopStream();
-                let stream: MediaStream;
-
-                try {
-                    stream = await navigator.mediaDevices.getUserMedia({
-                        video: { facingMode: { ideal: 'environment' } },
-                        audio: false,
-                    });
-                } catch {
-                    // Retry with broad constraints for browsers/devices that reject facingMode.
-                    stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-                }
-
-                if (!active) {
-                    stream.getTracks().forEach((t) => t.stop());
-                    return;
-                }
-
-                streamRef.current = stream;
-                if (videoRef.current) {
-                    videoRef.current.srcObject = stream;
-                    const v = videoRef.current;
-                    v.onloadedmetadata = () => {
-                        v.play().catch(() => {
-                            // no-op: user gesture may be required in some browsers
-                        });
-
-                        const processLoop = (now: number) => {
-                            const video = videoRef.current;
-                            const overlay = overlayCanvasRef.current;
-                            const processing = processingCanvasRef.current;
-                            if (!video || !overlay || !processing || !streamRef.current) return;
-
-                            const frameInterval = 1000 / 30;
-                            if (now - lastDrawRef.current < frameInterval) {
-                                rafRef.current = requestAnimationFrame(processLoop);
-                                return;
-                            }
-                            lastDrawRef.current = now;
-
-                            const width = video.videoWidth || 1280;
-                            const height = video.videoHeight || 720;
-                            overlay.width = width;
-                            overlay.height = height;
-                            processing.width = width;
-                            processing.height = height;
-
-                            const pctx = processing.getContext('2d', { willReadFrequently: true });
-                            const octx = overlay.getContext('2d');
-                            if (!pctx || !octx) {
-                                rafRef.current = requestAnimationFrame(processLoop);
-                                return;
-                            }
-
-                            pctx.drawImage(video, 0, 0, width, height);
-                            frameNumberRef.current += 1;
-
-                            if (frameNumberRef.current % FRAME_SKIP === 0) {
-                                const currentTick = frameNumberRef.current;
-
-                                // ── PURE YOLO, single-flight guard ──
-                                // Only fire if no request is currently in-flight.
-                                // This prevents concurrent responses all calling ingestDetections
-                                // simultaneously and mass-incrementing misses (the miss-storm bug).
-                                if (!yoloInFlightRef.current) {
-                                    yoloInFlightRef.current = true;
-
-                                    processing.toBlob((blob) => {
-                                        if (!blob) { yoloInFlightRef.current = false; return; }
-                                        const formData = new FormData();
-                                        formData.append('file', blob, 'frame.jpeg');
-
-                                        fetch('http://localhost:8000/predict', { method: 'POST', body: formData })
-                                            .then(r => r.ok ? r.json() : null)
-                                            .then(data => {
-                                                if (!data) return;
-                                                const pose = cameraPoseRef.current;
-                                                const yoloDetections = (data.boxes as any[]).map((b: any) => ({
-                                                    cx: b.cx,
-                                                    cy: b.cy,
-                                                    w:  b.w,
-                                                    h:  b.h,
-                                                    worldX: Math.max(-SCAN_WORLD_WIDTH / 2, Math.min(SCAN_WORLD_WIDTH / 2,
-                                                        pose.x + ((b.cx / width) - 0.5) * 6.2)),
-                                                    worldZ: Math.max(-SCAN_WORLD_DEPTH / 2, Math.min(SCAN_WORLD_DEPTH / 2,
-                                                        pose.z + ((b.cy / height) - 0.66) * 4.8)),
-                                                    confidence: b.confidence,
-                                                    aspectRatio: b.w / Math.max(b.h, 1),
-                                                }));
-                                                // Always ingest (even empty) — but only once per response
-                                                ingestDetections(yoloDetections, currentTick);
-                                            })
-                                            .catch(() => { /* network error */ })
-                                            .finally(() => { yoloInFlightRef.current = false; });
-                                    }, 'image/jpeg', 0.9);
-                                }
-
-                                const locked = Array.from(trackingMapRef.current.values()).filter((x) => x.locked).length;
-                                const provisional = Math.max(0, trackingMapRef.current.size - locked);
-                                setScanLabel(`Tables locked: ${locked}${provisional > 0 ? `  •  ${provisional} scanning` : ''}`);
-                            }
-
-                            drawTracingOverlay(octx, width, height, now);
-                            rafRef.current = requestAnimationFrame(processLoop);
-                        };
-
-                        rafRef.current = requestAnimationFrame(processLoop);
-                    };
-                }
-            } catch (error: any) {
-                const code = String(error?.name || '').trim();
-                if (code === 'NotAllowedError' || code === 'PermissionDeniedError') {
-                    setCameraError('Camera permission is blocked. Allow camera access in browser settings, then try again.');
-                } else if (code === 'NotFoundError' || code === 'DevicesNotFoundError') {
-                    setCameraError('No camera device was found on this system. You can continue with photo upload.');
-                } else if (code === 'NotReadableError' || code === 'TrackStartError') {
-                    setCameraError('Camera is currently in use by another app. Close that app and retry.');
-                } else {
-                    setCameraError('Camera failed to start. You can retry or continue with photo upload.');
-                }
-            } finally {
-                if (active) {
-                    setIsStartingCamera(false);
-                }
-            }
-        };
-
-        startCamera();
-
-        return () => {
-            active = false;
-            stopStream();
-        };
-    }, [detectFrameCandidates, drawTracingOverlay, ingestDetections, open, stopStream]);
-
-    const confirmScan = useCallback(() => {
-        const video = videoRef.current;
-        const canvas = processingCanvasRef.current;
-        if (!video || !canvas) return;
-
-        const width = video.videoWidth || 1280;
-        const height = video.videoHeight || 720;
-        canvas.width = width;
-        canvas.height = height;
-
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-        ctx.drawImage(video, 0, 0, width, height);
-
-        const previewUrl = canvas.toDataURL('image/jpeg', 0.92);
-        const locked = Array.from(trackingMapRef.current.values()).filter((t) => t.locked);
-        const normalized = locked.map((tracked, index) => {
-            const x = Math.max(0, Math.min(100, Number((((tracked.worldX / SCAN_WORLD_WIDTH) + 0.5) * 100).toFixed(2))));
-            const y = Math.max(0, Math.min(100, Number((((tracked.worldZ / SCAN_WORLD_DEPTH) + 0.5) * 100).toFixed(2))));
-            const inferredType: DetectedTable3D['type'] = tracked.aspectRatio >= 1.22 ? 'booth' : 'standard';
-            return {
-                id: tracked.id || `T-${String(index + 1).padStart(2, '0')}`,
-                type: inferredType,
-                x,
-                y,
-                seats: tracked.seats,
-                elevation: 0,
-                rotationY: 0,
-            } as DetectedTable3D;
-        });
-
-        stopStream();
-        onScanComplete({ previewUrl, detectedTables: normalized });
-    }, [onScanComplete, stopStream]);
-
-    if (!open) return null;
-
-    return (
-        <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
-            onClick={onClose}
-        >
-            <motion.div
-                initial={{ scale: 0.96, y: 10 }}
-                animate={{ scale: 1, y: 0 }}
-                exit={{ scale: 0.96, y: 10 }}
-                className="w-full max-w-6xl rounded-2xl border border-cyan-400/20 bg-slate-950 overflow-hidden shadow-2xl"
-                onClick={(e) => e.stopPropagation()}
-            >
-                <div className="h-14 px-4 border-b border-white/10 flex items-center justify-between text-white">
-                    <div className="flex items-center gap-2 text-sm font-medium">
-                        <Video className="w-4 h-4" />
-                        Live Spatial Scanner
-                    </div>
-                    <div className="text-xs text-cyan-300/80 font-mono">{scanLabel}</div>
-                    <button onClick={onClose} className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center">
-                        <X className="w-4 h-4" />
-                    </button>
-                </div>
-
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-0 bg-slate-950">
-                    <div className="relative aspect-video bg-black border-r border-white/10">
-                        <video ref={videoRef} className={cn('w-full h-full object-cover', cameraError && 'opacity-30')} playsInline muted autoPlay />
-                        <canvas ref={overlayCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
-
-                        <div className="absolute left-3 top-3 px-2.5 py-1 rounded-md bg-black/40 border border-cyan-300/30 text-[11px] text-cyan-200 font-mono">
-                            LIVE TRACE // AI SKIP x{FRAME_SKIP}
-                        </div>
-
-                    {isStartingCamera && !cameraError && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-slate-900/35">
-                            <div className="px-3 py-2 rounded-lg bg-slate-950/85 border border-white/10 text-white text-sm">
-                                Starting camera...
-                            </div>
-                        </div>
-                    )}
-                    {cameraError && (
-                        <div className="absolute inset-0 flex items-center justify-center p-4">
-                            <div className="max-w-md w-full rounded-xl border border-amber-300 bg-amber-50 text-amber-800 p-4 text-center">
-                                <p className="text-sm font-medium">{cameraError}</p>
-                                <div className="mt-3 flex items-center justify-center gap-2">
-                                    <button
-                                        onClick={onClose}
-                                        className="px-3 py-2 rounded-lg border border-amber-400 text-amber-800 text-sm font-medium hover:bg-amber-100"
-                                    >
-                                        Close
-                                    </button>
-                                    <button
-                                        onClick={onUseUpload}
-                                        className="px-3 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium"
-                                    >
-                                        Use Photo Upload
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                    </div>
-
-                    <div className="relative aspect-video bg-slate-900">
-                        <Canvas shadows camera={{ position: [5.6, 5.4, 6.2], fov: 50 }}>
-                            <color attach="background" args={['#020617']} />
-                            <ambientLight intensity={0.45} />
-                            <directionalLight position={[4, 7, 3]} intensity={0.9} castShadow />
-                            <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-                                <planeGeometry args={[SCAN_WORLD_WIDTH, SCAN_WORLD_DEPTH]} />
-                                <meshStandardMaterial color="#0f172a" roughness={0.95} />
-                            </mesh>
-                            <gridHelper args={[SCAN_WORLD_WIDTH, 24, '#334155', '#1e293b']} position={[0, 0.01, 0]} />
-                            <ContactShadows opacity={0.28} scale={SCAN_WORLD_WIDTH} blur={2} far={8} position={[0, 0.03, 0]} />
-
-                            {scanPath.length >= 2 && (
-                                <Line points={scanPath} color="#00f3ff" lineWidth={2} opacity={0.6} />
-                            )}
-
-                            {miniMapTables.map((table) => {
-                                const neonColor = table.locked ? '#00f3ff' : '#b900ff';
-                                return (
-                                    <group key={`mini-${table.id}`} position={[table.x, 0, table.z]}>
-                                        {/* Holographic Glowing Core */}
-                                        <mesh position={[0, 0.375, 0]}>
-                                            <boxGeometry args={[0.9, 0.75, 0.9]} />
-                                            <meshStandardMaterial 
-                                                color={neonColor} 
-                                                emissive={neonColor} 
-                                                emissiveIntensity={table.locked ? 1.2 : 0.6} 
-                                                transparent 
-                                                opacity={table.locked ? 0.2 : 0.1} 
-                                                wireframe={!table.locked}
-                                            />
-                                        </mesh>
-                                        
-                                        {/* Solid Glassmorphism Top */}
-                                        <mesh position={[0, 0.76, 0]}>
-                                            <boxGeometry args={[1.0, 0.04, 1.0]} />
-                                            <meshPhysicalMaterial 
-                                                color="#ffffff" 
-                                                transmission={0.9}
-                                                opacity={1} 
-                                                metalness={0.2} 
-                                                roughness={0.1} 
-                                                ior={1.5} 
-                                            />
-                                        </mesh>
-
-                                        {/* Floating UI Label */}
-                                        <Html position={[0, 1.1, 0]} center>
-                                            <div className="backdrop-blur-md bg-black/40 border border-[#00f3ff]/30 px-2 py-0.5 text-[#00f3ff] text-[10px] font-mono rounded-full uppercase tracking-widest pointer-events-none drop-shadow-md whitespace-nowrap">
-                                                {table.id}
-                                            </div>
-                                        </Html>
-                                    </group>
-                                );
-                            })}
-
-                            <OrbitControls
-                                enablePan={false}
-                                enableRotate
-                                enableZoom
-                                minDistance={4.2}
-                                maxDistance={11}
-                                minPolarAngle={Math.PI / 5}
-                                maxPolarAngle={Math.PI / 2.05}
-                                target={[0, 0.4, 0]}
-                            />
-                        </Canvas>
-                        <div className="absolute left-3 top-3 px-2.5 py-1 rounded-md bg-black/40 border border-emerald-300/30 text-[11px] text-emerald-200 font-mono">
-                            MINI 3D RECON
-                        </div>
-                    </div>
-                </div>
-
-                <div className="p-4 border-t border-white/10 flex items-center justify-end gap-2 bg-slate-900">
-                    <div className="mr-auto text-xs text-slate-300 font-mono">
-                        Locked tables: <span className="text-emerald-300">{lockedTableCount}</span>
-                    </div>
-                    <button onClick={onClose} className="px-4 py-2 rounded-lg border border-slate-600 text-slate-200 hover:bg-slate-800 text-sm">
-                        Cancel
-                    </button>
-                    <button onClick={confirmScan} disabled={!!cameraError || lockedTableCount === 0} className="px-4 py-2 rounded-lg bg-orange-500 hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium shadow-md shadow-orange-500/30 flex items-center gap-2">
-                        <ScanLine className="w-4 h-4" />
-                        Confirm Scan
-                    </button>
-                </div>
-                <canvas ref={processingCanvasRef} className="hidden" />
-            </motion.div>
-        </motion.div>
-    );
-}
-
-// ─── Table Management Modal ───────────────────────────────────────────────────
 
 function TableManagementModal({
     tables,
@@ -1533,9 +820,35 @@ function GlbOrFallback({
     return <primitive object={cloned} scale={scale} />;
 }
 
-function buildChairOffsets(seats: number) {
-    const radius = 0.82;
+function buildChairOffsets(seats: number, shape: TableShape) {
+    const radius = shape === 'rectangle' ? 0.94 : 0.82;
     const count = Math.max(2, Math.min(12, seats));
+
+    if (shape === 'rectangle') {
+        const halfW = 0.95;
+        const halfD = 0.62;
+        if (count <= 4) {
+            return [
+                [0, 0, -halfD],
+                [halfW, 0, 0],
+                [0, 0, halfD],
+                [-halfW, 0, 0],
+            ].slice(0, count) as Array<[number, number, number]>;
+        }
+
+        const perimeter: Array<[number, number, number]> = [];
+        const sideCount = Math.max(2, Math.ceil((count - 2) / 2));
+        for (let i = 0; i < sideCount; i++) {
+            const t = sideCount === 1 ? 0.5 : i / (sideCount - 1);
+            const z = -halfD + t * (halfD * 2);
+            perimeter.push([halfW, 0, z]);
+            if (perimeter.length < count) perimeter.push([-halfW, 0, z]);
+            if (perimeter.length >= count) break;
+        }
+        if (perimeter.length < count) perimeter.push([0, 0, -halfD - 0.1]);
+        if (perimeter.length < count) perimeter.push([0, 0, halfD + 0.1]);
+        return perimeter.slice(0, count);
+    }
 
     if (count === 4) {
         return [
@@ -1580,13 +893,16 @@ function RealisticChairFallback() {
     );
 }
 
-function TableTopFallback({ rectangular }: { rectangular: boolean }) {
+function TableTopFallback({ rectangular, color }: { rectangular: boolean; color: TableColor }) {
+    const accent = color;
+    const baseTone = '#334155';
+
     if (rectangular) {
         return (
             <group>
                 <mesh castShadow receiveShadow>
                     <boxGeometry args={[1.38, 0.12, 0.78]} />
-                    <meshStandardMaterial color="#f97316" roughness={0.35} metalness={0.1} />
+                    <meshStandardMaterial color={accent} roughness={0.35} metalness={0.1} />
                 </mesh>
                 {[
                     [0.58, -0.24, 0.28],
@@ -1596,7 +912,7 @@ function TableTopFallback({ rectangular }: { rectangular: boolean }) {
                 ].map((pos, idx) => (
                     <mesh key={`table-leg-${idx}`} castShadow receiveShadow position={pos as [number, number, number]}>
                         <boxGeometry args={[0.09, 0.48, 0.09]} />
-                        <meshStandardMaterial color="#334155" roughness={0.5} metalness={0.28} />
+                        <meshStandardMaterial color={baseTone} roughness={0.5} metalness={0.28} />
                     </mesh>
                 ))}
             </group>
@@ -1607,7 +923,7 @@ function TableTopFallback({ rectangular }: { rectangular: boolean }) {
         <group>
             <mesh castShadow receiveShadow>
                 <cylinderGeometry args={[0.72, 0.72, 0.12, 46]} />
-                <meshStandardMaterial color="#f97316" roughness={0.38} metalness={0.08} />
+                <meshStandardMaterial color={accent} roughness={0.38} metalness={0.08} />
             </mesh>
             <mesh position={[0, 0.07, 0]} castShadow receiveShadow>
                 <cylinderGeometry args={[0.26, 0.26, 0.02, 36]} />
@@ -1638,8 +954,10 @@ function TableFurnitureGroup({
 }) {
     const groupRef = useRef<THREE.Group | null>(null);
     const world = normalizedToWorld(table.x, table.y);
-    const isRectangular = false;
-    const chairOffsets = useMemo(() => buildChairOffsets(table.seats), [table.seats]);
+    const tableShape = resolveTableShape(table);
+    const tableColor = resolveTableColor(table);
+    const isRectangular = tableShape === 'rectangle';
+    const chairOffsets = useMemo(() => buildChairOffsets(table.seats, tableShape), [table.seats, tableShape]);
 
     useEffect(() => {
         setRef(table.id, groupRef.current);
@@ -1657,15 +975,12 @@ function TableFurnitureGroup({
             }}
         >
             <group position={[0, 0.38, 0]}>
-                <GlbOrFallback
-                    modelPath={isRectangular ? '/assets/models/table_rectangle_6_seat.glb' : '/assets/models/table_standard_4_seat.glb'}
-                    scale={[0.9, 0.9, 0.9]}
-                    fallback={<TableTopFallback rectangular={isRectangular} />}
-                />
+                <TableTopFallback rectangular={isRectangular} color={tableColor} />
             </group>
 
             {chairOffsets.map((offset, index) => {
-                const angle = Math.atan2(-offset[2], -offset[0]) + Math.PI / 2;
+                const facingToCenter = Math.atan2(-offset[0], -offset[2]);
+                const angle = facingToCenter;
                 return (
                     <group key={`${table.id}-chair-${index}`} position={offset} rotation={[0, angle, 0]}>
                         <group position={[0, 0.23, 0]}>
@@ -1932,7 +1247,6 @@ export default function TablesQRCodesPage() {
     const [showManageModal, setShowManageModal] = useState(false);
     const [showUpgradeModal, setShowUpgradeModal] = useState(false);
     const [isAiScanning, setIsAiScanning] = useState(false);
-    const [showCameraModal, setShowCameraModal] = useState(false);
     const [autoLayoutStep, setAutoLayoutStep] = useState<'idle' | 'scanning' | 'review3d'>('idle');
     const [reviewViewMode, setReviewViewMode] = useState<'3d' | '2d'>('3d');
     const [transformMode, setTransformMode] = useState<'translate' | 'rotate'>('translate');
@@ -2074,6 +1388,8 @@ export default function TablesQRCodesPage() {
                 seats: tables[idx]?.seats || 4,
                 elevation: 0,
                 rotationY: 0,
+                tableShape: item.type === 'booth' ? 'rectangle' : 'round',
+                tableColor: '#8b5e3c' as TableColor,
             }));
 
             setDetectedTables(nextDetected);
@@ -2088,68 +1404,11 @@ export default function TablesQRCodesPage() {
         }
     }, [userSubscription, generateLayoutFromImage, tables]);
 
-    const onScanButtonClick = useCallback(() => {
-        if (userSubscription !== 'pro') {
-            setShowUpgradeModal(true);
-            return;
-        }
-
-        if (!navigator?.mediaDevices?.getUserMedia) {
-            photoInputRef.current?.click();
-            return;
-        }
-
-        setShowCameraModal(true);
-    }, [userSubscription]);
-
     const onPhotoPicked = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (!file) return;
         await applyAiLayout(file);
     }, [applyAiLayout]);
-
-    const onCameraScanComplete = useCallback(({ previewUrl, detectedTables: yoloTables }: { previewUrl: string; detectedTables: DetectedTable3D[] }) => {
-        setShowCameraModal(false);
-
-        if (previewUrl) setCapturedImagePreview(previewUrl);
-
-        // ── Use YOLO detections directly ──
-        // The camera scanner already ran YOLO, identified table positions in world-space,
-        // and locked them. Skip re-sending to Gemini; go straight into the 3D editor.
-        if (yoloTables.length > 0) {
-            setDetectedTables(yoloTables);
-            setReviewViewMode(isMobileViewport ? '2d' : '3d');
-            setAutoLayoutStep('review3d');
-            toast.success(`YOLO scan complete — ${yoloTables.length} table${yoloTables.length > 1 ? 's' : ''} detected. Drag to adjust.`);
-            return;
-        }
-
-        // Fallback: if YOLO found nothing, re-analyze the captured frame with Gemini AI
-        toast.info('No tables locked by YOLO scan. Re-analyzing with AI…');
-        setAutoLayoutStep('scanning');
-        setIsAiScanning(true);
-
-        fetch(previewUrl)
-            .then(r => r.blob())
-            .then(blob => generateLayoutFromImage(blob))
-            .then(aiTables => {
-                const nextDetected = aiTables.map((item, idx) => ({
-                    ...item,
-                    seats: tables[idx]?.seats || 4,
-                    elevation: 0,
-                    rotationY: 0,
-                }));
-                setDetectedTables(nextDetected);
-                setReviewViewMode(isMobileViewport ? '2d' : '3d');
-                setAutoLayoutStep('review3d');
-                toast.success(`AI Analysis Complete: ${nextDetected.length} tables detected`);
-            })
-            .catch(() => {
-                setAutoLayoutStep('idle');
-                toast.error('AI analysis was not confident. Please retake a clearer photo.');
-            })
-            .finally(() => setIsAiScanning(false));
-    }, [generateLayoutFromImage, isMobileViewport, tables]);
 
     const updateDetectedTable = useCallback((id: string, patch: Partial<DetectedTable3D>) => {
         setDetectedTables((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
@@ -2164,6 +1423,8 @@ export default function TablesQRCodesPage() {
             seats: Math.max(2, Math.min(12, item.capacity)),
             elevation: 0,
             rotationY: 0,
+            tableShape: item.shape,
+            tableColor: '#8b5e3c' as TableColor,
         }));
 
         setDetectedTables(mapped);
@@ -2190,6 +1451,8 @@ export default function TablesQRCodesPage() {
                     seats: table.seats || 4,
                     elevation: 0,
                     rotationY: 0,
+                    tableShape: 'round' as const,
+                    tableColor: '#8b5e3c' as TableColor,
                 } as DetectedTable3D;
             });
 
@@ -2202,6 +1465,31 @@ export default function TablesQRCodesPage() {
         setReviewViewMode(isMobileViewport ? '2d' : '3d');
         setAutoLayoutStep('review3d');
     }, [userSubscription, detectedTables, tables, mapAbsoluteToNormalized, isMobileViewport]);
+
+    useEffect(() => {
+        if (viewMode !== 'floor') return;
+        if (autoLayoutStep === 'scanning') return;
+        if (detectedTables.length > 0) return;
+        if (tables.length === 0) return;
+
+        const seeded = tables.map((table, idx) => {
+            const normalized = mapAbsoluteToNormalized(table.x, table.y);
+            return {
+                id: table.id || `T-${String(idx + 1).padStart(2, '0')}`,
+                type: 'standard' as const,
+                x: normalized.x,
+                y: normalized.y,
+                seats: table.seats || 4,
+                elevation: 0,
+                rotationY: 0,
+                tableShape: 'round' as const,
+                tableColor: '#8b5e3c' as TableColor,
+            } as DetectedTable3D;
+        });
+
+        setDetectedTables(seeded);
+        setReviewViewMode(isMobileViewport ? '2d' : '3d');
+    }, [viewMode, autoLayoutStep, detectedTables.length, tables, mapAbsoluteToNormalized, isMobileViewport]);
 
     const saveReviewedLayoutToFirebase = useCallback(async () => {
         if (!tenantId) return;
@@ -2634,16 +1922,6 @@ export default function TablesQRCodesPage() {
                                     <motion.button
                                         whileHover={{ scale: 1.02 }}
                                         whileTap={{ scale: 0.98 }}
-                                        onClick={onScanButtonClick}
-                                        className="flex items-center gap-2 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-sm font-medium shadow-md transition-all"
-                                    >
-                                        <Camera className="w-4 h-4" />
-                                        Live Camera Scan (Pro)
-                                        <ProBadge />
-                                    </motion.button>
-                                    <motion.button
-                                        whileHover={{ scale: 1.02 }}
-                                        whileTap={{ scale: 0.98 }}
                                         onClick={() => photoInputRef.current?.click()}
                                         className="flex items-center gap-2 px-4 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-xl text-sm font-medium"
                                     >
@@ -2704,7 +1982,7 @@ export default function TablesQRCodesPage() {
                                         />
                                     </div>
                                 </motion.div>
-                            ) : autoLayoutStep === 'review3d' ? (
+                            ) : (
                                 <motion.div
                                     key="ai-3d-review"
                                     initial={{ opacity: 0, y: 10 }}
@@ -2845,15 +2123,21 @@ export default function TablesQRCodesPage() {
                                                                     }}
                                                                     onPointerCancel={endDetectedDrag}
                                                                     className={cn(
-                                                                        'absolute rounded-2xl cursor-grab border-2 border-emerald-500 bg-emerald-100/90 shadow-[0_4px_12px_rgba(16,185,129,0.18)] text-emerald-900 flex flex-col items-center justify-center touch-none',
-                                                                        table.type === 'booth' ? 'w-28 h-20' : 'w-24 h-24'
+                                                                        'absolute rounded-2xl cursor-grab border-2 shadow-[0_4px_12px_rgba(15,23,42,0.16)] text-slate-900 flex flex-col items-center justify-center touch-none',
+                                                                        resolveTableShape(table) === 'rectangle' ? 'w-28 h-20' : 'w-24 h-24'
                                                                     )}
-                                                                    style={{ left: `${table.x}%`, top: `${table.y}%`, transform: 'translate(-50%, -50%)' }}
+                                                                    style={{
+                                                                        left: `${table.x}%`,
+                                                                        top: `${table.y}%`,
+                                                                        transform: 'translate(-50%, -50%)',
+                                                                        borderColor: resolveTableColor(table),
+                                                                        backgroundColor: hexToRgba(resolveTableColor(table), 0.22),
+                                                                    }}
                                                                     animate={{ scale: draggingDetectedId === table.id ? 1.04 : 1 }}
                                                                 >
                                                                     <div className="text-xl leading-none">🍽️</div>
                                                                     <div className="mt-0.5 text-sm font-semibold tracking-wide">{table.id}</div>
-                                                                    <div className="text-[11px] text-emerald-700">{table.seats} seats</div>
+                                                                    <div className="text-[11px] text-slate-700">{table.seats} seats</div>
                                                                 </motion.div>
                                                             ))}
                                                         </div>
@@ -2923,6 +2207,37 @@ export default function TablesQRCodesPage() {
                                                             >
                                                                 {[2, 4, 6, 8, 10, 12].map((n) => <option key={table.id ? `${table.id}-cap-${n}` : `cap-${index}-${n}`} value={n}>{n}</option>)}
                                                             </select>
+
+                                                            <label className="text-slate-500">Shape</label>
+                                                            <select
+                                                                value={resolveTableShape(table)}
+                                                                onChange={(e) => updateDetectedTable(table.id, { tableShape: e.target.value as TableShape })}
+                                                                className="h-8 rounded-md border border-slate-200 bg-white px-2 text-slate-700"
+                                                            >
+                                                                <option value="round">Round</option>
+                                                                <option value="rectangle">Rectangle</option>
+                                                            </select>
+
+                                                            <label className="text-slate-500">Color</label>
+                                                            <div className="flex items-center gap-1.5">
+                                                                {TABLE_COLOR_OPTIONS.map((option) => {
+                                                                    const activeColor = resolveTableColor(table);
+                                                                    const active = activeColor === option.value;
+                                                                    return (
+                                                                        <button
+                                                                            key={`${table.id}-${option.value}`}
+                                                                            type="button"
+                                                                            title={option.label}
+                                                                            onClick={() => updateDetectedTable(table.id, { tableColor: option.value })}
+                                                                            className={cn(
+                                                                                'w-6 h-6 rounded-full border transition-all',
+                                                                                active ? 'border-slate-900 ring-2 ring-slate-300' : 'border-slate-200'
+                                                                            )}
+                                                                            style={{ backgroundColor: option.value }}
+                                                                        />
+                                                                    );
+                                                                })}
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 ))}
@@ -2930,10 +2245,10 @@ export default function TablesQRCodesPage() {
 
                                             <div className="mt-3 flex gap-2">
                                                 <button
-                                                    onClick={() => setAutoLayoutStep('idle')}
+                                                    onClick={() => setViewMode('qr')}
                                                     className="flex-1 h-9 rounded-lg border border-slate-200 bg-white text-slate-600 text-sm"
                                                 >
-                                                    Cancel
+                                                    Back to QR
                                                 </button>
                                                 <button
                                                     onClick={confirmAndSync3D}
@@ -2945,17 +2260,6 @@ export default function TablesQRCodesPage() {
                                             </div>
                                         </div>
                                     </div>
-                                </motion.div>
-                            ) : (
-                                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-white rounded-2xl p-4 lg:p-6 border border-slate-200/60 shadow-sm">
-                                    <FloorPlanEditor
-                                        tables={tables} setTables={updater => { setTables(updater); setHasChanges(true); }}
-                                        walls={walls} setWalls={updater => { setWalls(updater); setHasChanges(true); }}
-                                        desks={desks} setDesks={updater => { setDesks(updater); setHasChanges(true); }}
-                                        scanning={isAiScanning}
-                                        floorPlanRef={floorPlanRef}
-                                    />
-                                    <p className="mt-4 text-sm text-slate-400">💡 <span className="font-medium">Drag</span> to move • <span className="font-medium">Shift + Click</span> to delete walls/desks</p>
                                 </motion.div>
                             )}
                         </AnimatePresence>
@@ -3019,15 +2323,6 @@ export default function TablesQRCodesPage() {
                         </motion.div>
                     </motion.div>
                 )}
-                <CameraModal
-                    open={showCameraModal}
-                    onClose={() => setShowCameraModal(false)}
-                    onScanComplete={onCameraScanComplete}
-                    onUseUpload={() => {
-                        setShowCameraModal(false);
-                        photoInputRef.current?.click();
-                    }}
-                />
             </AnimatePresence>
         </div>
     );
