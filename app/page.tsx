@@ -2,9 +2,8 @@
 import { useEffect } from 'react';
 
 const NUM_FRAMES = 48;
-const UHD_WIDTH = 3840;
-const UHD_HEIGHT = 2160;
-const UHD_PIXELS = UHD_WIDTH * UHD_HEIGHT;
+const MAX_RENDER_PIXELS_DESKTOP = 3600000;
+const MAX_RENDER_PIXELS_MOBILE = 2200000;
 
 export default function RootPage() {
   useEffect(() => {
@@ -65,16 +64,27 @@ export default function RootPage() {
       const canvas = document.getElementById('cv') as HTMLCanvasElement | null;
       const ctx = canvas ? canvas.getContext('2d') : null;
       let cw = 0, ch = 0, currentIdx = 0;
+      let pendingFrame: number | null = null;
+
+      function queueDraw(idx: number) {
+        pendingFrame = idx;
+        if ((queueDraw as any)._raf) return;
+        (queueDraw as any)._raf = requestAnimationFrame(() => {
+          (queueDraw as any)._raf = null;
+          if (pendingFrame !== null) drawFrame(pendingFrame);
+        });
+      }
 
       function resizeCanvas() {
         if (!canvas) return;
         const viewportW = window.innerWidth;
         const viewportH = window.innerHeight;
-        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
         const viewportPixels = viewportW * viewportH * dpr * dpr;
 
-        // Keep desktop scroll playback crisp by targeting at least a 4K render surface.
-        const targetPixels = viewportW >= 1024 ? Math.max(viewportPixels, UHD_PIXELS) : viewportPixels;
+        // Cap render resolution to keep scroll smooth on most hardware.
+        const maxPixels = viewportW >= 1024 ? MAX_RENDER_PIXELS_DESKTOP : MAX_RENDER_PIXELS_MOBILE;
+        const targetPixels = Math.min(viewportPixels, maxPixels);
         const renderScale = Math.sqrt(targetPixels / (viewportW * viewportH));
 
         cw = canvas.width = Math.round(viewportW * renderScale);
@@ -86,7 +96,7 @@ export default function RootPage() {
           ctx.imageSmoothingEnabled = true;
           ctx.imageSmoothingQuality = 'high';
         }
-        drawFrame(currentIdx);
+        queueDraw(currentIdx);
       }
 
       function drawFrame(idx: number) {
@@ -106,9 +116,18 @@ export default function RootPage() {
       const hint  = document.getElementById('hint')  as HTMLElement | null;
       const phone = document.getElementById('phone') as HTMLElement | null;
 
-      /* Keep hero visual stable during scroll */
-      currentIdx = 0;
-      drawFrame(currentIdx);
+      /* Frame scrub */
+      ScrollTrigger.create({
+        start: 0,
+        end: spacerEnd,
+        onUpdate: (self: any) => {
+          const idx = Math.min(Math.floor(self.progress * NUM_FRAMES), NUM_FRAMES - 1);
+          if (idx !== currentIdx) {
+            currentIdx = idx;
+            queueDraw(idx);
+          }
+        }
+      });
 
       /* Hint */
       ScrollTrigger.create({ start: 100, end: 200, onEnter: () => { if (hint) hint.style.opacity = '0'; }, onLeaveBack: () => { if (hint) hint.style.opacity = '1'; } });
@@ -162,25 +181,22 @@ export default function RootPage() {
       /* Premium scroll animation pass */
       const premiumTargets = gsap.utils.toArray('#sec-stats .titem, #sec-bento .bcard, #sec-advantage .acard, #sec-cta .ctacard') as HTMLElement[];
       premiumTargets.forEach((el) => {
-        gsap.fromTo(el,
-          {
-            opacity: 0,
-            y: 56,
-            scale: 0.98,
-          },
-          {
-            opacity: 1,
-            y: 0,
-            scale: 1,
-            ease: 'power2.out',
-            scrollTrigger: {
-              trigger: el,
-              start: 'top 88%',
-              end: 'top 62%',
-              scrub: true,
-            }
+        gsap.fromTo(el, {
+          opacity: 0,
+          y: 42,
+          scale: 0.985,
+        }, {
+          opacity: 1,
+          y: 0,
+          scale: 1,
+          duration: 0.55,
+          ease: 'power2.out',
+          scrollTrigger: {
+            trigger: el,
+            start: 'top 88%',
+            once: true,
           }
-        );
+        });
       });
 
       /* Reveal */
