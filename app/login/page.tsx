@@ -3,10 +3,10 @@
 import { memo, useMemo, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useRouter } from 'next/navigation';
-import { Eye, EyeOff, Mail, Lock, AlertCircle, Loader2, ShieldCheck } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, AlertCircle, Loader2, ShieldCheck, LogOut } from 'lucide-react';
 import NexRestoLogo from '@/components/ui/NexRestoLogo';
 import { signInWithEmail, signInWithGoogle, signUpAndCreateTenant } from '@/lib/firebase-auth';
-import { signInWithCredential, GoogleAuthProvider, signInWithEmailAndPassword } from 'firebase/auth';
+import { signInWithCredential, GoogleAuthProvider, signInWithEmailAndPassword, signOut as firebaseSignOut } from 'firebase/auth';
 import { tenantAuth, adminAuth } from '@/lib/firebase';
 import { useAuth } from '@/context/AuthContext';
 import { useSuperAdminAuth } from '@/context/SuperAdminAuthContext';
@@ -80,8 +80,15 @@ export default function LoginPage() {
     const [formLoading, setFormLoading] = useState(false);
     const [googleLoading, setGoogleLoading] = useState(false);
     const [resetLoading, setResetLoading] = useState(false);
+    const [signOutLoading, setSignOutLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [info, setInfo] = useState<string | null>(null);
+
+    const hasFirebasePublicConfig = Boolean(
+        process.env.NEXT_PUBLIC_FIREBASE_API_KEY &&
+        process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID &&
+        process.env.NEXT_PUBLIC_FIREBASE_APP_ID
+    );
 
     // OTP verification state
     const [enteredOtp, setEnteredOtp] = useState('');
@@ -111,6 +118,10 @@ export default function LoginPage() {
 
     const handleEmailAuth = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!hasFirebasePublicConfig) {
+            setError('Hosted environment is missing Firebase public config. Set NEXT_PUBLIC_FIREBASE_API_KEY, NEXT_PUBLIC_FIREBASE_PROJECT_ID, and NEXT_PUBLIC_FIREBASE_APP_ID in your deployment environment.');
+            return;
+        }
         if (!email || !password) { setError('Please fill in all fields.'); return; }
         if (password.length < 8) { setError('Password must be at least 8 characters.'); return; }
         setFormLoading(true); setError(null); setInfo(null);
@@ -240,19 +251,32 @@ export default function LoginPage() {
             }
         } catch (err: any) {
             const msg = err?.message ?? 'Authentication failed';
-            if (msg.includes('auth/invalid-credential') || msg.includes('auth/wrong-password') || msg.includes('auth/user-not-found')) {
+            const code = typeof err?.code === 'string' ? err.code : '';
+            if (msg.includes('auth/invalid-credential') || msg.includes('auth/wrong-password') || msg.includes('auth/user-not-found') || code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') {
                 setError('Incorrect email or password. Please try again.');
-            } else if (msg.includes('auth/internal-error')) {
-                setError('Firebase authentication temporarily failed. Please try again in a few seconds. If this continues, confirm Email/Password sign-in is enabled in Firebase Auth and this account exists.');
+            } else if (code === 'auth/invalid-api-key' || code === 'auth/app-deleted') {
+                setError('Firebase API key/app config is invalid in the hosted environment. Verify NEXT_PUBLIC Firebase variables in your hosting dashboard.');
+            } else if (code === 'auth/configuration-not-found' || code === 'auth/operation-not-allowed') {
+                setError('Email/Password sign-in is not enabled in Firebase Auth. Enable it in Firebase Console → Authentication → Sign-in method.');
+            } else if (code === 'auth/network-request-failed') {
+                setError('Network error while connecting to Firebase. Check internet/firewall settings and try again.');
+            } else if (code === 'auth/too-many-requests') {
+                setError('Too many failed attempts. Please wait a moment and try again.');
+            } else if (code === 'auth/unauthorized-domain') {
+                setError('This domain is not authorized for Firebase Auth. Add your hosted domain in Firebase Console → Authentication → Settings → Authorized domains.');
+            } else if (msg.includes('auth/internal-error') || code === 'auth/internal-error') {
+                setError('Firebase authentication failed on the hosted environment. Check Firebase project config, authorized domains, and that Email/Password sign-in is enabled.');
             } else if (msg.includes('auth/email-already-in-use') || msg.includes('already registered')) {
                 setError('This email is already registered. Try signing in instead.');
-            } else if (msg.includes('auth/too-many-requests')) {
-                setError('Too many failed attempts. Please wait a moment and try again.');
             } else if (msg.includes('not authorized') || msg.includes('not the owner')) {
                 setError('Your account does not have dashboard access. Contact the administrator.');
             } else {
                 setError(msg);
             }
+            console.error('[LoginPage] Email auth error', {
+                code: code || 'unknown',
+                message: msg,
+            });
         } finally { setFormLoading(false); }
     };
 
@@ -363,6 +387,27 @@ export default function LoginPage() {
             setError(err?.message || 'Failed to send reset email. Please try again.');
         } finally {
             setResetLoading(false);
+        }
+    };
+
+    const handleSignOutSession = async () => {
+        setSignOutLoading(true);
+        setError(null);
+        try {
+            await Promise.allSettled([
+                firebaseSignOut(tenantAuth),
+                firebaseSignOut(adminAuth),
+            ]);
+
+            if (typeof window !== 'undefined') {
+                sessionStorage.removeItem('pending_admin_token');
+            }
+
+            setInfo('Signed out of all sessions on this device. You can now sign in again.');
+        } catch {
+            setError('Could not clear session right now. Please refresh and try again.');
+        } finally {
+            setSignOutLoading(false);
         }
     };
 
@@ -498,6 +543,18 @@ export default function LoginPage() {
                             <motion.button onClick={handleGoogle} disabled={googleLoading} whileHover={{ scale: googleLoading ? 1 : 1.02 }} whileTap={{ scale: googleLoading ? 1 : 0.98 }} className="w-full h-12 flex items-center justify-center gap-3 bg-slate-800/60 hover:bg-slate-700/60 border border-slate-700/60 hover:border-slate-500/60 text-white rounded-xl font-medium text-sm transition-all disabled:opacity-60">
                                 {googleLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <GoogleIcon />}
                                 {googleLoading ? 'Redirecting to Google…' : 'Sign in with Google'}
+                            </motion.button>
+
+                            <motion.button
+                                type="button"
+                                onClick={handleSignOutSession}
+                                disabled={signOutLoading || formLoading || googleLoading}
+                                whileHover={{ scale: signOutLoading ? 1 : 1.01 }}
+                                whileTap={{ scale: signOutLoading ? 1 : 0.99 }}
+                                className="w-full mt-3 h-11 flex items-center justify-center gap-2 bg-transparent border border-slate-700/70 hover:border-slate-500/70 text-slate-300 hover:text-white rounded-xl font-medium text-sm transition-all disabled:opacity-60"
+                            >
+                                {signOutLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogOut className="w-4 h-4" />}
+                                {signOutLoading ? 'Signing out…' : 'Sign out on this device'}
                             </motion.button>
 
                             <p className="mt-6 text-center text-xs text-slate-500 leading-relaxed">

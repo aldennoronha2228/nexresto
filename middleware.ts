@@ -46,7 +46,9 @@ function buildSecurityHeaders(nonce: string, allowCamera: boolean): Record<strin
     const csp = [
         `default-src 'self'`,
         // Scripts: allow self, inline scripts, eval, and Vercel/Firebase domains
-        `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://vercel.live https://cdn.vercel-insights.com https://cdnjs.cloudflare.com https://*.firebaseapp.com https://*.googleapis.com`,
+        `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://vercel.live https://cdn.vercel-insights.com https://cdnjs.cloudflare.com https://apis.google.com https://www.gstatic.com https://accounts.google.com https://*.firebaseapp.com https://*.googleapis.com https://*.gstatic.com`,
+        // Explicit script element policy for stricter browsers
+        `script-src-elem 'self' 'unsafe-inline' https://vercel.live https://cdn.vercel-insights.com https://cdnjs.cloudflare.com https://apis.google.com https://www.gstatic.com https://accounts.google.com https://*.firebaseapp.com https://*.googleapis.com https://*.gstatic.com`,
         // Styles: self + unsafe-inline (required by Tailwind/Next.js)
         `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com`,
         // Fonts
@@ -54,10 +56,11 @@ function buildSecurityHeaders(nonce: string, allowCamera: boolean): Record<strin
         // Images: self + Unsplash + data URIs + avatars + Firebase storage
         `img-src 'self' data: blob: https://images.unsplash.com https://lh3.googleusercontent.com https://avatars.githubusercontent.com https://firebasestorage.googleapis.com`,
         // API/WebSocket connections: self + Firebase + Vercel
-        `connect-src 'self' https://*.firebaseio.com wss://*.firebaseio.com https://*.googleapis.com https://vercel.live wss://ws-us3.pusher.com https://vitals.vercel-insights.com`,
+        `connect-src 'self' https://*.firebaseio.com wss://*.firebaseio.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com https://*.googleapis.com https://*.gstatic.com https://vercel.live wss://ws-us3.pusher.com https://vitals.vercel-insights.com`,
         // No iframes
         `frame-ancestors 'none'`,
-        `frame-src 'none'`,
+        // Firebase auth popup/iframe + Google account chooser
+        `frame-src 'self' https://${firebaseHost} https://accounts.google.com https://*.google.com https://*.firebaseapp.com`,
         // Media (camera review modal requires local media stream support on tables dashboard)
         allowCamera ? `media-src 'self' blob: data:` : `media-src 'none'`,
         // Object/embed
