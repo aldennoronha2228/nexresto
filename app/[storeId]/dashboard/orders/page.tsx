@@ -833,21 +833,6 @@ export default function LiveOrdersPage() {
                             </div>
                         </div>
 
-                        {isMobileViewport && (
-                            <div className="mb-3">
-                                <button
-                                    onClick={() => setFloorViewMode((prev) => (prev === '2d' ? '3d' : '2d'))}
-                                    className={cn(
-                                        'w-full h-10 rounded-xl text-xs font-semibold border transition-colors',
-                                        floorViewMode === '3d'
-                                            ? 'bg-slate-900 text-white border-slate-900'
-                                            : 'bg-indigo-50 text-indigo-700 border-indigo-200'
-                                    )}
-                                >
-                                    {floorViewMode === '3d' ? 'Switch to 2D Map' : 'Open 3D Floor View'}
-                                </button>
-                            </div>
-                        )}
                         <div className="rounded-2xl border border-white/30 overflow-x-auto overflow-y-visible">
                             {floorViewMode === '2d' ? (
                                 <div
