@@ -10,12 +10,12 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as THREE from 'three';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { setTables as setSharedTables, type Table } from '@/data/sharedData';
+import { getDefaultTables, setTables as setSharedTables, type Table } from '@/data/sharedData';
 import { useAuth } from '@/context/AuthContext';
 import { useRestaurant } from '@/hooks/useRestaurant';
 import { ProFeatureGate, ProBadge } from '@/components/dashboard/ProFeatureGate';
 import { adminAuth, db, tenantAuth } from '@/lib/firebase';
-import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { addDoc, collection, doc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 
 const MENU_CUSTOMER_PATH = process.env.NEXT_PUBLIC_MENU_CUSTOMER_PATH ?? '/customer';
 
@@ -1279,6 +1279,21 @@ export default function TablesQRCodesPage() {
         throw new Error('Missing active session');
     }, []);
 
+    const isSameJson = useCallback((a: unknown, b: unknown) => {
+        return JSON.stringify(a) === JSON.stringify(b);
+    }, []);
+
+    const getNextTableId = useCallback((ids: string[]) => {
+        const highest = ids.reduce((max, id) => {
+            const match = String(id).match(/(\d+)/);
+            if (!match) return max;
+            const n = Number(match[1]);
+            return Number.isFinite(n) ? Math.max(max, n) : max;
+        }, 0);
+
+        return `T-${String(highest + 1).padStart(2, '0')}`;
+    }, []);
+
     const saveLayoutToServer = useCallback(async (nextTables: Table[], nextWalls: Wall[], nextDesks: Desk[], nextPlans: FloorPlan[]) => {
         if (!tenantId) return;
         const token = await getActiveToken();
@@ -1499,8 +1514,10 @@ export default function TablesQRCodesPage() {
     const saveReviewedLayoutToFirebase = useCallback(async () => {
         if (!tenantId) return;
 
+        const existingById = new Map(tables.map((table) => [table.id, table]));
+
         const updatedTables = detectedTables.map((item, idx) => {
-            const prev = tables[idx];
+            const prev = existingById.get(item.id);
             const abs = mapNormalizedToAbsolute(item.x, item.y);
             return {
                 id: prev?.id || item.id,
@@ -1517,6 +1534,37 @@ export default function TablesQRCodesPage() {
         await saveLayoutToServer(updatedTables, walls, desks, floorPlans);
         toast.success('Floor plan saved for this hotel');
     }, [tenantId, detectedTables, tables, mapNormalizedToAbsolute, saveLayoutToServer, walls, desks, floorPlans]);
+
+    const addDetectedTable = useCallback(() => {
+        setDetectedTables((prev) => {
+            const allKnownIds = [
+                ...tables.map((t) => t.id),
+                ...prev.map((t) => t.id),
+            ];
+            const nextId = getNextTableId(allKnownIds);
+            const nextIndex = prev.length;
+            const col = nextIndex % 4;
+            const row = Math.floor(nextIndex / 4);
+            const nextX = Number((18 + col * 20).toFixed(2));
+            const nextY = Number((20 + row * 18).toFixed(2));
+
+            return [
+                ...prev,
+                {
+                    id: nextId,
+                    type: 'standard',
+                    x: Math.max(8, Math.min(92, nextX)),
+                    y: Math.max(10, Math.min(90, nextY)),
+                    seats: 4,
+                    elevation: 0,
+                    rotationY: 0,
+                    tableShape: 'round',
+                    tableColor: '#8b5e3c' as TableColor,
+                },
+            ];
+        });
+        toast.success('Added table to AI review');
+    }, [tables, getNextTableId]);
 
     const autoAlignDetectedTables = useCallback(() => {
         if (detectedTables.length === 0) {
@@ -1572,8 +1620,10 @@ export default function TablesQRCodesPage() {
     const confirmAndSync3D = useCallback(async () => {
         if (!tenantId) return;
 
+        const existingById = new Map(tables.map((table) => [table.id, table]));
+
         const updated = detectedTables.map((item, idx) => {
-            const prev = tables[idx];
+            const prev = existingById.get(item.id);
             const abs = mapNormalizedToAbsolute(item.x, item.y);
             return {
                 id: prev?.id || item.id,
@@ -1611,7 +1661,7 @@ export default function TablesQRCodesPage() {
         const loadState = async () => {
         setBaseUrl(resolveMenuBaseUrl());
 
-        const defaultSeedTables: Table[] = [];
+        const defaultSeedTables: Table[] = getDefaultTables();
         const defaultSeedWalls: Wall[] = [];
         const defaultSeedDesks: Desk[] = [];
         const defaultSeedPlans: FloorPlan[] = [{
@@ -1665,7 +1715,7 @@ export default function TablesQRCodesPage() {
             }
         }
 
-        const resolvedTables: Table[] = [];
+        const resolvedTables: Table[] = getDefaultTables();
         if (!active) return;
         setTables(resolvedTables);
         setWalls(defaultSeedWalls);
@@ -1681,6 +1731,41 @@ export default function TablesQRCodesPage() {
             active = false;
         };
     }, [tenantId, scopedKey, getActiveToken, saveLayoutToServer]);
+
+    useEffect(() => {
+        if (!tenantId || !isLoaded) return;
+
+        const layoutRef = doc(db, 'restaurants', tenantId, 'settings', 'floor_layout');
+        const unsubscribe = onSnapshot(
+            layoutRef,
+            (snapshot) => {
+                if (!snapshot.exists()) return;
+                const data = snapshot.data() as Record<string, unknown>;
+
+                const incomingTables = Array.isArray(data?.tables) ? (data.tables as Table[]) : [];
+                const incomingWalls = Array.isArray(data?.walls) ? (data.walls as Wall[]) : [];
+                const incomingDesks = Array.isArray(data?.desks) ? (data.desks as Desk[]) : [];
+                const incomingPlans = Array.isArray(data?.floorPlans) ? (data.floorPlans as FloorPlan[]) : [];
+
+                setTables((prev) => (isSameJson(prev, incomingTables) ? prev : incomingTables));
+                setWalls((prev) => (isSameJson(prev, incomingWalls) ? prev : incomingWalls));
+                setDesks((prev) => (isSameJson(prev, incomingDesks) ? prev : incomingDesks));
+                setFloorPlans((prev) => {
+                    const normalizedIncoming = incomingPlans.length > 0
+                        ? incomingPlans
+                        : [{ id: '1', name: 'Default Layout', tables: incomingTables, walls: incomingWalls, desks: incomingDesks }];
+                    return isSameJson(prev, normalizedIncoming) ? prev : normalizedIncoming;
+                });
+
+                setSharedTables(incomingTables, tenantId);
+            },
+            () => {
+                // Keep existing local layout if real-time listener temporarily fails.
+            }
+        );
+
+        return () => unsubscribe();
+    }, [tenantId, isLoaded, isSameJson]);
 
     useEffect(() => {
         const syncViewport = () => {
@@ -2169,6 +2254,12 @@ export default function TablesQRCodesPage() {
                                         <div className="w-full lg:w-80 rounded-xl border border-slate-200 bg-slate-50 p-3">
                                             <h4 className="text-sm font-semibold text-slate-800 mb-2">Detected Tables</h4>
                                             <div className="mb-3 grid grid-cols-2 gap-2">
+                                                <button
+                                                    onClick={addDetectedTable}
+                                                    className="h-9 rounded-lg bg-slate-800 hover:bg-slate-900 text-white text-xs font-medium shadow-sm"
+                                                >
+                                                    Add Table
+                                                </button>
                                                 <button
                                                     onClick={renderValidated3DLayout}
                                                     className="h-9 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-medium shadow-sm"
