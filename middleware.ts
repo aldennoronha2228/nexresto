@@ -46,7 +46,7 @@ function buildSecurityHeaders(nonce: string, allowCamera: boolean): Record<strin
     const csp = [
         `default-src 'self'`,
         // Scripts: allow self, inline scripts, eval, and Vercel/Firebase domains
-        `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://vercel.live https://cdn.vercel-insights.com https://*.firebaseapp.com https://*.googleapis.com`,
+        `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://vercel.live https://cdn.vercel-insights.com https://cdnjs.cloudflare.com https://*.firebaseapp.com https://*.googleapis.com`,
         // Styles: self + unsafe-inline (required by Tailwind/Next.js)
         `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com`,
         // Fonts
