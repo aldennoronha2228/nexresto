@@ -5,15 +5,18 @@
  * Track stock levels, get low-stock alerts, and manage suppliers
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
     Package, Plus, Search, AlertTriangle, TrendingDown,
-    Filter, Download, RefreshCw, Edit2, Trash2, X
+    Filter, Download, RefreshCw, Edit2, Trash2, X, Loader2
 } from 'lucide-react';
 import { ProFeatureGate } from '@/components/dashboard/ProFeatureGate';
 import { RoleGuard } from '@/components/dashboard/RoleGuard';
 import { cn } from '@/lib/utils';
+import { useRestaurant } from '@/hooks/useRestaurant';
+import { auth } from '@/lib/firebase';
+import { toast } from 'sonner';
 
 type InventoryItem = {
     id: string;
@@ -26,11 +29,166 @@ type InventoryItem = {
     status: 'good' | 'low' | 'critical';
 };
 
+type InventoryFormState = {
+    name: string;
+    quantity: string;
+    unit: string;
+    reorderLevel: string;
+    costPerUnit: string;
+    supplier: string;
+};
+
+const defaultFormState: InventoryFormState = {
+    name: '',
+    quantity: '0',
+    unit: 'pcs',
+    reorderLevel: '0',
+    costPerUnit: '0',
+    supplier: '',
+};
+
 function InventoryContent() {
+    const { storeId } = useRestaurant();
     const [inventory, setInventory] = useState<InventoryItem[]>([]);
     const [search, setSearch] = useState('');
     const [filterStatus, setFilterStatus] = useState<'all' | 'low' | 'critical'>('all');
     const [showAddModal, setShowAddModal] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const [form, setForm] = useState<InventoryFormState>(defaultFormState);
+
+    const loadInventory = async () => {
+        if (!storeId) return;
+        setLoading(true);
+        try {
+            const token = await auth.currentUser?.getIdToken();
+            if (!token) {
+                setLoading(false);
+                return;
+            }
+
+            const res = await fetch(`/api/inventory?restaurantId=${encodeURIComponent(storeId)}`, {
+                headers: { Authorization: `Bearer ${token}` },
+                cache: 'no-store',
+            });
+
+            const data = await res.json();
+            if (!res.ok) throw new Error(data?.error || 'Failed to load inventory');
+            setInventory(Array.isArray(data?.items) ? data.items : []);
+        } catch (error: any) {
+            toast.error(error?.message || 'Failed to load inventory');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        void loadInventory();
+    }, [storeId]);
+
+    const openAddModal = () => {
+        setEditingId(null);
+        setForm(defaultFormState);
+        setShowAddModal(true);
+    };
+
+    const openEditModal = (item: InventoryItem) => {
+        setEditingId(item.id);
+        setForm({
+            name: item.name,
+            quantity: String(item.quantity),
+            unit: item.unit,
+            reorderLevel: String(item.reorderLevel),
+            costPerUnit: String(item.costPerUnit),
+            supplier: item.supplier,
+        });
+        setShowAddModal(true);
+    };
+
+    const closeModal = () => {
+        setShowAddModal(false);
+        setEditingId(null);
+        setForm(defaultFormState);
+    };
+
+    const saveItem = async () => {
+        if (!storeId) return;
+        if (!form.name.trim()) {
+            toast.error('Item name is required');
+            return;
+        }
+
+        setSaving(true);
+        try {
+            const token = await auth.currentUser?.getIdToken();
+            if (!token) throw new Error('Session expired. Please sign in again.');
+
+            const body = {
+                restaurantId: storeId,
+                itemId: editingId,
+                item: {
+                    name: form.name.trim(),
+                    quantity: Number(form.quantity || '0'),
+                    unit: form.unit.trim() || 'pcs',
+                    reorderLevel: Number(form.reorderLevel || '0'),
+                    costPerUnit: Number(form.costPerUnit || '0'),
+                    supplier: form.supplier.trim(),
+                },
+            };
+
+            const res = await fetch('/api/inventory', {
+                method: editingId ? 'PUT' : 'POST',
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(body),
+            });
+
+            const data = await res.json();
+            if (!res.ok) throw new Error(data?.error || 'Failed to save item');
+
+            const nextItem = data?.item as InventoryItem;
+            if (editingId) {
+                setInventory((prev) => prev.map((item) => (item.id === editingId ? nextItem : item)));
+                toast.success('Item updated');
+            } else {
+                setInventory((prev) => [...prev, nextItem].sort((a, b) => a.name.localeCompare(b.name)));
+                toast.success('Item added');
+            }
+            closeModal();
+        } catch (error: any) {
+            toast.error(error?.message || 'Failed to save item');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const deleteItem = async (item: InventoryItem) => {
+        if (!storeId) return;
+        if (!confirm(`Delete ${item.name}?`)) return;
+
+        try {
+            const token = await auth.currentUser?.getIdToken();
+            if (!token) throw new Error('Session expired. Please sign in again.');
+
+            const res = await fetch(
+                `/api/inventory?restaurantId=${encodeURIComponent(storeId)}&itemId=${encodeURIComponent(item.id)}`,
+                {
+                    method: 'DELETE',
+                    headers: { Authorization: `Bearer ${token}` },
+                }
+            );
+            const data = await res.json();
+            if (!res.ok) throw new Error(data?.error || 'Failed to delete item');
+
+            setInventory((prev) => prev.filter((x) => x.id !== item.id));
+            toast.success('Item deleted');
+        } catch (error: any) {
+            toast.error(error?.message || 'Failed to delete item');
+        }
+    };
 
     const filteredInventory = inventory.filter(item => {
         const matchesSearch = item.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -66,10 +224,17 @@ function InventoryContent() {
                         <Download className="w-4 h-4" />
                         Export
                     </button>
+                    <button
+                        onClick={() => void loadInventory()}
+                        className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors"
+                    >
+                        <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
+                        Refresh
+                    </button>
                     <motion.button
                         whileHover={{ scale: 1.02 }}
                         whileTap={{ scale: 0.98 }}
-                        onClick={() => setShowAddModal(true)}
+                        onClick={openAddModal}
                         className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors"
                     >
                         <Plus className="w-4 h-4" />
@@ -197,7 +362,14 @@ function InventoryContent() {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                            {filteredInventory.length === 0 ? (
+                            {loading ? (
+                                <tr>
+                                    <td colSpan={6} className="px-6 py-12 text-center text-slate-400 text-sm">
+                                        <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2" />
+                                        Loading inventory...
+                                    </td>
+                                </tr>
+                            ) : filteredInventory.length === 0 ? (
                                 <tr>
                                     <td colSpan={6} className="px-6 py-12 text-center text-slate-400 text-sm">
                                         No inventory data yet
@@ -228,10 +400,10 @@ function InventoryContent() {
                                         </td>
                                         <td className="px-6 py-4 text-right">
                                             <div className="flex items-center justify-end gap-1">
-                                                <button className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+                                                <button onClick={() => openEditModal(item)} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
                                                     <Edit2 className="w-4 h-4 text-slate-400" />
                                                 </button>
-                                                <button className="p-2 hover:bg-red-50 rounded-lg transition-colors">
+                                                <button onClick={() => void deleteItem(item)} className="p-2 hover:bg-red-50 rounded-lg transition-colors">
                                                     <Trash2 className="w-4 h-4 text-red-400" />
                                                 </button>
                                             </div>
@@ -243,6 +415,68 @@ function InventoryContent() {
                     </table>
                 </div>
             </motion.div>
+
+            <AnimatePresence>
+                {showAddModal && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
+                        onClick={closeModal}
+                    >
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.96, y: 8 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.96, y: 8 }}
+                            className="w-full max-w-lg bg-white rounded-2xl border border-slate-200 shadow-xl"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
+                                <h3 className="text-lg font-semibold text-slate-900">{editingId ? 'Edit Item' : 'Add Item'}</h3>
+                                <button onClick={closeModal} className="p-2 rounded-lg hover:bg-slate-100">
+                                    <X className="w-4 h-4 text-slate-500" />
+                                </button>
+                            </div>
+
+                            <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <label className="sm:col-span-2">
+                                    <span className="block text-xs text-slate-500 mb-1">Name</span>
+                                    <input value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} className="w-full px-3 py-2.5 rounded-xl border border-slate-200" />
+                                </label>
+                                <label>
+                                    <span className="block text-xs text-slate-500 mb-1">Quantity</span>
+                                    <input type="number" min="0" value={form.quantity} onChange={(e) => setForm((p) => ({ ...p, quantity: e.target.value }))} className="w-full px-3 py-2.5 rounded-xl border border-slate-200" />
+                                </label>
+                                <label>
+                                    <span className="block text-xs text-slate-500 mb-1">Unit</span>
+                                    <input value={form.unit} onChange={(e) => setForm((p) => ({ ...p, unit: e.target.value }))} className="w-full px-3 py-2.5 rounded-xl border border-slate-200" />
+                                </label>
+                                <label>
+                                    <span className="block text-xs text-slate-500 mb-1">Reorder Level</span>
+                                    <input type="number" min="0" value={form.reorderLevel} onChange={(e) => setForm((p) => ({ ...p, reorderLevel: e.target.value }))} className="w-full px-3 py-2.5 rounded-xl border border-slate-200" />
+                                </label>
+                                <label>
+                                    <span className="block text-xs text-slate-500 mb-1">Cost Per Unit (INR)</span>
+                                    <input type="number" min="0" value={form.costPerUnit} onChange={(e) => setForm((p) => ({ ...p, costPerUnit: e.target.value }))} className="w-full px-3 py-2.5 rounded-xl border border-slate-200" />
+                                </label>
+                                <label className="sm:col-span-2">
+                                    <span className="block text-xs text-slate-500 mb-1">Supplier</span>
+                                    <input value={form.supplier} onChange={(e) => setForm((p) => ({ ...p, supplier: e.target.value }))} className="w-full px-3 py-2.5 rounded-xl border border-slate-200" />
+                                </label>
+                            </div>
+
+                            <div className="px-5 pb-5 flex items-center justify-end gap-2">
+                                <button onClick={closeModal} className="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-700">Cancel</button>
+                                <button onClick={() => void saveItem()} disabled={saving} className="px-4 py-2.5 rounded-xl bg-blue-600 text-white disabled:opacity-60 inline-flex items-center gap-2">
+                                    {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                                    {editingId ? 'Save Changes' : 'Add Item'}
+                                </button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     );
 }
