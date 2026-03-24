@@ -386,7 +386,7 @@ export default function RestaurantManager() {
                 </div>
 
                 {/* Search and Filter */}
-                <div className="flex items-center gap-2 w-full sm:w-auto">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
                     <div className="relative w-full sm:w-72">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                         <input
@@ -397,11 +397,11 @@ export default function RestaurantManager() {
                             className="w-full pl-10 pr-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
                         />
                     </div>
-                    <div className="relative">
+                    <div className="relative w-full sm:w-auto">
                         <button
                             onClick={() => setShowFilters((prev) => !prev)}
                             className={cn(
-                                "inline-flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm transition-colors",
+                                "w-full sm:w-auto inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border text-sm transition-colors",
                                 (tierFilter !== 'all' || statusFilter !== 'all')
                                     ? 'bg-purple-500/20 border-purple-500/30 text-purple-300'
                                     : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
@@ -417,7 +417,7 @@ export default function RestaurantManager() {
                                     initial={{ opacity: 0, y: -6 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     exit={{ opacity: 0, y: -6 }}
-                                    className="absolute right-0 mt-2 w-72 bg-slate-800 border border-slate-700 rounded-xl shadow-xl z-30 p-4"
+                                    className="absolute right-0 mt-2 w-72 max-w-[calc(100vw-2rem)] bg-slate-800 border border-slate-700 rounded-xl shadow-xl z-30 p-4"
                                 >
                                     <p className="text-slate-300 text-sm mb-2">Tier</p>
                                     <div className="flex flex-wrap gap-2 mb-4">
@@ -469,7 +469,7 @@ export default function RestaurantManager() {
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -20 }}
                         className={cn(
-                            "fixed top-4 right-4 z-50 flex items-center gap-2 px-4 py-3 rounded-xl border shadow-lg",
+                            "fixed top-4 right-4 left-4 sm:left-auto z-50 flex items-center gap-2 px-4 py-3 rounded-xl border shadow-lg",
                             actionMessage.type === 'success'
                                 ? "bg-green-500/20 text-green-400 border-green-500/30"
                                 : "bg-red-500/20 text-red-400 border-red-500/30"
@@ -493,8 +493,8 @@ export default function RestaurantManager() {
                         <p>No restaurants found</p>
                     </div>
                 ) : (
-                    <div>
-                        <table className="w-full">
+                    <div className="overflow-x-auto">
+                        <table className="w-full min-w-[1120px]">
                             <thead>
                                 <tr className="border-b border-slate-700">
                                     <th className="text-left px-6 py-4 text-sm font-medium text-slate-400">Restaurant</th>
@@ -757,7 +757,7 @@ export default function RestaurantManager() {
 
                 {/* Pagination */}
                 {totalPages > 1 && (
-                    <div className="flex items-center justify-between px-6 py-4 border-t border-slate-700">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-6 py-4 border-t border-slate-700">
                         <p className="text-sm text-slate-400">
                             Showing {(page - 1) * ITEMS_PER_PAGE + 1} - {Math.min(page * ITEMS_PER_PAGE, total)} of {total}
                         </p>

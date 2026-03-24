@@ -93,14 +93,14 @@ export default function SuperAdminEmailsPage() {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div>
                     <h1 className="text-2xl font-bold text-white">Email Center</h1>
                     <p className="text-slate-400 text-sm mt-1">Track subscription reminder emails and send manually when needed.</p>
                 </div>
                 <button
                     onClick={loadRows}
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 transition-colors"
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 transition-colors"
                 >
                     <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
                     Refresh
@@ -152,7 +152,98 @@ export default function SuperAdminEmailsPage() {
                     <div className="h-56 flex items-center justify-center text-slate-400">No restaurants found</div>
                 ) : (
                     <div>
-                        <table className="w-full table-fixed">
+                        <div className="md:hidden space-y-3 p-3">
+                            {rows.map((row) => {
+                                const isBusy = busyId === row.id;
+                                const inReminderWindow = row.days_remaining !== null && row.days_remaining >= 0 && row.days_remaining <= 2;
+                                const hasEndDate = Boolean(row.subscription_end_date);
+                                const todayYmd = new Date().toISOString().slice(0, 10);
+                                const alreadySentToday = row.last_reminder_sent_on === todayYmd;
+                                const canManualSend = hasEndDate && row.reminders_enabled && !row.account_temporarily_disabled && !alreadySentToday;
+
+                                return (
+                                    <div key={row.id} className="rounded-xl border border-slate-700 bg-slate-900/50 p-3 space-y-3">
+                                        <div>
+                                            <p className="text-white font-medium">{row.name}</p>
+                                            <p className="text-xs text-slate-500 break-all">{row.id}</p>
+                                        </div>
+
+                                        <div className="text-sm text-slate-300 space-y-1">
+                                            <p className="break-all">Owner: {row.owner_email || 'Not found'}</p>
+                                            <p>End Date: {row.subscription_end_date || 'Not set'}</p>
+                                            {row.days_remaining !== null && (
+                                                <p className={cn('text-xs', inReminderWindow ? 'text-amber-300' : 'text-slate-500')}>
+                                                    {row.days_remaining} days remaining
+                                                </p>
+                                            )}
+                                            <p className="text-xs">Last Sent: {row.last_reminder_sent_at ? formatDate(row.last_reminder_sent_at) : 'Never'}</p>
+                                            <p className="text-xs break-all">Provider ID: {row.last_reminder_provider_id || 'N/A'}</p>
+                                            <p className="text-xs">Source: {row.last_reminder_source || 'N/A'}</p>
+                                            {row.last_reminder_error && (
+                                                <p className="text-xs text-rose-300 break-words">Error: {row.last_reminder_error}</p>
+                                            )}
+                                        </div>
+
+                                        <div className="flex flex-wrap gap-2">
+                                            <span className={cn(
+                                                'inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full border',
+                                                row.reminders_enabled
+                                                    ? 'text-emerald-300 border-emerald-500/30 bg-emerald-500/10'
+                                                    : 'text-rose-300 border-rose-500/30 bg-rose-500/10'
+                                            )}>
+                                                <Mail className="w-3.5 h-3.5" />
+                                                {row.reminders_enabled ? 'Enabled' : 'Disabled'}
+                                            </span>
+                                            {row.account_temporarily_disabled && (
+                                                <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full border text-amber-300 border-amber-500/30 bg-amber-500/10">
+                                                    <Ban className="w-3.5 h-3.5" />
+                                                    Account Disabled
+                                                </span>
+                                            )}
+                                            {inReminderWindow && (
+                                                <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full border text-blue-300 border-blue-500/30 bg-blue-500/10">
+                                                    <Clock3 className="w-3.5 h-3.5" />
+                                                    Reminder Window
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <button
+                                                disabled={isBusy}
+                                                onClick={() => handleToggle(row)}
+                                                className={cn(
+                                                    'px-3 py-2 rounded-lg text-xs transition-colors',
+                                                    row.reminders_enabled
+                                                        ? 'bg-amber-500/20 text-amber-300 hover:bg-amber-500/30'
+                                                        : 'bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30',
+                                                    isBusy && 'opacity-50 cursor-not-allowed'
+                                                )}
+                                            >
+                                                {row.reminders_enabled ? 'Disable' : 'Enable'}
+                                            </button>
+                                            <button
+                                                disabled={!canManualSend || isBusy}
+                                                onClick={() => handleManualSend(row)}
+                                                className={cn(
+                                                    'inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs transition-colors',
+                                                    canManualSend
+                                                        ? 'bg-purple-600 text-white hover:bg-purple-700'
+                                                        : 'bg-slate-700 text-slate-500 cursor-not-allowed',
+                                                    isBusy && 'opacity-50'
+                                                )}
+                                            >
+                                                <Send className="w-3.5 h-3.5" />
+                                                Send Now
+                                            </button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        <div className="hidden md:block overflow-x-auto">
+                        <table className="w-full table-fixed min-w-[1120px]">
                             <thead>
                                 <tr className="border-b border-slate-700">
                                     <th className="text-left px-3 py-3 text-slate-400 text-xs font-semibold w-[14%]">Restaurant</th>
@@ -273,6 +364,7 @@ export default function SuperAdminEmailsPage() {
                                 })}
                             </tbody>
                         </table>
+                        </div>
                     </div>
                 )}
             </div>

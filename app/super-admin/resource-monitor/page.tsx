@@ -348,7 +348,7 @@ export default function ResourceMonitorPage() {
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={() => handleSyncNow()}
-                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white transition-colors disabled:opacity-50"
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white transition-colors disabled:opacity-50"
                 >
                     <RefreshCw className="w-4 h-4" />
                     Sync Now
@@ -361,7 +361,7 @@ export default function ResourceMonitorPage() {
                         No restaurants found for usage monitoring.
                     </div>
                 ) : (
-                    <table className="w-full">
+                    <table className="w-full min-w-[1120px]">
                         <thead>
                             <tr className="border-b border-slate-700">
                                 <th className="text-left px-6 py-4 text-sm font-medium text-slate-400">Restaurant</th>

@@ -141,7 +141,7 @@ export default function ActivityLogs() {
                     <p className="text-slate-400 mt-1">Real-time platform events and activities</p>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
                     {/* Auto-refresh toggle */}
                     <button
                         onClick={() => setAutoRefresh(!autoRefresh)}
@@ -300,7 +300,7 @@ export default function ActivityLogs() {
                                                 exit={{ opacity: 0, height: 0 }}
                                                 className="overflow-hidden"
                                             >
-                                                <div className="px-4 pb-4 pl-[68px]">
+                                                <div className="px-4 pb-4 pl-4 sm:pl-[68px]">
                                                     <div className="bg-slate-900/50 rounded-lg p-4 space-y-3">
                                                         <div className="flex items-center gap-4 text-sm">
                                                             <span className="text-slate-400">

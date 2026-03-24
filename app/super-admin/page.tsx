@@ -173,7 +173,7 @@ export default function SuperAdminOverview() {
     return (
         <div className="space-y-8">
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div>
                     <h1 className="text-2xl font-bold text-white">Platform Overview</h1>
                     <p className="text-slate-400 mt-1">Monitor your entire NexResto network</p>
@@ -241,7 +241,7 @@ export default function SuperAdminOverview() {
                     className="bg-slate-800 rounded-2xl border border-slate-700 p-6"
                 >
                     <h2 className="text-lg font-semibold text-white mb-4">Quick Actions</h2>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <button
                             onClick={() => window.location.href = '/super-admin/restaurants'}
                             className="flex items-center gap-3 p-4 bg-slate-700/50 hover:bg-slate-700 rounded-xl transition-colors text-left"
