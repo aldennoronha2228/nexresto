@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, Mail, Lock, AlertCircle, Loader2, ShieldCheck, LogOut } from 'lucide-react';
 import NexRestoLogo from '@/components/ui/NexRestoLogo';
 import { signInWithEmail, signInWithGoogle, signUpAndCreateTenant } from '@/lib/firebase-auth';
-import { signInWithCredential, GoogleAuthProvider, signInWithEmailAndPassword, signOut as firebaseSignOut } from 'firebase/auth';
+import { signInWithCredential, GoogleAuthProvider, signInWithEmailAndPassword, signOut as firebaseSignOut, type User } from 'firebase/auth';
 import { tenantAuth, adminAuth } from '@/lib/firebase';
 import { useAuth } from '@/context/AuthContext';
 import { useSuperAdminAuth } from '@/context/SuperAdminAuthContext';
@@ -64,6 +64,16 @@ const PasswordStrength = memo(function PasswordStrength({ password }: { password
 
 type FormMode = 'signin' | 'signup' | 'verify-otp';
 
+type ResolvedProfile = {
+    role?: string;
+    tenant_id?: string;
+    must_change_password?: boolean;
+};
+
+function sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 
 
 export default function LoginPage() {
@@ -94,6 +104,31 @@ export default function LoginPage() {
     const [enteredOtp, setEnteredOtp] = useState('');
     const [otpExpiry, setOtpExpiry] = useState<string | null>(null);
 
+    const resolveProfileWithRetry = async (user: User, attempts = 4): Promise<ResolvedProfile | null> => {
+        for (let i = 0; i < attempts; i++) {
+            if (i > 0) {
+                await sleep(350 * i);
+            }
+
+            const idToken = await user.getIdToken(true);
+            const profileRes = await fetch('/api/auth/profile', {
+                headers: { Authorization: `Bearer ${idToken}` },
+                cache: 'no-store',
+            });
+
+            if (!profileRes.ok) {
+                continue;
+            }
+
+            const { profile } = await profileRes.json();
+            if (profile?.role) {
+                return profile as ResolvedProfile;
+            }
+        }
+
+        return null;
+    };
+
     useEffect(() => {
         if (!loading && !tenantLoading && !adminLoading && session) {
             if (mustChangePassword) {
@@ -110,8 +145,6 @@ export default function LoginPage() {
 
             if (userRole && tenantId) {
                 router.replace(`/${tenantId}/dashboard/orders`);
-            } else if (!tenantLoading && !userRole) {
-                router.replace('/unauthorized');
             }
         }
     }, [session, loading, tenantLoading, adminLoading, adminSession, userRole, tenantId, mustChangePassword, router]);
@@ -310,45 +343,52 @@ export default function LoginPage() {
             const result = await signInWithGoogle();
             const user = result.user;
 
-            const idToken = await user.getIdToken(true);
-
-            // Fetch profile for tenant info
-            const profileRes = await fetch('/api/auth/profile', {
-                headers: { Authorization: `Bearer ${idToken}` },
-            });
-
-            if (profileRes.ok) {
-                const { profile } = await profileRes.json();
-                if (profile?.must_change_password) {
-                    router.replace('/change-password');
-                    return;
-                }
-
-                if (profile?.role === 'super_admin') {
-                    // Seed the admin-specific auth instance too
-                    const credential = GoogleAuthProvider.credentialFromResult(result);
-                    if (credential) {
-                        try {
-                            await signInWithCredential(adminAuth, credential);
-                        } catch (err) {
-                            console.warn('Could not seed adminAuth instance:', err);
-                        }
-                    }
-                    // Ensure fresh claims before redirect.
-                    await user.getIdToken(true).catch(() => { });
-                    router.replace('/super-admin');
-                    return;
-                }
-                if (profile?.role && profile?.tenant_id) {
-                    // Claims can be set server-side during profile hydration.
-                    await user.getIdToken(true).catch(() => { });
-                    router.replace(`/${profile.tenant_id}/dashboard/orders`);
-                    return;
-                }
+            const profile = await resolveProfileWithRetry(user, 4);
+            if (profile?.must_change_password) {
+                router.replace('/change-password');
+                return;
             }
 
-            // No profile found → unauthorized
-            router.replace('/unauthorized');
+            if (profile?.role === 'super_admin') {
+                const credential = GoogleAuthProvider.credentialFromResult(result);
+                if (credential) {
+                    try {
+                        await signInWithCredential(adminAuth, credential);
+                    } catch (err) {
+                        console.warn('Could not seed adminAuth instance:', err);
+                    }
+                }
+                await user.getIdToken(true).catch(() => { });
+                router.replace('/super-admin');
+                return;
+            }
+
+            if (profile?.role && profile?.tenant_id) {
+                await user.getIdToken(true).catch(() => { });
+                router.replace(`/${profile.tenant_id}/dashboard/orders`);
+                return;
+            }
+
+            const tokenResult = await user.getIdTokenResult(true).catch(() => null);
+            const claimRole = tokenResult?.claims?.role as string | undefined;
+            const claimTenant = (tokenResult?.claims?.tenant_id || tokenResult?.claims?.restaurant_id) as string | undefined;
+
+            if (tokenResult?.claims?.must_change_password) {
+                router.replace('/change-password');
+                return;
+            }
+
+            if (claimRole === 'super_admin') {
+                router.replace('/super-admin');
+                return;
+            }
+
+            if (claimRole && claimTenant) {
+                router.replace(`/${claimTenant}/dashboard/orders`);
+                return;
+            }
+
+            setError('Sign-in succeeded, but your access profile is still syncing. Please wait a moment and try again.');
         } catch (err: any) {
             const code = typeof err?.code === 'string' ? err.code : '';
             if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
