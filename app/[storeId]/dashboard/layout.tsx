@@ -787,14 +787,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <AnimatePresence>
                     {mobileMenuOpen && (
                         <motion.div
-                            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.2, ease: 'easeOut' }}
                             className="lg:hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-40"
                             onClick={() => setMobileMenuOpen(false)}
                         >
                             <motion.div
-                                initial={{ x: -280 }} animate={{ x: 0 }} exit={{ x: -280 }}
+                                initial={{ x: '-100%' }}
+                                animate={{ x: 0 }}
+                                exit={{ x: '-100%' }}
+                                transition={{ type: 'spring', stiffness: 320, damping: 34, mass: 0.85 }}
                                 onClick={(e) => e.stopPropagation()}
-                                className="absolute left-0 top-0 h-full w-72 premium-sidebar shadow-2xl"
+                                className="absolute left-0 top-0 h-full w-72 max-w-[88vw] premium-sidebar shadow-2xl will-change-transform"
                             >
                                 <div className="flex flex-col h-full">
                                         <div className="h-16 flex items-center justify-between px-6 border-b border-white/10 premium-sidebar">
@@ -1048,6 +1054,23 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                 </button>
                             );
                         })}
+
+                        <button
+                            onClick={() => setMobileMenuOpen(true)}
+                            className="flex-1"
+                            aria-label="Open more options"
+                        >
+                            <motion.div
+                                whileTap={{ scale: 0.95 }}
+                                className={cn(
+                                    "mx-auto w-full max-w-[104px] rounded-xl flex flex-col items-center justify-center gap-1 py-2 transition-all",
+                                    mobileMenuOpen ? "text-blue-600 bg-blue-50/90" : "text-slate-600"
+                                )}
+                            >
+                                <Menu className={cn("w-5 h-5", mobileMenuOpen && "drop-shadow-[0_0_6px_rgba(37,99,235,0.3)]")} />
+                                <span className={cn("text-[11px] font-medium", mobileMenuOpen && "font-semibold")}>More</span>
+                            </motion.div>
+                        </button>
                     </div>
                 </nav>
 

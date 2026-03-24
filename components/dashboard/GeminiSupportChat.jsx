@@ -257,11 +257,11 @@ export default function GeminiSupportChat() {
             <AnimatePresence>
                 {isOpen && (
                     <motion.div
-                        initial={{ opacity: 0, y: 20, scale: 0.98 }}
+                        initial={{ opacity: 0, y: 28, scale: 0.985 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 18, scale: 0.98 }}
-                        transition={{ duration: 0.24, ease: 'easeOut' }}
-                        className="fixed z-[60] bottom-0 left-0 right-0 h-[78vh] md:bottom-24 md:left-auto md:right-8 md:h-[560px] md:w-[390px]"
+                        exit={{ opacity: 0, y: 20, scale: 0.985 }}
+                        transition={{ type: 'spring', stiffness: 360, damping: 32, mass: 0.85 }}
+                        className="fixed z-[60] bottom-0 left-0 right-0 h-[78vh] md:bottom-24 md:left-auto md:right-8 md:h-[560px] md:w-[390px] will-change-transform"
                     >
                         <div className="h-full rounded-t-3xl md:rounded-3xl border border-slate-700/50 bg-slate-900/75 backdrop-blur-2xl shadow-2xl shadow-black/35 overflow-hidden">
                             <div className="h-14 px-4 flex items-center justify-between bg-gradient-to-r from-[#08142f]/95 to-[#0b1a3d]/95 text-white border-b border-white/10">
@@ -391,7 +391,18 @@ export default function GeminiSupportChat() {
                 aria-label="Toggle Nexo"
                 title="Nexo"
             >
-                {isOpen ? <X className="w-5 h-5" /> : <Sparkles className="w-5 h-5" />}
+                <AnimatePresence mode="wait" initial={false}>
+                    <motion.span
+                        key={isOpen ? 'close' : 'open'}
+                        initial={{ opacity: 0, rotate: -14, scale: 0.86 }}
+                        animate={{ opacity: 1, rotate: 0, scale: 1 }}
+                        exit={{ opacity: 0, rotate: 14, scale: 0.86 }}
+                        transition={{ duration: 0.16, ease: 'easeOut' }}
+                        className="flex items-center justify-center"
+                    >
+                        {isOpen ? <X className="w-5 h-5" /> : <Sparkles className="w-5 h-5" />}
+                    </motion.span>
+                </AnimatePresence>
             </motion.button>
         </>
     );
