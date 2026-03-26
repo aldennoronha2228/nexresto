@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Clock, X, Plus, Trash2, Search, RefreshCw, AlertCircle, Lock, Sparkles } from 'lucide-react';
 import { Canvas } from '@react-three/fiber';
@@ -41,6 +41,8 @@ const FLOOR_SOURCE_WIDTH = 1000;
 const FLOOR_SOURCE_HEIGHT = 600;
 const FLOOR_WORLD_WIDTH = 14;
 const FLOOR_WORLD_DEPTH = 8.4;
+const FLOOR_PADDING_X_PCT = 8;
+const FLOOR_PADDING_Y_PCT = 10;
 
 function floorToWorld(x: number, y: number) {
     const nx = Math.max(0, Math.min(FLOOR_SOURCE_WIDTH, x)) / FLOOR_SOURCE_WIDTH;
@@ -759,6 +761,21 @@ export default function LiveOrdersPage() {
     const activeOrders = orders.filter(o => ['new', 'preparing'].includes(o.status));
     const readyToServeOrders = orders.filter(o => o.status === 'done');
     const busyTables = floorTables.filter(t => t.status === 'busy').length;
+    const normalizedFloorTables = useMemo(() => {
+        const usableXPct = 100 - FLOOR_PADDING_X_PCT * 2;
+        const usableYPct = 100 - FLOOR_PADDING_Y_PCT * 2;
+
+        return floorTables.map((table) => {
+            const normalizedX = Math.max(0, Math.min(FLOOR_SOURCE_WIDTH, table.x)) / FLOOR_SOURCE_WIDTH;
+            const normalizedY = Math.max(0, Math.min(FLOOR_SOURCE_HEIGHT, table.y)) / FLOOR_SOURCE_HEIGHT;
+
+            return {
+                ...table,
+                leftPct: FLOOR_PADDING_X_PCT + normalizedX * usableXPct,
+                topPct: FLOOR_PADDING_Y_PCT + normalizedY * usableYPct,
+            };
+        });
+    }, [floorTables]);
 
     const displayedOrders = selectedTableId
         ? activeOrders.filter(o => {
@@ -918,18 +935,16 @@ export default function LiveOrdersPage() {
                             </div>
                         </div>
 
-                        <div className="rounded-2xl border border-white/30 overflow-x-auto overflow-y-visible">
+                        <div className="rounded-2xl border border-white/30 overflow-visible">
                             {floorViewMode === '2d' ? (
                                 <div
-                                    className="relative bg-gradient-to-br from-slate-900/[0.03] to-emerald-500/[0.04] p-3 lg:p-5 min-w-max"
+                                    className="relative w-full h-[52vh] min-h-[320px] max-h-[460px] bg-gradient-to-br from-slate-900/[0.03] to-emerald-500/[0.04] p-3 lg:p-5"
                                     style={{
-                                        height: 420,
-                                        minWidth: 700,
                                         backgroundImage: 'radial-gradient(circle, #94a3b8 1px, transparent 1px)',
                                         backgroundSize: '22px 22px'
                                     }}
                                 >
-                                    {floorTables.map(table => {
+                                    {normalizedFloorTables.map(table => {
                                         const config = tableStatusConfig[table.status];
                                         const isSelected = selectedTableId === table.id;
                                         const tableOrders = getOrdersForTable(table);
@@ -939,7 +954,7 @@ export default function LiveOrdersPage() {
                                         return (
                                             <div
                                                 key={table.id}
-                                                style={{ position: 'absolute', left: table.x * 0.7, top: table.y * 0.7 }}
+                                                style={{ position: 'absolute', left: `${table.leftPct}%`, top: `${table.topPct}%`, transform: 'translate(-50%, -50%)' }}
                                                 className={cn('relative', isSelected ? 'z-[70]' : 'z-10')}
                                             >
                                                 <motion.div onClick={() => setSelectedTableId(isSelected ? null : table.id)} whileHover={{ scale: 1.1 }} className={cn('w-12 h-12 lg:w-16 lg:h-16 rounded-2xl border-2 flex flex-col items-center justify-center cursor-pointer transition-all shadow-sm relative', config.color, config.border, config.text, isSelected && 'ring-4 ring-rose-400/30', table.status === 'busy' && 'drop-shadow-[0_0_16px_rgba(244,63,94,0.45)]', table.status === 'available' && 'drop-shadow-[0_0_14px_rgba(46,213,115,0.38)]', table.status === 'reserved' && 'drop-shadow-[0_0_12px_rgba(245,158,11,0.35)]')}>
@@ -996,7 +1011,7 @@ export default function LiveOrdersPage() {
                                     })}
                                 </div>
                             ) : (
-                                <div className="relative h-[420px] min-w-[700px] bg-slate-100">
+                                <div className="relative w-full h-[52vh] min-h-[320px] max-h-[460px] bg-slate-100">
                                     <LiveOrdersFloor3D
                                         tables={floorTables}
                                         selectedTableId={selectedTableId}
