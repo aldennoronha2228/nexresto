@@ -28,7 +28,7 @@ export const metadata: Metadata = {
     siteName: 'NexResto',
     images: [
       {
-        url: '/icon-192.png?v=20260328',
+        url: '/icon-192.png',
         width: 1200,
         height: 630,
         alt: 'NexResto platform',
@@ -39,7 +39,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'NexResto | Restaurant & Hotel Digital Menus',
     description: 'NexResto helps restaurants and hotels publish digital menus and streamline online ordering.',
-    images: ['/icon-192.png?v=20260328'],
+    images: ['/icon-192.png'],
   },
   robots: {
     index: true,
@@ -48,12 +48,12 @@ export const metadata: Metadata = {
   manifest: '/site.webmanifest',
   icons: {
     icon: [
-      { url: '/favicon-48.png?v=20260328', sizes: '48x48', type: 'image/png' },
-      { url: '/icon-192.png?v=20260328', sizes: '192x192', type: 'image/png' },
-      { url: '/nexresto-mark.svg?v=20260328', type: 'image/svg+xml' },
+      { url: '/favicon.ico' },
+      { url: '/favicon-48.png', sizes: '48x48', type: 'image/png' },
+      { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
     ],
-    shortcut: '/favicon-48.png?v=20260328',
-    apple: '/apple-touch-icon.png?v=20260328',
+    shortcut: '/favicon.ico',
+    apple: '/apple-touch-icon.png',
   },
 };
 
