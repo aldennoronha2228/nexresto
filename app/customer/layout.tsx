@@ -3,8 +3,15 @@ import { CartProvider } from '@/context/CartContext';
 import { AuthProvider } from '@/context/AuthContext';
 
 export const metadata: Metadata = {
-    title: 'MENU',
-    description: 'Digital Restaurant Menu',
+    title: 'Customer Menu | NexResto',
+    description: 'Legacy query-based customer menu route.',
+    robots: {
+        index: false,
+        follow: false,
+    },
+    alternates: {
+        canonical: '/customer',
+    },
 };
 
 /**

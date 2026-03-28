@@ -202,7 +202,7 @@ function BrandingContent() {
             toast.error('Restaurant context missing');
             return;
         }
-        const href = `/customer?restaurant=${encodeURIComponent(storeId)}&preview=1`;
+        const href = `/${encodeURIComponent(storeId)}/menu?preview=1`;
         window.open(href, '_blank', 'noopener,noreferrer');
     };
 
@@ -538,7 +538,7 @@ function BrandingContent() {
                     <iframe
                         ref={iframeRef}
                         title="Customer Menu Preview"
-                        src={`/customer?restaurant=${encodeURIComponent(storeId)}&preview=1`}
+                        src={`/${encodeURIComponent(storeId)}/menu?preview=1`}
                         onLoad={sendPreviewMessage}
                         className="w-full h-[760px] rounded-xl border border-slate-200"
                     />

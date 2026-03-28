@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Image from 'next/image';
 import { motion, AnimatePresence } from 'motion/react';
 import { CheckCircle2, Home, Receipt, Loader2, AlertCircle, Wifi } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
@@ -182,7 +183,14 @@ function OrderSummaryContent() {
                                     {receiptCart.length > 0 ? receiptCart.map((item, i) => (
                                         <motion.div key={item.id} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.5 + i * 0.07 }}
                                             className="flex items-center gap-4 pb-3 border-b border-gray-100 last:border-0">
-                                            <img src={item.image} alt={item.name} className="w-16 h-16 rounded-xl object-cover" />
+                                            <Image
+                                                src={item.image}
+                                                alt={`${item.name} in your confirmed order`}
+                                                width={64}
+                                                height={64}
+                                                unoptimized
+                                                className="h-16 w-16 rounded-xl object-cover"
+                                            />
                                             <div className="flex-1">
                                                 <p className="font-semibold text-[#1B4332]">{item.name}</p>
                                                 <p className="text-sm text-gray-500">× {item.quantity}</p>

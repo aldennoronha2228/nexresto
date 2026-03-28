@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Image from 'next/image';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, ShoppingBag, Trash2 } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
@@ -83,7 +84,14 @@ export const CartDrawer: React.FC<{ tableId?: string; restaurantId?: string }> =
                                     cart.map((item) => (
                                         <motion.div key={item.id} layout initial={{ opacity: 0, x: 50 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -50 }} className="bg-[#FAF8F5] rounded-2xl p-4 relative">
                                             <div className="flex gap-4">
-                                                <img src={item.image} alt={item.name} className="w-20 h-20 rounded-xl object-cover" />
+                                                <Image
+                                                    src={item.image}
+                                                    alt={`${item.name} in your cart`}
+                                                    width={80}
+                                                    height={80}
+                                                    unoptimized
+                                                    className="h-20 w-20 rounded-xl object-cover"
+                                                />
                                                 <div className="flex-1">
                                                     <h3 className="font-bold text-[#1B4332] mb-1">{item.name}</h3>
                                                     <p className="text-[#D4AF37] font-semibold mb-2">{formatINR(item.price)}</p>

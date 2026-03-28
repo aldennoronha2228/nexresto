@@ -211,6 +211,7 @@ export default function RootPage() {
 
   return (
     <>
+      <h1 className="sr-only">NexResto digital menu platform for restaurants and hotels</h1>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300&family=DM+Sans:wght@200;300;400;500&display=swap');
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}

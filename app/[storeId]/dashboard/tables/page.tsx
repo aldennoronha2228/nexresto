@@ -48,17 +48,17 @@ function resolveMenuBaseUrl() {
 
 function getTableMenuUrl(baseUrl: string, tableId: string, restaurantId?: string | null) {
     const normalizedBase = (baseUrl || '').trim() || (typeof window !== 'undefined' ? window.location.origin : '');
-    const normalizedPath = MENU_CUSTOMER_PATH.startsWith('/') ? MENU_CUSTOMER_PATH : `/${MENU_CUSTOMER_PATH}`;
+    const normalizedPath = restaurantId
+        ? `/${encodeURIComponent(restaurantId)}/menu`
+        : (MENU_CUSTOMER_PATH.startsWith('/') ? MENU_CUSTOMER_PATH : `/${MENU_CUSTOMER_PATH}`);
 
     try {
         const url = new URL(normalizedPath, normalizedBase.endsWith('/') ? normalizedBase : `${normalizedBase}/`);
         url.searchParams.set('table', tableId);
-        if (restaurantId) url.searchParams.set('restaurant', restaurantId);
         return url.toString();
     } catch {
         const params = new URLSearchParams();
         params.set('table', tableId);
-        if (restaurantId) params.set('restaurant', restaurantId);
         return `${normalizedBase}${normalizedPath}?${params.toString()}`;
     }
 }

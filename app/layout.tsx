@@ -4,12 +4,47 @@ import './globals.css';
 import { AuthProvider } from '@/context/AuthContext';
 import { SuperAdminAuthProvider } from '@/context/SuperAdminAuthContext';
 import { Toaster } from 'sonner';
+import { getSiteOrigin } from '@/lib/seo/url';
 
 const inter = Inter({ subsets: ['latin'] });
+const siteOrigin = getSiteOrigin();
 
 export const metadata: Metadata = {
-  title: 'NexResto — Dashboard',
-  description: 'NexResto restaurant management dashboard',
+  metadataBase: new URL(siteOrigin),
+  title: {
+    default: 'NexResto | Restaurant & Hotel Digital Menus',
+    template: '%s | NexResto',
+  },
+  description: 'NexResto helps restaurants and hotels publish digital menus and streamline online ordering.',
+  keywords: ['restaurant menu', 'digital menu', 'online ordering', 'hotel dining', 'nexresto'],
+  alternates: {
+    canonical: '/',
+  },
+  openGraph: {
+    type: 'website',
+    title: 'NexResto | Restaurant & Hotel Digital Menus',
+    description: 'NexResto helps restaurants and hotels publish digital menus and streamline online ordering.',
+    url: '/',
+    siteName: 'NexResto',
+    images: [
+      {
+        url: '/icon-192.png?v=20260328',
+        width: 1200,
+        height: 630,
+        alt: 'NexResto platform',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'NexResto | Restaurant & Hotel Digital Menus',
+    description: 'NexResto helps restaurants and hotels publish digital menus and streamline online ordering.',
+    images: ['/icon-192.png?v=20260328'],
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
   manifest: '/site.webmanifest',
   icons: {
     icon: [

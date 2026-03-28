@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Image from 'next/image';
 import { motion } from 'motion/react';
 import { Receipt, ArrowLeft, ChevronDown, ChevronUp } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
@@ -69,7 +70,14 @@ function CustomerOrderHistoryContent() {
                                     <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="border-t border-gray-200 p-6 space-y-4 bg-[#FAF8F5]">
                                         {order.items.map((item) => (
                                             <div key={item.id} className="flex items-center gap-4">
-                                                <img src={item.image} alt={item.name} className="w-16 h-16 rounded-xl object-cover" />
+                                                <Image
+                                                    src={item.image}
+                                                    alt={`${item.name} from your previous order`}
+                                                    width={64}
+                                                    height={64}
+                                                    unoptimized
+                                                    className="h-16 w-16 rounded-xl object-cover"
+                                                />
                                                 <div className="flex-1"><p className="font-semibold text-[#1B4332]">{item.name}</p><p className="text-sm text-gray-600">{formatINR(item.price)} × {item.quantity}</p></div>
                                                 <p className="font-bold text-[#1B4332]">{formatINR(item.price * item.quantity)}</p>
                                             </div>

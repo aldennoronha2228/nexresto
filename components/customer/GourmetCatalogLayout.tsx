@@ -1,6 +1,8 @@
 'use client';
 
 import React from 'react';
+import Image from 'next/image';
+import Link from 'next/link';
 import { motion } from 'motion/react';
 import {
     ArrowLeft,
@@ -25,15 +27,15 @@ type CatalogItem = CartMenuItem & { available: boolean; type?: 'veg' | 'non-veg'
 type GourmetCatalogLayoutProps = {
     branding: CatalogBranding;
     categories: string[];
-    activeCategory: string;
     items: CatalogItem[];
     tableId: string;
+    restaurantName: string;
     totalItems: number;
     totalPrice: number;
     loading: boolean;
+    homeHref?: string;
     onBack?: () => void;
     onSearch?: () => void;
-    onFilter?: () => void;
     onSelectCategory: (category: string) => void;
     onAddToCart: (item: CatalogItem) => void;
     onOpenCart: () => void;
@@ -103,15 +105,15 @@ function isVegItem(item: CatalogItem): boolean {
 export function GourmetCatalogLayout({
     branding,
     categories,
-    activeCategory,
     items,
     tableId,
+    restaurantName,
     totalItems,
     totalPrice,
     loading,
+    homeHref,
     onBack,
     onSearch,
-    onFilter,
     onSelectCategory,
     onAddToCart,
     onOpenCart,
@@ -243,10 +245,17 @@ export function GourmetCatalogLayout({
                             <span>Non-Veg</span>
                         </button>
                     </div>
+                    {homeHref ? (
+                        <div className="mt-2 text-xs font-medium text-slate-600">
+                            <Link href={homeHref} className="underline underline-offset-2">About {restaurantName}</Link>
+                        </div>
+                    ) : null}
                 </header>
 
                 <main className="space-y-4 px-4 py-4 md:px-6">
-                    <h2 className="text-2xl font-bold tracking-tight text-slate-800 md:text-3xl">{heading}</h2>
+                    <h1 className="text-2xl font-bold tracking-tight text-slate-800 md:text-3xl">
+                        {restaurantName} {heading}
+                    </h1>
 
                     {loading ? (
                         <div className="rounded-3xl border border-slate-200 bg-white p-10 text-center text-slate-500">Loading menu...</div>
@@ -254,15 +263,15 @@ export function GourmetCatalogLayout({
                         <div className="rounded-3xl border border-slate-200 bg-white p-10 text-center text-slate-500">No menu items available.</div>
                     ) : (
                         <div className="space-y-8">
-                            {groupedSections.map((section) => (
+                            {groupedSections.map((section, sectionIdx) => (
                                 <section
                                     key={section.category}
                                     ref={(el) => { sectionRefs.current[section.category] = el; }}
                                     className="space-y-4"
                                 >
-                                    <h3 className="text-xl font-bold tracking-tight text-slate-800 md:text-2xl">
+                                    <h2 className="text-xl font-bold tracking-tight text-slate-800 md:text-2xl">
                                         {section.category} ({section.items.length})
-                                    </h3>
+                                    </h2>
                                     <div className="grid grid-cols-2 gap-4">
                                         {section.items.slice(0, 24).map((item, idx) => (
                                             <motion.article
@@ -272,10 +281,14 @@ export function GourmetCatalogLayout({
                                                 transition={{ delay: idx * 0.03 }}
                                                 className="space-y-2"
                                             >
-                                                <div className="aspect-[4/3] overflow-hidden rounded-3xl bg-white shadow-sm">
-                                                    <img
+                                                <div className="relative aspect-[4/3] overflow-hidden rounded-3xl bg-white shadow-sm">
+                                                    <Image
                                                         src={imageFor(idx, item, branding.featuredImages)}
-                                                        alt={item.name}
+                                                        alt={`${item.name} from ${restaurantName} ${section.category} menu`}
+                                                        fill
+                                                        sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 280px"
+                                                        priority={sectionIdx === 0 && idx === 0}
+                                                        unoptimized
                                                         className="h-full w-full object-cover"
                                                     />
                                                 </div>
@@ -287,7 +300,7 @@ export function GourmetCatalogLayout({
                                                     <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-600">★ {pseudoRating(item.name)}</span>
                                                 </div>
 
-                                                <h4 className="line-clamp-2 text-lg font-bold leading-tight text-slate-900 md:text-xl">{item.name}</h4>
+                                                <h3 className="line-clamp-2 text-lg font-bold leading-tight text-slate-900 md:text-xl">{item.name}</h3>
 
                                                 <div className="flex items-center justify-between gap-2">
                                                     <span className="text-lg font-bold leading-none text-slate-900 md:text-xl">₹{Math.round(item.price)}</span>

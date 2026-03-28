@@ -1,10 +1,18 @@
 import type { NextConfig } from 'next';
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const WebpackObfuscator = require('webpack-obfuscator');
+import WebpackObfuscator from 'webpack-obfuscator';
 
 const nextConfig: NextConfig = {
   reactStrictMode: false,
+  trailingSlash: false,
   turbopack: {},
+  images: {
+    remotePatterns: [
+      { protocol: 'https', hostname: 'images.unsplash.com' },
+      { protocol: 'https', hostname: 'firebasestorage.googleapis.com' },
+      { protocol: 'https', hostname: 'lh3.googleusercontent.com' },
+      { protocol: 'https', hostname: 'avatars.githubusercontent.com' },
+    ],
+  },
   webpack: (config, { dev, isServer }) => {
     if (!dev && !isServer) {
       config.plugins.push(
