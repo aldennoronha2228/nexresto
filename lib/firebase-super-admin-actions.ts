@@ -100,6 +100,23 @@ export interface SubscriptionReminderEmailRow {
     last_reminder_source: string | null;
 }
 
+export type DemoRequestStatus = 'new' | 'contacted' | 'scheduled' | 'converted' | 'closed';
+
+export interface DemoRequestRow {
+    id: string;
+    contact_name: string;
+    business_email: string;
+    phone: string;
+    restaurant_name: string;
+    outlet_count: string;
+    qr_requirements: string;
+    status: DemoRequestStatus;
+    source: string;
+    created_at: string;
+    updated_at: string | null;
+    notes: string | null;
+}
+
 function normalizeYmd(value: unknown): string | null {
     const raw = String(value || '').trim();
     return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : null;
@@ -514,6 +531,140 @@ export async function sendManualSubscriptionReminderEmail(
         return { success: true };
     } catch (error: any) {
         return { success: false, error: error.message || 'Failed to send manual reminder' };
+    }
+}
+
+// ─── Demo Requests ──────────────────────────────────────────────────────────
+
+function toIsoString(value: unknown): string | null {
+    try {
+        if (
+            typeof value === 'object' &&
+            value !== null &&
+            'toDate' in value &&
+            typeof (value as { toDate?: unknown }).toDate === 'function'
+        ) {
+            const toDateFn = (value as { toDate: () => Date }).toDate;
+            return toDateFn().toISOString();
+        }
+
+        if (value instanceof Date) {
+            if (!Number.isNaN(value.getTime())) return value.toISOString();
+            return null;
+        }
+
+        if (typeof value === 'string' || typeof value === 'number') {
+            const parsed = new Date(value);
+            if (!Number.isNaN(parsed.getTime())) return parsed.toISOString();
+        }
+
+        return null;
+    } catch {
+        return null;
+    }
+}
+
+const DEMO_REQUEST_STATUS_SET = new Set<DemoRequestStatus>([
+    'new',
+    'contacted',
+    'scheduled',
+    'converted',
+    'closed',
+]);
+
+export async function getDemoRequests(filters?: {
+    status?: 'all' | DemoRequestStatus;
+    search?: string;
+}): Promise<DemoRequestRow[]> {
+    try {
+        const snapshot = await adminFirestore
+            .collection('demo_requests')
+            .orderBy('created_at', 'desc')
+            .limit(500)
+            .get();
+
+        const statusFilter = filters?.status || 'all';
+        const search = String(filters?.search || '').trim().toLowerCase();
+
+        const rows = snapshot.docs.map((doc) => {
+            const d = doc.data() || {};
+            const statusRaw = String(d.status || 'new').trim().toLowerCase() as DemoRequestStatus;
+            const status: DemoRequestStatus = DEMO_REQUEST_STATUS_SET.has(statusRaw) ? statusRaw : 'new';
+
+            return {
+                id: doc.id,
+                contact_name: String(d.contact_name || ''),
+                business_email: String(d.business_email || ''),
+                phone: String(d.phone || ''),
+                restaurant_name: String(d.restaurant_name || ''),
+                outlet_count: String(d.outlet_count || ''),
+                qr_requirements: String(d.qr_requirements || ''),
+                status,
+                source: String(d.source || 'website'),
+                created_at: toIsoString(d.created_at) || new Date(0).toISOString(),
+                updated_at: toIsoString(d.updated_at),
+                notes: d.notes ? String(d.notes) : null,
+            } as DemoRequestRow;
+        });
+
+        return rows.filter((row) => {
+            if (statusFilter !== 'all' && row.status !== statusFilter) return false;
+            if (!search) return true;
+
+            const haystack = [
+                row.contact_name,
+                row.business_email,
+                row.phone,
+                row.restaurant_name,
+                row.outlet_count,
+                row.qr_requirements,
+                row.status,
+            ]
+                .join(' ')
+                .toLowerCase();
+
+            return haystack.includes(search);
+        });
+    } catch (error) {
+        console.error('Error loading demo requests:', error);
+        return [];
+    }
+}
+
+export async function updateDemoRequestStatus(
+    requestId: string,
+    status: DemoRequestStatus,
+    notes?: string
+): Promise<{ success: boolean; error?: string }> {
+    if (!DEMO_REQUEST_STATUS_SET.has(status)) {
+        return { success: false, error: 'Invalid status' };
+    }
+
+    try {
+        const updateData: Record<string, unknown> = {
+            status,
+            updated_at: FieldValue.serverTimestamp(),
+        };
+
+        if (notes !== undefined) {
+            updateData.notes = String(notes || '').trim();
+        }
+
+        await adminFirestore.doc(`demo_requests/${requestId}`).update(updateData);
+
+        await logActivity(
+            'DEMO_REQUEST_STATUS_CHANGED',
+            `Demo request status changed to ${status}`,
+            'info',
+            { request_id: requestId, status }
+        );
+
+        revalidatePath('/super-admin/demo-requests');
+        revalidatePath('/super-admin');
+        return { success: true };
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Failed to update demo request';
+        return { success: false, error: message };
     }
 }
 

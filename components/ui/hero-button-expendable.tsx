@@ -3,12 +3,14 @@
 import { useEffect, useState, type FormEvent } from "react"
 import { X, Check, ArrowRight, BarChart3, Globe2, Menu } from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
+import NexRestoLogo from "@/components/ui/NexRestoLogo"
 
 export default function Hero() {
   const [isExpanded, setIsExpanded] = useState(false)
   const [formStep, setFormStep] = useState<"idle" | "submitting" | "success">("idle")
   const [isAnimationComplete, setIsAnimationComplete] = useState(false)
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
 
   const handleExpand = () => {
     setIsMobileNavOpen(false)
@@ -18,18 +20,51 @@ export default function Hero() {
 
   const handleClose = () => {
     setIsAnimationComplete(false)
+    setFormError(null)
     setTimeout(() => {
       setIsExpanded(false)
       setTimeout(() => setFormStep("idle"), 500)
     }, 200)
   }
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    setFormError(null)
     setFormStep("submitting")
-    setTimeout(() => {
+
+    try {
+      const form = e.currentTarget
+      const formData = new FormData(form)
+
+      const payload = {
+        contactName: String(formData.get("contactName") || ""),
+        businessEmail: String(formData.get("businessEmail") || ""),
+        phone: String(formData.get("phone") || ""),
+        restaurantName: String(formData.get("restaurantName") || ""),
+        outletCount: String(formData.get("outletCount") || ""),
+        qrRequirements: String(formData.get("qrRequirements") || ""),
+      }
+
+      const response = await fetch("/api/demo-requests", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      })
+
+      if (!response.ok) {
+        const errorPayload = await response.json().catch(() => ({}))
+        const message = String(errorPayload?.error || "Failed to submit request")
+        throw new Error(message)
+      }
+
+      form.reset()
       setFormStep("success")
-    }, 1500)
+    } catch (error) {
+      setFormStep("idle")
+      setFormError(error instanceof Error ? error.message : "Failed to submit request")
+    }
   }
 
   useEffect(() => {
@@ -45,7 +80,9 @@ export default function Hero() {
         <nav className="absolute left-0 top-0 z-20 w-full px-4 pt-[max(1rem,env(safe-area-inset-top))] sm:px-6 sm:pt-6">
           <div className="mx-auto flex w-full max-w-6xl items-center justify-between rounded-2xl border border-zinc-800 bg-zinc-950/70 px-3 py-2.5 backdrop-blur-md sm:px-4 sm:py-3">
             <a href="#" className="inline-flex items-center gap-2 text-sm font-semibold text-zinc-100 sm:text-base">
-              <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white">N</span>
+              <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white/10 ring-1 ring-white/20 shadow-lg shadow-amber-500/25">
+                <NexRestoLogo className="h-4 w-4" priority />
+              </span>
               NexResto
             </a>
             <div className="hidden items-center gap-6 text-sm text-zinc-300 md:flex">
@@ -677,7 +714,7 @@ export default function Hero() {
                               </div>
                               <div>
                                 <h3 className="mb-2 text-2xl font-bold text-white">Request Received!</h3>
-                                <p className="text-blue-100">Our team will be in touch shortly to schedule your personalized demo.</p>
+                                <p className="text-blue-100">Our team will contact you shortly to set up your QR ordering onboarding call.</p>
                               </div>
                               <button
                                 onClick={handleClose}
@@ -689,33 +726,55 @@ export default function Hero() {
                           ) : (
                             <form onSubmit={handleSubmit} className="space-y-5">
                               <div className="space-y-1">
-                                <h3 className="text-xl font-semibold text-white">Get a Demo</h3>
-                                <p className="text-sm text-blue-200">Fill out the form below and we&apos;ll contact you.</p>
+                                <h3 className="text-xl font-semibold text-white">Get Your Restaurant QR Demo</h3>
+                                <p className="text-sm text-blue-200">Share your restaurant details and we&apos;ll tailor a QR ordering walkthrough.</p>
                               </div>
+
+                              {formError && (
+                                <p className="rounded-lg border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">
+                                  {formError}
+                                </p>
+                              )}
 
                               <div className="space-y-4">
                                 <div>
                                   <label htmlFor="name" className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-blue-200">
-                                    Full Name
+                                    Contact Person
                                   </label>
                                   <input
                                     required
                                     type="text"
                                     id="name"
-                                    placeholder="Jane Doe"
+                                    name="contactName"
+                                    placeholder="Alden Noronha"
                                     className="w-full rounded-lg border border-blue-300/20 bg-blue-950/40 px-4 py-3 text-base text-white placeholder:text-white/30 transition-all focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-400 sm:text-sm"
                                   />
                                 </div>
 
                                 <div>
                                   <label htmlFor="email" className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-blue-200">
-                                    Work Email
+                                    Business Email
                                   </label>
                                   <input
                                     required
                                     type="email"
                                     id="email"
-                                    placeholder="jane@company.com"
+                                    name="businessEmail"
+                                    placeholder="ops@yourrestaurant.com"
+                                    className="w-full rounded-lg border border-blue-300/20 bg-blue-950/40 px-4 py-3 text-base text-white placeholder:text-white/30 transition-all focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-400 sm:text-sm"
+                                  />
+                                </div>
+
+                                <div>
+                                  <label htmlFor="phone" className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-blue-200">
+                                    WhatsApp / Phone
+                                  </label>
+                                  <input
+                                    required
+                                    type="tel"
+                                    id="phone"
+                                    name="phone"
+                                    placeholder="+91 98XXXXXX10"
                                     className="w-full rounded-lg border border-blue-300/20 bg-blue-950/40 px-4 py-3 text-base text-white placeholder:text-white/30 transition-all focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-400 sm:text-sm"
                                   />
                                 </div>
@@ -723,39 +782,46 @@ export default function Hero() {
                                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                   <div>
                                     <label htmlFor="company" className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-blue-200">
-                                      Company
+                                      Restaurant Name
                                     </label>
                                     <input
+                                      required
                                       type="text"
                                       id="company"
-                                      placeholder="Acme Inc"
+                                      name="restaurantName"
+                                      placeholder="Spice Route Bistro"
                                       className="w-full rounded-lg border border-blue-300/20 bg-blue-950/40 px-4 py-3 text-base text-white placeholder:text-white/30 transition-all focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-400 sm:text-sm"
                                     />
                                   </div>
                                   <div>
                                     <label htmlFor="size" className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-blue-200">
-                                      Size
+                                      Number of Outlets
                                     </label>
                                     <select
                                       id="size"
+                                      name="outletCount"
+                                      required
+                                      defaultValue=""
                                       className="w-full cursor-pointer appearance-none rounded-lg border border-blue-300/20 bg-blue-950/40 px-4 py-3 text-base text-white transition-all focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-400 sm:text-sm"
                                     >
-                                      <option className="bg-blue-900">1-50</option>
-                                      <option className="bg-blue-900">51-200</option>
-                                      <option className="bg-blue-900">201-1000</option>
-                                      <option className="bg-blue-900">1000+</option>
+                                      <option value="" className="bg-blue-900">Select outlets</option>
+                                      <option className="bg-blue-900">1 Outlet</option>
+                                      <option className="bg-blue-900">2-5 Outlets</option>
+                                      <option className="bg-blue-900">6-20 Outlets</option>
+                                      <option className="bg-blue-900">20+ Outlets</option>
                                     </select>
                                   </div>
                                 </div>
 
                                 <div>
                                   <label htmlFor="message" className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-blue-200">
-                                    Needs
+                                    QR Setup Requirements
                                   </label>
                                   <textarea
                                     id="message"
+                                    name="qrRequirements"
                                     rows={3}
-                                    placeholder="Tell us about your project..."
+                                    placeholder="Tell us your cuisine type, table count, and current ordering flow..."
                                     className="w-full resize-none rounded-lg border border-blue-300/20 bg-blue-950/40 px-4 py-3 text-base text-white placeholder:text-white/30 transition-all focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-400 sm:text-sm"
                                   />
                                 </div>
@@ -772,12 +838,12 @@ export default function Hero() {
                                     Sending...
                                   </span>
                                 ) : (
-                                  "Submit Request"
+                                  "Request QR Demo"
                                 )}
                               </button>
 
                               <p className="mt-4 text-center text-xs text-blue-200/60">
-                                By submitting, you agree to our Terms of Service and Privacy Policy.
+                                By submitting, you agree to be contacted for NexResto QR ordering onboarding.
                               </p>
                             </form>
                           )}

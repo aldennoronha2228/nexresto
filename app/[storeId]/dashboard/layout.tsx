@@ -426,7 +426,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             return;
         }
         router.push(item.href);
-        router.refresh();
     };
 
     // Refresh session on route change to prevent stale state

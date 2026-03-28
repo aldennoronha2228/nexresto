@@ -13,6 +13,7 @@ const inter = Inter({
   fallback: ['Segoe UI', 'Roboto', 'Helvetica', 'Arial', 'sans-serif'],
 });
 const siteOrigin = getSiteOrigin();
+const iconVersion = '20260328d';
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteOrigin),
@@ -53,12 +54,12 @@ export const metadata: Metadata = {
   manifest: '/site.webmanifest',
   icons: {
     icon: [
-      { url: '/favicon.ico' },
-      { url: '/favicon-48.png', sizes: '48x48', type: 'image/png' },
-      { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
+      { url: `/favicon.png?v=${iconVersion}`, sizes: '32x32', type: 'image/png' },
+      { url: `/favicon-48.png?v=${iconVersion}`, sizes: '48x48', type: 'image/png' },
+      { url: `/icon-192.png?v=${iconVersion}`, sizes: '192x192', type: 'image/png' },
     ],
-    shortcut: '/favicon.ico',
-    apple: '/apple-touch-icon.png',
+    shortcut: `/favicon.png?v=${iconVersion}`,
+    apple: `/apple-touch-icon.png?v=${iconVersion}`,
   },
 };
 

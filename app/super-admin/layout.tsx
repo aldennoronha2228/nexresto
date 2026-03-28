@@ -23,7 +23,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Geist, Geist_Mono } from 'next/font/google';
 import {
     LayoutDashboard, Building2, ScrollText,
-    ChevronLeft, LogOut, Menu, X, HardDrive, Mail
+    ChevronLeft, LogOut, Menu, X, HardDrive, Mail, Inbox
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import NexRestoLogo from '@/components/ui/NexRestoLogo';
@@ -36,6 +36,7 @@ const navigation = [
     { name: 'Overview', href: '/super-admin', icon: LayoutDashboard },
     { name: 'Restaurants', href: '/super-admin/restaurants', icon: Building2 },
     { name: 'Emails', href: '/super-admin/emails', icon: Mail },
+    { name: 'Demo Requests', href: '/super-admin/demo-requests', icon: Inbox },
     { name: 'Usage & Billing', href: '/super-admin/resource-monitor', icon: HardDrive },
     { name: 'Activity Logs', href: '/super-admin/logs', icon: ScrollText },
 ];
