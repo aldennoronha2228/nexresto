@@ -1,5 +1,7 @@
 # SEO QA Checklist (Multi-Tenant Safe)
 
+See also: `docs/seo/INDEXING_RUNBOOK.md` for Search Console operations and the 14-day monitoring workflow.
+
 ## 1) Metadata per tenant
 - [ ] Visit `/{storeId}` and confirm title/description/OG/canonical are tenant-specific.
 - [ ] Visit `/{storeId}/menu` and confirm metadata remains scoped to the same `storeId`.

@@ -2,6 +2,8 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { CustomerMenuShell } from '@/components/customer/CustomerMenuShell';
+import { AuthProvider } from '@/context/AuthContext';
+import { CartProvider } from '@/context/CartContext';
 import { JsonLd } from '@/components/seo/JsonLd';
 import {
     buildBreadcrumbJsonLd,
@@ -88,11 +90,15 @@ export default async function TenantMenuPage({
                 <span aria-current="page">Menu</span>
             </div>
 
-            <CustomerMenuShell
-                restaurantIdOverride={tenant.storeId}
-                tenantHomePath={homePath}
-                restaurantName={tenant.name}
-            />
+            <AuthProvider>
+                <CartProvider>
+                    <CustomerMenuShell
+                        restaurantIdOverride={tenant.storeId}
+                        tenantHomePath={homePath}
+                        restaurantName={tenant.name}
+                    />
+                </CartProvider>
+            </AuthProvider>
         </>
     );
 }

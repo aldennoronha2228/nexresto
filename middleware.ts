@@ -34,8 +34,21 @@ const IS_PROD = process.env.NODE_ENV === 'production';
 // Paths that require an authenticated session
 const PROTECTED_PREFIXES = ['/super-admin'];
 
-// Paths that are always public
-const PUBLIC_PATHS = ['/login', '/auth', '/customer', '/unauthorized', '/_next', '/favicon.ico', '/public'];
+const NOINDEX_PREFIXES = [
+    '/api',
+    '/super-admin',
+    '/admin',
+    '/dashboard',
+    '/customer',
+    '/login',
+    '/change-password',
+    '/setup-password',
+    '/maintenance',
+    '/unauthorized',
+];
+
+const TENANT_DASHBOARD_PATH = /^\/[^/]+\/dashboard(?:\/.*)?$/;
+const TENANT_MENU_PATH = /^\/[^/]+\/menu\/?$/;
 
 // ─── Security headers ─────────────────────────────────────────────────────────
 
@@ -89,8 +102,33 @@ function buildSecurityHeaders(nonce: string, allowCamera: boolean): Record<strin
         ].join(', '),
         ...(IS_PROD ? { 'Strict-Transport-Security': 'max-age=63072000; includeSubDomains; preload' } : {}),
         'X-Powered-By': '',
-        'Cache-Control': 'no-store',
     };
+}
+
+function shouldNoIndex(pathname: string, searchParams: URLSearchParams): boolean {
+    if (NOINDEX_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))) {
+        return true;
+    }
+
+    if (TENANT_DASHBOARD_PATH.test(pathname)) {
+        return true;
+    }
+
+    // Preview URLs should never be indexed.
+    if (TENANT_MENU_PATH.test(pathname) && searchParams.get('preview') === '1') {
+        return true;
+    }
+
+    return false;
+}
+
+function getCacheControl(pathname: string, isNoIndexRoute: boolean): string {
+    if (isNoIndexRoute || pathname.startsWith('/api/')) {
+        return 'no-store';
+    }
+
+    // Cache only public content to improve crawl efficiency.
+    return 'public, max-age=0, s-maxage=900, stale-while-revalidate=86400';
 }
 
 // ─── Request nonce generation ─────────────────────────────────────────────────
@@ -102,7 +140,7 @@ function generateNonce(): string {
 
 // ─── Open-redirect guard ──────────────────────────────────────────────────────
 
-function isSafeRedirect(url: string | null, requestUrl: URL): boolean {
+function isSafeRedirect(url: string | null): boolean {
     if (!url) return false;
     if (url.startsWith('//') || /^https?:\/\//i.test(url)) return false;
     return url.startsWith('/') && !url.startsWith('//');
@@ -112,14 +150,6 @@ function isSafeRedirect(url: string | null, requestUrl: URL): boolean {
 
 function hasPathTraversal(pathname: string): boolean {
     return pathname.includes('..') || pathname.includes('%2e%2e') || pathname.includes('%2E%2E');
-}
-
-// ─── Session token extraction ─────────────────────────────────────────────────
-
-function extractSessionFromCookies(request: NextRequest): string | null {
-    // Firebase session management is usually client-side, 
-    // but some apps stores a __session cookie or token for SSR.
-    return request.cookies.get('__session')?.value ?? null;
 }
 
 // ─── Main middleware ───────────────────────────────────────────────────────────
@@ -134,6 +164,8 @@ export default function proxy(request: NextRequest) {
     const nonce = generateNonce();
     const isTablesRoute = /^\/[^/]+\/dashboard\/tables(?:\/.*)?$/.test(pathname);
     const securityHeaders = buildSecurityHeaders(nonce, isTablesRoute);
+    const isNoIndexRoute = shouldNoIndex(pathname, searchParams);
+    const cacheControl = getCacheControl(pathname, isNoIndexRoute);
 
     const isDashboard = pathname.match(/^\/[^/]+\/dashboard(\/.*)?$/);
     const isProtected = isDashboard || PROTECTED_PREFIXES.some(p => pathname.startsWith(p));
@@ -145,12 +177,16 @@ export default function proxy(request: NextRequest) {
     }
 
     const nextParam = searchParams.get('next');
-    if (nextParam && !isSafeRedirect(nextParam, request.nextUrl)) {
+    if (nextParam && !isSafeRedirect(nextParam)) {
         const cleanUrl = request.nextUrl.clone();
         cleanUrl.searchParams.delete('next');
         const response = NextResponse.redirect(cleanUrl);
         for (const [k, v] of Object.entries(securityHeaders)) {
             if (v) response.headers.set(k, v);
+        }
+        response.headers.set('Cache-Control', cacheControl);
+        if (isNoIndexRoute) {
+            response.headers.set('X-Robots-Tag', 'noindex, nofollow, noarchive, nosnippet');
         }
         return response;
     }
@@ -167,6 +203,11 @@ export default function proxy(request: NextRequest) {
 
     for (const [k, v] of Object.entries(securityHeaders)) {
         if (v) response.headers.set(k, v);
+    }
+    response.headers.set('Cache-Control', cacheControl);
+
+    if (isNoIndexRoute) {
+        response.headers.set('X-Robots-Tag', 'noindex, nofollow, noarchive, nosnippet');
     }
 
     return response;

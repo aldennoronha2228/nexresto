@@ -1,4 +1,5 @@
-const FALLBACK_ORIGIN = 'http://localhost:3000';
+const DEV_FALLBACK_ORIGIN = 'http://localhost:3000';
+const PROD_FALLBACK_ORIGIN = 'https://nexresto.in';
 
 function normalizeOrigin(raw: string): string | null {
     const value = (raw || '').trim();
@@ -33,6 +34,7 @@ function isLocalOrigin(origin: string): boolean {
 export function getSiteOrigin(): string {
     const isProduction = process.env.NODE_ENV === 'production';
     const candidates = [
+        process.env.SEO_SITE_ORIGIN,
         process.env.NEXT_PUBLIC_SITE_URL,
         process.env.NEXT_PUBLIC_APP_URL,
         process.env.VERCEL_PROJECT_PRODUCTION_URL,
@@ -47,7 +49,7 @@ export function getSiteOrigin(): string {
         return normalized;
     }
 
-    return FALLBACK_ORIGIN;
+    return isProduction ? PROD_FALLBACK_ORIGIN : DEV_FALLBACK_ORIGIN;
 }
 
 export function normalizeCanonicalPath(inputPath: string): string {

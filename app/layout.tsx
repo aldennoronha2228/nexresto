@@ -14,6 +14,11 @@ const inter = Inter({
 });
 const siteOrigin = getSiteOrigin();
 const iconVersion = '20260328d';
+const googleSiteVerification = (
+  process.env.GOOGLE_SITE_VERIFICATION ||
+  process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION ||
+  ''
+).trim();
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteOrigin),
@@ -50,7 +55,21 @@ export const metadata: Metadata = {
   robots: {
     index: true,
     follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+      'max-video-preview': -1,
+    },
   },
+  ...(googleSiteVerification
+    ? {
+      verification: {
+        google: googleSiteVerification,
+      },
+    }
+    : {}),
   manifest: '/site.webmanifest',
   icons: {
     icon: [

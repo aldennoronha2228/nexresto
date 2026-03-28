@@ -9,12 +9,16 @@ export default function robots(): MetadataRoute.Robots {
         rules: [
             {
                 userAgent: '*',
-                allow: ['/', '/*/menu', '/*'],
+                allow: ['/', '/*/menu', '/sitemap.xml'],
                 disallow: [
                     '/dashboard',
+                    '/dashboard/',
                     '/*/dashboard',
+                    '/*/dashboard/',
                     '/super-admin',
+                    '/super-admin/',
                     '/admin',
+                    '/admin/',
                     '/api/',
                     '/api/admin',
                     '/api/auth',
@@ -22,6 +26,7 @@ export default function robots(): MetadataRoute.Robots {
                     '/api/support',
                     '/api/tenant/create',
                     '/customer',
+                    '/customer/',
                     '/customer/order-summary',
                     '/customer/order-history',
                     '/login',
