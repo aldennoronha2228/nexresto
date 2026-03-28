@@ -22,7 +22,7 @@ const heroFadeInUp = {
     y: 0,
     transition: {
       duration: 0.68,
-      ease: [0.22, 1, 0.36, 1],
+      ease: [0.22, 1, 0.36, 1] as const,
     },
   },
 }
@@ -236,7 +236,7 @@ export default function Hero() {
                   style={{ borderRadius: "100px" }}
                   layout
                   layoutId="cta-card"
-                  transition={{ type: "tween", ease: [0.25, 1, 0.5, 1], duration: 0.4 }}
+                  transition={{ type: "tween", ease: [0.25, 1, 0.5, 1] as const, duration: 0.4 }}
                   className="absolute inset-0 origin-center bg-blue-600 dark:bg-blue-600"
                 />
                 <motion.button
@@ -606,7 +606,7 @@ export default function Hero() {
           <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-0 sm:items-center sm:p-4">
             <motion.div
               layoutId="cta-card"
-              transition={{ type: "tween", ease: [0.25, 1, 0.5, 1], duration: 0.4 }}
+              transition={{ type: "tween", ease: [0.25, 1, 0.5, 1] as const, duration: 0.4 }}
               style={{ borderRadius: "24px" }}
               layout
               className="relative flex min-h-[100svh] w-full origin-center overflow-hidden bg-blue-700 shadow-2xl sm:h-full sm:min-h-0 sm:rounded-[24px]"
