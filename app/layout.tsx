@@ -13,10 +13,11 @@ export const metadata: Metadata = {
   manifest: '/site.webmanifest',
   icons: {
     icon: [
-      { url: '/favicon.png?v=20260328', type: 'image/png' },
+      { url: '/favicon-48.png?v=20260328', sizes: '48x48', type: 'image/png' },
+      { url: '/icon-192.png?v=20260328', sizes: '192x192', type: 'image/png' },
       { url: '/nexresto-mark.svg?v=20260328', type: 'image/svg+xml' },
     ],
-    shortcut: '/favicon.png?v=20260328',
+    shortcut: '/favicon-48.png?v=20260328',
     apple: '/apple-touch-icon.png?v=20260328',
   },
 };
