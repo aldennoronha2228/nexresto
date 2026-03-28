@@ -89,7 +89,8 @@ export const CartDrawer: React.FC<{ tableId?: string; restaurantId?: string }> =
                                                     alt={`${item.name} in your cart`}
                                                     width={80}
                                                     height={80}
-                                                    unoptimized
+                                                    loading="lazy"
+                                                    quality={58}
                                                     className="h-20 w-20 rounded-xl object-cover"
                                                 />
                                                 <div className="flex-1">

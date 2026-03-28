@@ -1,8 +1,10 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import type { Metadata } from 'next';
+import { preload } from 'react-dom';
 import { notFound } from 'next/navigation';
 import { JsonLd } from '@/components/seo/JsonLd';
+import { getOptimizedHeroImageSrc } from '@/lib/image-optimization';
 import {
     buildBreadcrumbJsonLd,
     buildRestaurantJsonLd,
@@ -12,8 +14,6 @@ import {
 } from '@/lib/seo/tenant';
 
 type RouteParams = Promise<{ storeId: string }>;
-
-const FALLBACK_HERO = 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1600&q=80';
 
 export async function generateMetadata({
     params,
@@ -48,7 +48,9 @@ export default async function TenantHomePage({
 
     const homePath = `/${tenant.storeId}`;
     const menuPath = `${homePath}/menu`;
-    const heroImage = tenant.heroImageUrl || tenant.ogImageUrl || FALLBACK_HERO;
+    const heroImage = getOptimizedHeroImageSrc(tenant.heroImageUrl || tenant.ogImageUrl);
+
+    preload(heroImage, { as: 'image', fetchPriority: 'high' });
 
     return (
         <>
@@ -65,11 +67,13 @@ export default async function TenantHomePage({
                         <Image
                             src={heroImage}
                             alt={`${tenant.name} restaurant ambience and dining experience`}
-                            fill
-                            sizes="(max-width: 1024px) 100vw, 1200px"
+                            width={1600}
+                            height={700}
+                            sizes="(max-width: 768px) 100vw, (max-width: 1280px) 90vw, 1200px"
+                            quality={65}
                             priority
-                            unoptimized
-                            className="object-cover"
+                            fetchPriority="high"
+                            className="h-full w-full object-cover"
                         />
                     </div>
 

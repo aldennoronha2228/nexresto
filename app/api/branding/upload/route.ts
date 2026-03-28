@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
+import sharp from 'sharp';
 import { adminFirestore } from '@/lib/firebase-admin';
 import { getStorage } from 'firebase-admin/storage';
 import { authorizeTenantAccess } from '@/lib/server/authz/tenant';
 
-const ALLOWED_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/jpg', 'image/webp']);
+const ALLOWED_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/avif']);
 const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
+const HERO_TARGET_BYTES = 150 * 1024;
+const LOGO_TARGET_BYTES = 80 * 1024;
 
 function sanitizeRestaurantId(input: unknown): string {
     if (typeof input !== 'string') return '';
@@ -31,10 +34,39 @@ function errorMessage(error: unknown, fallback: string): string {
     return error instanceof Error && error.message ? error.message : fallback;
 }
 
-function extensionFromMime(type: string): string {
-    if (type === 'image/png') return 'png';
-    if (type === 'image/webp') return 'webp';
-    return 'jpg';
+async function optimizeToWebp(
+    source: Buffer,
+    {
+        width,
+        targetBytes,
+        startQuality,
+    }: {
+        width: number;
+        targetBytes: number;
+        startQuality: number;
+    }
+): Promise<Buffer> {
+    let quality = startQuality;
+    let output = source;
+
+    while (quality >= 45) {
+        output = await sharp(source)
+            .rotate()
+            .resize({
+                width,
+                withoutEnlargement: true,
+            })
+            .webp({ quality, effort: 4 })
+            .toBuffer();
+
+        if (output.length <= targetBytes) {
+            return output;
+        }
+
+        quality -= 7;
+    }
+
+    return output;
 }
 
 export async function POST(request: NextRequest) {
@@ -57,16 +89,26 @@ export async function POST(request: NextRequest) {
         }
 
         if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
-            return NextResponse.json({ error: 'Only PNG, JPG, JPEG, or WEBP files are allowed' }, { status: 400 });
+            return NextResponse.json({ error: 'Only PNG, JPG, JPEG, WEBP, or AVIF files are allowed' }, { status: 400 });
         }
 
         if (file.size <= 0 || file.size > MAX_UPLOAD_BYTES) {
             return NextResponse.json({ error: 'File size must be between 1 byte and 2MB' }, { status: 400 });
         }
 
-        const buffer = Buffer.from(await file.arrayBuffer());
-        const ext = extensionFromMime(file.type);
-        const objectPath = `restaurants/${restaurantId}/branding/${assetType}-${Date.now()}.${ext}`;
+        const originalBuffer = Buffer.from(await file.arrayBuffer());
+        const optimizedBuffer = await optimizeToWebp(originalBuffer, assetType === 'hero'
+            ? {
+                width: 1600,
+                targetBytes: HERO_TARGET_BYTES,
+                startQuality: 70,
+            }
+            : {
+                width: 512,
+                targetBytes: LOGO_TARGET_BYTES,
+                startQuality: 80,
+            });
+        const objectPath = `restaurants/${restaurantId}/branding/${assetType}-${Date.now()}.webp`;
 
         const configuredBucket = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
         const storage = configuredBucket
@@ -74,11 +116,11 @@ export async function POST(request: NextRequest) {
             : getStorage().bucket();
 
         const object = storage.file(objectPath);
-        await object.save(buffer, {
+        await object.save(optimizedBuffer, {
             resumable: false,
             metadata: {
-                contentType: file.type,
-                cacheControl: 'public, max-age=3600',
+                contentType: 'image/webp',
+                cacheControl: 'public, max-age=31536000, immutable',
             },
         });
 
@@ -118,7 +160,13 @@ export async function POST(request: NextRequest) {
             }, { merge: true });
         }
 
-        return NextResponse.json({ success: true, logoUrl: signedUrl, assetType });
+        return NextResponse.json({
+            success: true,
+            logoUrl: signedUrl,
+            assetType,
+            originalBytes: originalBuffer.length,
+            optimizedBytes: optimizedBuffer.length,
+        });
     } catch (error: unknown) {
         return NextResponse.json({ error: errorMessage(error, 'Failed to upload logo') }, { status: 500 });
     }

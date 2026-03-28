@@ -7,11 +7,7 @@ import { tenantAuth, adminAuth } from '@/lib/firebase';
 import { useRestaurant } from '@/hooks/useRestaurant';
 
 const SESSION_KEY = 'nexresto_nexo_support_chat_v1';
-
-const STARTER_MESSAGE = {
-    role: 'assistant',
-    content: 'Hi, I am Nexo. I can help with operations, growth, and technical issues across your dashboard.\n- I read live context from menu, tables, orders, inventory, reports, branding, and staff modules for your restaurant.\n- You can type naturally in any style and I will execute supported changes. Example: "please make paneer tikka unavailable", "change margherita price to 349", "arrange all tables in square", or "add menu item name=Margherita Pizza, price=299, category=Pizza, type=veg".',
-};
+const LEGACY_STARTER_PREFIX = 'Hi, I am Nexo.';
 
 function toUsageState(payload) {
     const tier = payload?.tier === 'pro' ? 'pro' : 'free';
@@ -89,7 +85,7 @@ export default function GeminiSupportChat() {
     const { storeId } = useRestaurant();
     const [isOpen, setIsOpen] = useState(false);
     const [input, setInput] = useState('');
-    const [messages, setMessages] = useState([STARTER_MESSAGE]);
+    const [messages, setMessages] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [dashboardContext, setDashboardContext] = useState(null);
     const [usage, setUsage] = useState(toUsageState({ tier: 'free', used: 0, limit: 5 }));
@@ -102,7 +98,12 @@ export default function GeminiSupportChat() {
             if (!raw) return;
             const parsed = JSON.parse(raw);
             if (Array.isArray(parsed) && parsed.length > 0) {
-                setMessages(parsed);
+                const migrated = parsed.filter((msg) => {
+                    if (!msg || typeof msg !== 'object') return false;
+                    if (msg.role !== 'assistant' || typeof msg.content !== 'string') return true;
+                    return !msg.content.startsWith(LEGACY_STARTER_PREFIX);
+                });
+                setMessages(migrated);
             }
         } catch {
             // ignore malformed session data
@@ -167,11 +168,11 @@ export default function GeminiSupportChat() {
     }, [isOpen]);
 
     const clearChat = () => {
-        setMessages([STARTER_MESSAGE]);
+        setMessages([]);
         setInput('');
         setIsLoading(false);
         try {
-            sessionStorage.setItem(SESSION_KEY, JSON.stringify([STARTER_MESSAGE]));
+            sessionStorage.removeItem(SESSION_KEY);
         } catch {
             // ignore storage issues
         }

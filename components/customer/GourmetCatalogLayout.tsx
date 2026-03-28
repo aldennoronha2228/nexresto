@@ -12,6 +12,7 @@ import {
     X,
 } from 'lucide-react';
 import type { MenuItem as CartMenuItem } from '@/context/CartContext';
+import { getOptimizedMenuItemImageSrc } from '@/lib/image-optimization';
 
 type CatalogBranding = {
     primaryColor: string;
@@ -80,9 +81,8 @@ function formatINR(value: number): string {
 }
 
 function imageFor(index: number, item: CatalogItem | undefined, featuredImages: string[]): string {
-    if (featuredImages[index]) return featuredImages[index];
-    if (item?.image) return item.image;
-    return 'https://images.unsplash.com/photo-1541544741938-0af808871cc0?w=1200&q=80';
+    if (featuredImages[index]) return getOptimizedMenuItemImageSrc(featuredImages[index]);
+    return getOptimizedMenuItemImageSrc(item?.image);
 }
 
 function pseudoRating(seed: string): string {
@@ -273,7 +273,9 @@ export function GourmetCatalogLayout({
                                         {section.category} ({section.items.length})
                                     </h2>
                                     <div className="grid grid-cols-2 gap-4">
-                                        {section.items.slice(0, 24).map((item, idx) => (
+                                        {section.items.slice(0, 24).map((item, idx) => {
+                                            const lcpCandidate = sectionIdx === 0 && idx === 0;
+                                            return (
                                             <motion.article
                                                 key={item.id}
                                                 initial={{ opacity: 0, y: 12 }}
@@ -287,8 +289,10 @@ export function GourmetCatalogLayout({
                                                         alt={`${item.name} from ${restaurantName} ${section.category} menu`}
                                                         fill
                                                         sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 280px"
-                                                        priority={sectionIdx === 0 && idx === 0}
-                                                        unoptimized
+                                                        quality={lcpCandidate ? 66 : 58}
+                                                        priority={lcpCandidate}
+                                                        fetchPriority={lcpCandidate ? 'high' : 'auto'}
+                                                        loading={lcpCandidate ? 'eager' : 'lazy'}
                                                         className="h-full w-full object-cover"
                                                     />
                                                 </div>
@@ -314,7 +318,8 @@ export function GourmetCatalogLayout({
                                                     </button>
                                                 </div>
                                             </motion.article>
-                                        ))}
+                                            );
+                                        })}
                                     </div>
                                 </section>
                             ))}

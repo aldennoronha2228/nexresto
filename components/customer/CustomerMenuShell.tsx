@@ -1,10 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import { useCart } from '@/context/CartContext';
 import type { MenuItem as CartMenuItem } from '@/context/CartContext';
-import { CartDrawer } from '@/components/customer/CartDrawer';
-import { GourmetCatalogLayout } from '@/components/customer/GourmetCatalogLayout';
 import { AlertCircle, RefreshCw } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
@@ -12,6 +11,22 @@ import { db, tenantAuth, adminAuth } from '@/lib/firebase';
 import { collection, query, orderBy, getDocs, onSnapshot } from 'firebase/firestore';
 import { applyAvailabilityOverrides, seedAvailabilityMap } from '@/lib/menuAvailability';
 import { getTenantTableStorageKey } from '@/lib/client/storage/tenantKeys';
+import { getOptimizedHeroImageSrc, getOptimizedMenuItemImageSrc } from '@/lib/image-optimization';
+
+const CartDrawer = dynamic(
+    () => import('@/components/customer/CartDrawer').then((mod) => mod.CartDrawer),
+    { ssr: false }
+);
+
+const GourmetCatalogLayout = dynamic(
+    () => import('@/components/customer/GourmetCatalogLayout').then((mod) => mod.GourmetCatalogLayout),
+    {
+        ssr: false,
+        loading: () => (
+            <div className="mx-auto max-w-3xl px-4 py-10 text-center text-slate-500">Loading menu...</div>
+        ),
+    }
+);
 
 // Firestore item shape → CartMenuItem shape
 interface FirestoreItem {
@@ -47,7 +62,7 @@ const DEFAULT_BRANDING: CustomerBranding = {
     backgroundColor: '#FDFCF8',
     fontFamily: 'Inter',
     logoUrl: '',
-    heroImageUrl: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1600&q=80',
+    heroImageUrl: getOptimizedHeroImageSrc(''),
     heroOverlayOpacity: 60,
     heroHeadline: 'Culinary Excellence',
     heroTagline: 'Discover our exquisite menu crafted by world-class chefs',
@@ -78,7 +93,7 @@ function normalizeBranding(raw: unknown): CustomerBranding {
         backgroundColor: typeof source.backgroundColor === 'string' ? source.backgroundColor : DEFAULT_BRANDING.backgroundColor,
         fontFamily: typeof source.fontFamily === 'string' ? source.fontFamily : DEFAULT_BRANDING.fontFamily,
         logoUrl: typeof source.logoUrl === 'string' ? source.logoUrl : DEFAULT_BRANDING.logoUrl,
-        heroImageUrl: typeof source.heroImageUrl === 'string' && source.heroImageUrl ? source.heroImageUrl : DEFAULT_BRANDING.heroImageUrl,
+        heroImageUrl: getOptimizedHeroImageSrc(typeof source.heroImageUrl === 'string' ? source.heroImageUrl : ''),
         heroOverlayOpacity: Number.isFinite(overlay) ? Math.max(0, Math.min(100, overlay)) : DEFAULT_BRANDING.heroOverlayOpacity,
         heroHeadline: typeof source.heroHeadline === 'string' && source.heroHeadline ? source.heroHeadline : DEFAULT_BRANDING.heroHeadline,
         heroTagline: typeof source.heroTagline === 'string' && source.heroTagline ? source.heroTagline : DEFAULT_BRANDING.heroTagline,
@@ -110,7 +125,7 @@ function toCartItem(
         name: f.name,
         description: '',
         price: f.price,
-        image: f.image_url ?? 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=800&q=80',
+        image: getOptimizedMenuItemImageSrc(f.image_url),
         category: categoryName,
         available: f.available ?? true,
         type,

@@ -6,7 +6,12 @@ import { SuperAdminAuthProvider } from '@/context/SuperAdminAuthContext';
 import { Toaster } from 'sonner';
 import { getSiteOrigin } from '@/lib/seo/url';
 
-const inter = Inter({ subsets: ['latin'] });
+const inter = Inter({
+  subsets: ['latin'],
+  display: 'swap',
+  preload: true,
+  fallback: ['Segoe UI', 'Roboto', 'Helvetica', 'Arial', 'sans-serif'],
+});
 const siteOrigin = getSiteOrigin();
 
 export const metadata: Metadata = {

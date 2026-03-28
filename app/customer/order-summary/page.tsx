@@ -188,7 +188,8 @@ function OrderSummaryContent() {
                                                 alt={`${item.name} in your confirmed order`}
                                                 width={64}
                                                 height={64}
-                                                unoptimized
+                                                loading="lazy"
+                                                quality={58}
                                                 className="h-16 w-16 rounded-xl object-cover"
                                             />
                                             <div className="flex-1">

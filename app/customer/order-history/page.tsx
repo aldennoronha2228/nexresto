@@ -75,7 +75,8 @@ function CustomerOrderHistoryContent() {
                                                     alt={`${item.name} from your previous order`}
                                                     width={64}
                                                     height={64}
-                                                    unoptimized
+                                                    loading="lazy"
+                                                    quality={58}
                                                     className="h-16 w-16 rounded-xl object-cover"
                                                 />
                                                 <div className="flex-1"><p className="font-semibold text-[#1B4332]">{item.name}</p><p className="text-sm text-gray-600">{formatINR(item.price)} × {item.quantity}</p></div>
