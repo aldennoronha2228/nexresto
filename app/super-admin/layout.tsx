@@ -121,7 +121,7 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
                             </div>
                             {!collapsed && (
                                 <div>
-                                    <span className={cn("font-semibold tracking-tight text-white text-[17px]", geistMono.className)}>GOD.MODE</span>
+                                    <span className={cn("font-semibold tracking-tight text-white text-[17px]", geistMono.className)}>Super Admin</span>
                                     <p className="text-[11px] text-slate-400 tracking-[0.14em] uppercase">Command Center</p>
                                 </div>
                             )}
@@ -196,7 +196,7 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
                         <div className="w-8 h-8 rounded-lg bg-white/10 ring-1 ring-white/20 flex items-center justify-center shadow-lg shadow-violet-500/20">
                             <NexRestoLogo className="w-5 h-5" priority />
                         </div>
-                        <span className={cn("font-semibold text-white tracking-tight", geistMono.className)}>GOD.MODE</span>
+                        <span className={cn("font-semibold text-white tracking-tight", geistMono.className)}>Super Admin</span>
                     </div>
                 </div>
             </div>
@@ -224,7 +224,7 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
                                         <div className="w-8 h-8 rounded-lg bg-white/10 ring-1 ring-white/20 flex items-center justify-center shadow-lg shadow-violet-500/20">
                                             <NexRestoLogo className="w-5 h-5" priority />
                                         </div>
-                                        <span className={cn("font-semibold text-white tracking-tight", geistMono.className)}>GOD.MODE</span>
+                                        <span className={cn("font-semibold text-white tracking-tight", geistMono.className)}>Super Admin</span>
                                     </div>
                                     <button
                                         onClick={() => setMobileMenuOpen(false)}

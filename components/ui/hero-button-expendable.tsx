@@ -1,19 +1,90 @@
 "use client"
 
-import { useEffect, useState, type FormEvent } from "react"
-import { X, Check, ArrowRight, BarChart3, Globe2, Menu } from "lucide-react"
+import { useEffect, useState, type FormEvent, type MouseEvent, type ReactNode } from "react"
+import { X, Check, ArrowRight, BarChart3, Globe2 } from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
-import NexRestoLogo from "@/components/ui/NexRestoLogo"
+
+const heroSequence = {
+  hidden: { opacity: 1 },
+  show: {
+    opacity: 1,
+    transition: {
+      delayChildren: 0.12,
+      staggerChildren: 0.14,
+    },
+  },
+}
+
+const heroFadeInUp = {
+  hidden: { opacity: 0, y: 24 },
+  show: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      duration: 0.68,
+      ease: [0.22, 1, 0.36, 1],
+    },
+  },
+}
+
+const heroStats = [
+  { label: "Trusted By", value: "120+ Restaurant Brands" },
+  { label: "Monthly Orders", value: "4.8M+ Processed" },
+  { label: "Deployment Speed", value: "Go-live in under 72 hours" },
+]
+
+function handleCardPointerMove(event: MouseEvent<HTMLElement>) {
+  const element = event.currentTarget
+  const rect = element.getBoundingClientRect()
+
+  if (!rect.width || !rect.height) return
+
+  const x = event.clientX - rect.left
+  const y = event.clientY - rect.top
+  const px = (x / rect.width) * 100
+  const py = (y / rect.height) * 100
+  const rx = (50 - py) / 10
+  const ry = (px - 50) / 12
+
+  element.style.setProperty("--mx", `${px}%`)
+  element.style.setProperty("--my", `${py}%`)
+  element.style.setProperty("--rx", `${rx.toFixed(2)}deg`)
+  element.style.setProperty("--ry", `${ry.toFixed(2)}deg`)
+}
+
+function resetCardPointer(event: MouseEvent<HTMLElement>) {
+  const element = event.currentTarget
+  element.style.setProperty("--mx", "50%")
+  element.style.setProperty("--my", "50%")
+  element.style.setProperty("--rx", "0deg")
+  element.style.setProperty("--ry", "0deg")
+}
+
+function InteractiveGlowCard({ className, children }: { className: string; children: ReactNode }) {
+  return (
+    <motion.article
+      onMouseMove={handleCardPointerMove}
+      onMouseLeave={resetCardPointer}
+      whileHover={{ scale: 1.025, y: -2 }}
+      transition={{ type: "spring", stiffness: 260, damping: 20 }}
+      className={`group relative overflow-hidden transition-transform duration-200 will-change-transform [transform:perspective(900px)_rotateX(var(--rx,0deg))_rotateY(var(--ry,0deg))] ${className}`}
+    >
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-0 rounded-2xl bg-[radial-gradient(260px_circle_at_var(--mx,50%)_var(--my,50%),rgba(96,165,250,0.26),transparent_62%)] opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+      />
+      <div className="relative z-10">{children}</div>
+    </motion.article>
+  )
+}
 
 export default function Hero() {
   const [isExpanded, setIsExpanded] = useState(false)
   const [formStep, setFormStep] = useState<"idle" | "submitting" | "success">("idle")
   const [isAnimationComplete, setIsAnimationComplete] = useState(false)
-  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
 
   const handleExpand = () => {
-    setIsMobileNavOpen(false)
     setIsExpanded(true)
     setTimeout(() => setIsAnimationComplete(true), 400)
   }
@@ -76,150 +147,86 @@ export default function Hero() {
 
   return (
     <>
-      <div className="relative flex min-h-[100svh] flex-col items-center justify-center overflow-hidden bg-zinc-950 px-4 py-16 sm:px-6 sm:py-24">
-        <nav className="absolute left-0 top-0 z-20 w-full px-4 pt-[max(1rem,env(safe-area-inset-top))] sm:px-6 sm:pt-6">
-          <div className="mx-auto flex w-full max-w-6xl items-center justify-between rounded-2xl border border-zinc-800 bg-zinc-950/70 px-3 py-2.5 backdrop-blur-md sm:px-4 sm:py-3">
-            <a href="#" className="inline-flex items-center gap-2 text-sm font-semibold text-zinc-100 sm:text-base">
-              <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white/10 ring-1 ring-white/20 shadow-lg shadow-amber-500/25">
-                <NexRestoLogo className="h-4 w-4" priority />
-              </span>
-              NexResto
-            </a>
-            <div className="hidden items-center gap-6 text-sm text-zinc-300 md:flex">
-              <a href="#platform-info" className="transition-colors hover:text-white">Platform</a>
-              <a href="#nexresto-suite" className="transition-colors hover:text-white">Suite</a>
-              <a href="#nexresto-pricing" className="transition-colors hover:text-white">Plans</a>
-              <a href="#nexresto-faq" className="transition-colors hover:text-white">FAQ</a>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleExpand}
-                className="hidden rounded-full bg-blue-600 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-blue-500 sm:inline-flex sm:text-sm"
-              >
-                Book Demo
-              </button>
-              <button
-                onClick={() => setIsMobileNavOpen((prev) => !prev)}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-zinc-700 bg-zinc-900/60 text-zinc-200 md:hidden"
-                aria-label="Toggle navigation"
-                aria-expanded={isMobileNavOpen}
-              >
-                {isMobileNavOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
-              </button>
-            </div>
-          </div>
-
-          <AnimatePresence>
-            {isMobileNavOpen && (
-              <motion.div
-                initial={{ opacity: 0, y: -8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                className="mx-auto mt-2 w-full max-w-6xl rounded-2xl border border-zinc-800 bg-zinc-950/95 p-3 backdrop-blur-md md:hidden"
-              >
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <a href="#platform-info" onClick={() => setIsMobileNavOpen(false)} className="rounded-xl bg-zinc-900/60 px-3 py-2 text-zinc-200">Platform</a>
-                  <a href="#nexresto-suite" onClick={() => setIsMobileNavOpen(false)} className="rounded-xl bg-zinc-900/60 px-3 py-2 text-zinc-200">Suite</a>
-                  <a href="#nexresto-pricing" onClick={() => setIsMobileNavOpen(false)} className="rounded-xl bg-zinc-900/60 px-3 py-2 text-zinc-200">Plans</a>
-                  <a href="#nexresto-faq" onClick={() => setIsMobileNavOpen(false)} className="rounded-xl bg-zinc-900/60 px-3 py-2 text-zinc-200">FAQ</a>
-                </div>
-                <button
-                  onClick={handleExpand}
-                  className="mt-2 inline-flex w-full items-center justify-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white"
-                >
-                  Book Demo
-                </button>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </nav>
-
+      <div className="relative flex min-h-[100svh] flex-col items-center justify-center overflow-hidden bg-[radial-gradient(120%_95%_at_50%_0%,#10214e_0%,#070d1f_45%,#02050f_100%)] px-4 py-16 sm:px-6 sm:py-24">
         <div className="pointer-events-none absolute inset-0 transition-opacity duration-300" style={{ opacity: isExpanded ? 0 : 1 }}>
           <div
             className="absolute inset-0"
             style={{
               backgroundImage:
-                "radial-gradient(1200px 700px at 50% 100%, rgba(37,99,235,0.08), transparent 60%), radial-gradient(900px 520px at 50% 0%, rgba(255,255,255,0.06), transparent 70%)",
+                "radial-gradient(60% 45% at 14% 16%, rgba(59,130,246,0.26) 0%, rgba(59,130,246,0.06) 42%, transparent 74%), radial-gradient(56% 42% at 86% 14%, rgba(99,102,241,0.2) 0%, rgba(99,102,241,0.05) 44%, transparent 75%), radial-gradient(64% 54% at 52% 100%, rgba(15,23,42,0.7) 0%, rgba(2,6,23,0.94) 62%)",
             }}
           />
 
           <motion.div
-            className="absolute -right-[18%] -top-[60%] hidden h-[200%] w-[65%] rotate-[24deg] bg-white/25 blur-3xl sm:block"
-            animate={{ opacity: [0.08, 0.22, 0.08], x: [0, 18, 0], y: [0, 12, 0] }}
-            transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
+            className="absolute -left-12 top-20 h-32 w-32 rounded-full bg-blue-500/25 blur-3xl"
+            animate={{ x: [0, 24, 0], y: [0, -18, 0], opacity: [0.35, 0.6, 0.35] }}
+            transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
           />
 
           <motion.div
-            className="absolute -left-[20%] bottom-[-55%] hidden h-[180%] w-[58%] rotate-[28deg] bg-white/15 blur-3xl sm:block"
-            animate={{ opacity: [0.06, 0.16, 0.06], x: [0, -16, 0], y: [0, -10, 0] }}
-            transition={{ duration: 9, repeat: Infinity, ease: "easeInOut", delay: 0.4 }}
+            className="absolute right-[-5%] top-[18%] h-44 w-44 rounded-full bg-indigo-500/25 blur-3xl"
+            animate={{ x: [0, -22, 0], y: [0, 16, 0], opacity: [0.28, 0.52, 0.28] }}
+            transition={{ duration: 12, repeat: Infinity, ease: "easeInOut", delay: 0.7 }}
           />
 
           <motion.div
-            className="absolute inset-0"
-            style={{
-              backgroundImage:
-                "radial-gradient(circle at 14% 18%, rgba(37,99,235,0.22), transparent 36%), radial-gradient(circle at 86% 14%, rgba(59,130,246,0.18), transparent 35%), radial-gradient(circle at 50% 84%, rgba(30,64,175,0.12), transparent 32%)",
-            }}
-            animate={{
-              backgroundPosition: ["0% 0%", "6% 4%", "0% 0%"],
-            }}
-            transition={{ duration: 7, repeat: Infinity, ease: "easeInOut" }}
+            className="absolute bottom-[-10%] left-[32%] h-40 w-40 rounded-full bg-sky-400/20 blur-3xl"
+            animate={{ x: [0, 14, 0], y: [0, -22, 0], opacity: [0.2, 0.45, 0.2] }}
+            transition={{ duration: 11, repeat: Infinity, ease: "easeInOut", delay: 0.3 }}
           />
         </div>
 
-        <div className="relative z-10 flex flex-col items-center gap-7 pt-20 text-center sm:gap-10 sm:pt-24">
+        <motion.div
+          variants={heroSequence}
+          initial="hidden"
+          animate="show"
+          className="relative z-10 flex flex-col items-center gap-7 pt-16 text-center sm:gap-10 sm:pt-20"
+        >
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className="inline-flex max-w-[92vw] items-center rounded-full border border-zinc-700 bg-zinc-900/45 px-3 py-1 text-xs font-medium text-zinc-200 backdrop-blur-sm sm:text-sm"
+            variants={heroFadeInUp}
+            className="relative inline-flex max-w-[92vw] items-center overflow-hidden rounded-full border border-white/15 bg-slate-950/45 px-4 py-1.5 text-xs font-medium text-slate-200 shadow-[0_0_0_1px_rgba(59,130,246,0.18),0_8px_30px_rgba(30,64,175,0.25)] backdrop-blur-md sm:text-sm"
           >
-            <span className="mr-2 flex h-2 w-2 rounded-full bg-blue-600"></span>
+            <motion.span
+              aria-hidden
+              className="absolute inset-y-0 left-[-45%] w-1/3 bg-gradient-to-r from-transparent via-white/35 to-transparent"
+              animate={{ x: ["0%", "360%"] }}
+              transition={{ duration: 3.2, repeat: Infinity, repeatDelay: 2.6, ease: "easeInOut" }}
+            />
+            <span className="mr-2 flex h-2 w-2 rounded-full bg-blue-400 shadow-[0_0_0_4px_rgba(96,165,250,0.2)]"></span>
             NexResto OS: Multi-Outlet Control Center
           </motion.div>
 
           <motion.h1
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.1 }}
-            className="max-w-4xl text-3xl font-bold tracking-tight text-zinc-50 sm:text-5xl md:text-6xl lg:text-7xl"
+            variants={heroFadeInUp}
+            className="max-w-4xl text-3xl font-bold tracking-[-0.04em] text-slate-50 [font-family:Inter,Geist,ui-sans-serif,system-ui,sans-serif] sm:text-5xl md:text-6xl lg:text-7xl"
           >
             NexResto powers your full <br className="hidden sm:block" />
-            <span className="bg-gradient-to-br from-blue-400 to-indigo-500 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-500 bg-clip-text text-transparent">
               restaurant growth engine
             </span>
           </motion.h1>
 
           <motion.p
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.2 }}
-            className="max-w-3xl px-1 text-sm leading-relaxed text-zinc-400 sm:px-4 sm:text-lg md:text-xl"
+            variants={heroFadeInUp}
+            className="max-w-3xl px-1 text-sm leading-7 text-slate-400 sm:px-4 sm:text-lg sm:leading-8 md:text-xl md:leading-9"
           >
             NexResto is a unified restaurant operations platform for branded ordering, table management, staff workflows,
             and real-time performance intelligence across every branch.
           </motion.p>
 
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.3 }}
-            className="grid w-full max-w-4xl gap-4 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5 text-left sm:grid-cols-2 lg:grid-cols-3"
+            variants={heroFadeInUp}
+            className="grid w-full max-w-4xl gap-4 rounded-3xl border border-white/10 bg-white/[0.03] p-5 text-left backdrop-blur-md shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_20px_45px_rgba(2,6,23,0.45)] sm:grid-cols-2 lg:grid-cols-3"
           >
-            <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">Trusted By</p>
-              <p className="mt-1 text-sm font-semibold text-zinc-100">120+ Restaurant Brands</p>
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">Monthly Orders</p>
-              <p className="mt-1 text-sm font-semibold text-zinc-100">4.8M+ Processed</p>
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">Deployment Speed</p>
-              <p className="mt-1 text-sm font-semibold text-zinc-100">Go-live in under 72 hours</p>
-            </div>
+            {heroStats.map((stat) => (
+              <InteractiveGlowCard
+                key={stat.label}
+                className="rounded-2xl border border-white/10 bg-slate-950/50 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition-colors hover:border-white/30"
+              >
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">{stat.label}</p>
+                <p className="mt-1 text-sm font-semibold text-slate-100">{stat.value}</p>
+              </InteractiveGlowCard>
+            ))}
           </motion.div>
 
           <AnimatePresence initial={false}>
@@ -239,8 +246,14 @@ export default function Hero() {
                   exit={{ opacity: 0, scale: 0.8 }}
                   layout={false}
                   onClick={handleExpand}
-                  className="relative flex h-14 w-[min(86vw,22rem)] items-center justify-center gap-2 px-6 py-3 text-base font-medium tracking-wide text-white transition-opacity hover:opacity-90 sm:w-auto sm:px-8 sm:text-lg"
+                  className="relative flex h-14 w-[min(86vw,22rem)] items-center justify-center gap-2 overflow-hidden px-6 py-3 text-base font-medium tracking-wide text-white transition-opacity hover:opacity-90 sm:w-auto sm:px-8 sm:text-lg"
                 >
+                  <motion.span
+                    aria-hidden
+                    className="pointer-events-none absolute inset-y-0 left-[-40%] w-1/3 -skew-x-12 bg-gradient-to-r from-transparent via-white/40 to-transparent"
+                    animate={{ x: ["0%", "420%"] }}
+                    transition={{ duration: 2.8, repeat: Infinity, repeatDelay: 2.4, ease: "easeInOut" }}
+                  />
                   Start your journey
                   <ArrowRight className="h-5 w-5" />
                 </motion.button>
@@ -257,7 +270,7 @@ export default function Hero() {
           >
             Scroll for details
           </motion.a>
-        </div>
+        </motion.div>
       </div>
 
       <section id="platform-info" className="relative scroll-mt-24 bg-zinc-950 px-4 pb-36 pt-8 sm:px-6 sm:pb-44 sm:pt-12">
@@ -587,18 +600,6 @@ export default function Hero() {
           </footer>
         </div>
       </section>
-
-      {!isExpanded && (
-        <div className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-4 right-4 z-30 md:hidden">
-          <button
-            onClick={handleExpand}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-blue-500/50 bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-900/40"
-          >
-            Book Demo
-            <ArrowRight className="h-4 w-4" />
-          </button>
-        </div>
-      )}
 
       <AnimatePresence initial={false}>
         {isExpanded && (
