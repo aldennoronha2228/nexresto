@@ -653,7 +653,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
     return (
         <SubscriptionGuard>
-                <div className="min-h-screen">
+                <div className="min-h-screen bg-[linear-gradient(115deg,#f3f4f6_0%,#eef2f7_48%,#dfebe8_100%)]">
                 {/* Desktop Sidebar */}
                 <motion.aside
                     initial={false}

@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NexResto | Premium Dining SaaS</title>
+  <link rel="icon" type="image/svg+xml" href="/nexresto-mark.svg?v=20260401" />
+  <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48.png?v=20260401" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=20260401" />
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      color-scheme: dark;
+    }
+
+    body {
+      background: #131313;
+      color: #e5e2e1;
+      font-family: 'Inter', sans-serif;
+      min-height: 100dvh;
+    }
+
+    .font-headline {
+      font-family: 'Manrope', sans-serif;
+    }
+
+    .glass-panel {
+      background: rgba(32, 32, 31, 0.72);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+    }
+
+    .hero-gradient {
+      background:
+        radial-gradient(60rem 32rem at 8% 6%, rgba(62, 84, 211, 0.2), transparent 60%),
+        radial-gradient(44rem 28rem at 92% 10%, rgba(16, 185, 129, 0.12), transparent 60%),
+        #131313;
+    }
+
+    .surface-card {
+      background: #20201f;
+      border: 1px solid rgba(68, 70, 84, 0.32);
+    }
+
+    .reveal {
+      opacity: 0;
+      transform: translate3d(0, 28px, 0);
+      transition: opacity 700ms ease, transform 700ms ease;
+      will-change: opacity, transform;
+    }
+
+    .reveal-left {
+      transform: translate3d(-36px, 18px, 0);
+    }
+
+    .reveal-right {
+      transform: translate3d(36px, 18px, 0);
+    }
+
+    .reveal-zoom {
+      transform: translate3d(0, 22px, 0) scale(0.95);
+    }
+
+    .reveal.is-visible {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+
+    .stagger-group .stagger-item {
+      opacity: 0;
+      transform: translate3d(0, 20px, 0);
+      transition: opacity 650ms ease, transform 650ms ease;
+      transition-delay: calc(var(--stagger-delay, 0) * 90ms);
+      will-change: opacity, transform;
+    }
+
+    .stagger-group.is-visible .stagger-item {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+
+    .marquee-wrap {
+      overflow: hidden;
+      mask-image: linear-gradient(to right, transparent, black 12%, black 88%, transparent);
+      -webkit-mask-image: linear-gradient(to right, transparent, black 12%, black 88%, transparent);
+    }
+
+    .marquee-track {
+      display: flex;
+      width: max-content;
+      animation: marquee-scroll 26s linear infinite;
+    }
+
+    .scroll-progress {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: -1px;
+      height: 2px;
+      width: 100%;
+      transform-origin: left center;
+      transform: scaleX(0);
+      background: linear-gradient(90deg, #3e54d3, #10b981);
+      box-shadow: 0 0 16px rgba(62, 84, 211, 0.6);
+      transition: transform 120ms linear;
+      pointer-events: none;
+    }
+
+    @keyframes marquee-scroll {
+      from { transform: translateX(0); }
+      to { transform: translateX(-50%); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .reveal,
+      .stagger-group .stagger-item,
+      .marquee-track {
+        animation: none !important;
+        transition: none !important;
+        transform: none !important;
+        opacity: 1 !important;
+      }
+    }
+  </style>
+</head>
+<body class="overflow-x-hidden bg-[#131313]">
+  <div class="hero-gradient min-h-screen">
+    <header class="fixed top-0 z-50 w-full border-b border-white/5 bg-black/60 backdrop-blur-xl">
+      <div class="mx-auto flex max-w-7xl items-center justify-between px-6 py-4 lg:px-8">
+        <div class="flex items-center gap-3">
+          <img
+            alt="NexResto logo mark"
+            class="h-9 w-9 rounded-xl border border-white/15 bg-black/30 p-1"
+            src="/nexresto-mark.svg?v=20260401"
+          />
+          <span class="font-headline text-xl font-bold tracking-tight text-white">NexResto</span>
+        </div>
+
+        <nav class="hidden items-center gap-6 text-sm text-stone-300 md:flex">
+          <a class="transition-colors hover:text-white" href="#features">Features</a>
+          <a class="transition-colors hover:text-white" href="#platform">Platform</a>
+          <a class="transition-colors hover:text-white" href="#demo-request">Demo</a>
+        </nav>
+
+        <button class="rounded-full bg-[#3e54d3] px-5 py-2 text-sm font-semibold text-[#d8dbff] transition hover:opacity-90" data-go-demo="true" type="button">
+          Get Started
+        </button>
+      </div>
+      <div class="scroll-progress" id="scrollProgress"></div>
+    </header>
+
+    <main class="pt-24 lg:pt-28">
+      <section class="px-6 pb-16 pt-8 lg:min-h-[calc(100dvh-7rem)] lg:px-8 lg:pb-20" id="platform">
+        <div class="mx-auto grid max-w-7xl items-center gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:gap-14 xl:gap-16">
+          <div class="reveal reveal-left">
+            <div class="mb-6 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-[#bbc3ff]">
+              <span class="h-1.5 w-1.5 rounded-full bg-[#3e54d3]"></span>
+              Private Beta
+            </div>
+            <h1 class="font-headline text-4xl font-extrabold leading-tight text-white sm:text-5xl lg:text-6xl xl:text-7xl">
+              A complete operating system for modern restaurant teams.
+            </h1>
+            <p class="mt-6 max-w-xl text-base leading-relaxed text-[#c5c5d6] sm:text-lg">
+              Manage service flow, menu operations, analytics, and guest experience from one premium dashboard built for high-performance dining environments.
+            </p>
+            <div class="mt-8 flex flex-col gap-3 sm:flex-row">
+              <button class="rounded-lg bg-[#3e54d3] px-6 py-3.5 text-sm font-semibold text-[#d8dbff] shadow-xl shadow-[#3e54d3]/20 transition hover:opacity-90" data-go-demo="true" type="button">
+                Request Concierge Access
+              </button>
+              <a class="rounded-lg border border-white/15 bg-white/5 px-6 py-3.5 text-center text-sm font-medium text-white transition hover:bg-white/10" href="#features">
+                Explore Features
+              </a>
+            </div>
+
+            <div class="stagger-group mt-10 grid gap-3 sm:grid-cols-3" data-stagger>
+              <div class="stagger-item surface-card rounded-lg p-4 lg:p-5" style="--stagger-delay:0;">
+                <p class="text-[11px] uppercase tracking-[0.14em] text-[#8f8fa0]">Live Revenue</p>
+                <p class="mt-2 font-headline text-2xl font-bold text-white">$12,482</p>
+              </div>
+              <div class="stagger-item surface-card rounded-lg p-4 lg:p-5" style="--stagger-delay:1;">
+                <p class="text-[11px] uppercase tracking-[0.14em] text-[#8f8fa0]">Table Turnover</p>
+                <p class="mt-2 font-headline text-2xl font-bold text-white">2.8x</p>
+              </div>
+              <div class="stagger-item surface-card rounded-lg p-4 lg:p-5" style="--stagger-delay:2;">
+                <p class="text-[11px] uppercase tracking-[0.14em] text-[#8f8fa0]">Order Accuracy</p>
+                <p class="mt-2 font-headline text-2xl font-bold text-white">99.2%</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="reveal reveal-right relative" data-parallax="0.08">
+            <div class="overflow-hidden rounded-2xl border border-white/10 bg-[#0e0e0e] shadow-2xl">
+              <img alt="NexResto dashboard preview with operational insights" class="aspect-[4/3] w-full object-cover" src="https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=1400&q=80" />
+            </div>
+            <div class="absolute -bottom-5 -left-5 hidden rounded-lg border border-white/15 bg-black/70 px-4 py-3 shadow-xl md:block" data-parallax="0.16">
+              <p class="text-[10px] uppercase tracking-[0.16em] text-[#bbc3ff]">Daily Covers</p>
+              <p class="font-headline text-2xl font-bold text-white">264</p>
+            </div>
+            <div class="absolute -right-4 top-4 hidden rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 md:block" data-parallax="0.12">
+              <p class="text-[10px] uppercase tracking-[0.16em] text-emerald-300">Service Health</p>
+              <p class="font-headline text-xl font-bold text-white">Excellent</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="reveal reveal-zoom border-y border-white/5 bg-[#1b1b1b]/50 py-10">
+        <div class="mx-auto max-w-7xl px-6 lg:px-8">
+          <p class="mb-6 text-center text-[11px] uppercase tracking-[0.2em] text-[#8f8fa0]">Trusted by Culinary Operators</p>
+          <div class="marquee-wrap">
+            <div class="marquee-track gap-14 text-2xl font-bold text-white/40">
+              <span>L'ATELIER</span><span>SAVOY</span><span>NOBU</span><span>MIRA</span><span>ZUMA</span><span>STK</span>
+              <span>L'ATELIER</span><span>SAVOY</span><span>NOBU</span><span>MIRA</span><span>ZUMA</span><span>STK</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="px-6 py-20 lg:px-8" id="features">
+        <div class="mx-auto max-w-7xl">
+          <div class="reveal reveal-left mb-12 max-w-2xl">
+            <h2 class="font-headline text-3xl font-bold text-white sm:text-4xl">Precision tools for fast, profitable service</h2>
+            <p class="mt-3 text-[#c5c5d6]">Purpose-built workflows for kitchen, floor, and leadership teams.</p>
+          </div>
+
+          <div class="stagger-group grid gap-6 md:grid-cols-2 xl:grid-cols-3" data-stagger>
+            <article class="stagger-item surface-card rounded-xl p-7" style="--stagger-delay:0;">
+              <p class="mb-4 inline-flex rounded-md bg-[#3e54d3]/20 px-2 py-1 text-xs font-semibold text-[#bbc3ff]">Forecasting</p>
+              <h3 class="font-headline text-xl font-bold text-white">AI Service Predictions</h3>
+              <p class="mt-3 text-sm leading-relaxed text-[#c5c5d6]">Predict demand, optimize prep windows, and reduce wait time variance.</p>
+            </article>
+
+            <article class="stagger-item surface-card rounded-xl p-7" style="--stagger-delay:1;">
+              <p class="mb-4 inline-flex rounded-md bg-emerald-500/20 px-2 py-1 text-xs font-semibold text-emerald-300">Operations</p>
+              <h3 class="font-headline text-xl font-bold text-white">Live Floor Mapping</h3>
+              <p class="mt-3 text-sm leading-relaxed text-[#c5c5d6]">Monitor table turnover and service load in real time across sections.</p>
+            </article>
+
+            <article class="stagger-item surface-card rounded-xl p-7" style="--stagger-delay:2;">
+              <p class="mb-4 inline-flex rounded-md bg-amber-500/20 px-2 py-1 text-xs font-semibold text-amber-300">Finance</p>
+              <h3 class="font-headline text-xl font-bold text-white">Unified Margin Feed</h3>
+              <p class="mt-3 text-sm leading-relaxed text-[#c5c5d6]">Connect item-level margin data to live ticket and table behavior.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="px-6 pb-20 lg:px-8">
+        <div class="mx-auto grid max-w-7xl gap-8 rounded-2xl border border-white/10 bg-[#171717] p-8 lg:grid-cols-12 lg:gap-10 lg:p-10">
+          <div class="reveal reveal-left lg:col-span-5">
+            <p class="text-[11px] uppercase tracking-[0.2em] text-[#8f8fa0]">Desktop Control Center</p>
+            <h2 class="mt-3 font-headline text-3xl font-bold text-white sm:text-4xl">Optimized for large-screen operations</h2>
+            <p class="mt-4 text-sm leading-relaxed text-[#c5c5d6] sm:text-base">
+              NexResto is designed for desktop workflows where service leaders need quick scanning,
+              fast decisions, and clear visibility across all active stations.
+            </p>
+            <div class="mt-6 grid gap-3 sm:grid-cols-2">
+              <div class="surface-card rounded-lg p-4">
+                <p class="text-[11px] uppercase tracking-[0.14em] text-[#8f8fa0]">Avg Prep Time</p>
+                <p class="mt-2 font-headline text-2xl font-bold text-white">11m 24s</p>
+              </div>
+              <div class="surface-card rounded-lg p-4">
+                <p class="text-[11px] uppercase tracking-[0.14em] text-[#8f8fa0]">Table Utilization</p>
+                <p class="mt-2 font-headline text-2xl font-bold text-white">87%</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="stagger-group grid gap-4 sm:grid-cols-2 lg:col-span-7" data-stagger>
+            <article class="stagger-item surface-card rounded-xl p-5" style="--stagger-delay:0;">
+              <p class="text-xs uppercase tracking-[0.14em] text-[#8f8fa0]">Live Orders</p>
+              <p class="mt-2 text-sm text-[#c5c5d6]">Queue visibility for all active tickets with clear service priority.</p>
+            </article>
+            <article class="stagger-item surface-card rounded-xl p-5" style="--stagger-delay:1;">
+              <p class="text-xs uppercase tracking-[0.14em] text-[#8f8fa0]">Table Intelligence</p>
+              <p class="mt-2 text-sm text-[#c5c5d6]">Track occupancy, turnover speed, and section-level load in one view.</p>
+            </article>
+            <article class="stagger-item surface-card rounded-xl p-5" style="--stagger-delay:2;">
+              <p class="text-xs uppercase tracking-[0.14em] text-[#8f8fa0]">Menu Margin Feed</p>
+              <p class="mt-2 text-sm text-[#c5c5d6]">Connect item performance to contribution margin in real time.</p>
+            </article>
+            <article class="stagger-item surface-card rounded-xl p-5" style="--stagger-delay:3;">
+              <p class="text-xs uppercase tracking-[0.14em] text-[#8f8fa0]">Shift Reporting</p>
+              <p class="mt-2 text-sm text-[#c5c5d6]">Generate manager-ready summaries with key service and sales signals.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="px-6 pb-20 lg:px-8">
+        <div class="mx-auto grid max-w-7xl items-center gap-10 rounded-2xl border border-white/10 bg-[#1b1b1b] p-8 md:p-10 lg:grid-cols-[1.1fr_0.9fr]">
+          <div class="reveal reveal-left">
+            <p class="text-sm leading-relaxed text-[#e5e2e1] sm:text-base lg:text-lg">
+              "NexResto did not just change our software stack. It changed how our team coordinates service under pressure. Everything feels tighter, faster, and more deliberate."
+            </p>
+            <div class="mt-6 flex items-center gap-4">
+              <img alt="Executive chef portrait" class="h-12 w-12 rounded-full border border-white/20 object-cover" src="https://images.unsplash.com/photo-1607631568010-a87245c0daf8?auto=format&fit=crop&w=300&q=80" />
+              <div>
+                <p class="text-sm font-semibold text-white">Chef Julian Vane</p>
+                <p class="text-xs uppercase tracking-[0.12em] text-[#8f8fa0]">Executive Chef, L'Opera</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="reveal reveal-right" data-parallax="0.05">
+            <div class="surface-card rounded-xl p-6">
+              <p class="text-[11px] uppercase tracking-[0.16em] text-[#8f8fa0]">Why Teams Switch</p>
+              <ul class="mt-4 space-y-3 text-sm text-[#c5c5d6]">
+                <li>Higher table throughput without sacrificing service quality</li>
+                <li>Cleaner coordination between front-of-house and kitchen</li>
+                <li>Transparent daily margin and performance visibility</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="px-6 pb-20 lg:px-8" id="demo-request">
+        <div class="mx-auto max-w-7xl rounded-2xl border border-white/10 bg-[#171717] p-7 md:p-10">
+          <div class="grid gap-8 lg:grid-cols-[0.9fr_1.1fr]">
+            <div class="reveal reveal-left">
+              <p class="mb-3 text-[11px] uppercase tracking-[0.2em] text-[#8f8fa0]">Demo Request</p>
+              <h2 class="font-headline text-3xl font-bold text-white sm:text-4xl">Get Started With NexResto</h2>
+              <p class="mt-4 text-[#c5c5d6]">Share your details and we will schedule your onboarding walkthrough.</p>
+
+              <button class="mt-7 inline-flex items-center gap-2 rounded-lg bg-[#3e54d3] px-5 py-3 text-sm font-semibold text-[#d8dbff] transition hover:opacity-90" data-go-demo="true" type="button">
+                Secure Your Spot
+                <span aria-hidden="true">-></span>
+              </button>
+            </div>
+
+            <form class="reveal reveal-right glass-panel space-y-4 rounded-xl border border-white/10 p-5 md:p-6" id="demoRequestForm" novalidate>
+              <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <label class="mb-2 block text-xs uppercase tracking-widest text-[#8f8fa0]" for="contactName">Contact Name</label>
+                  <input class="w-full rounded-md border border-white/10 bg-[#161616] px-3 py-2 text-sm text-white" id="contactName" maxlength="80" minlength="2" name="contactName" required type="text" />
+                </div>
+                <div>
+                  <label class="mb-2 block text-xs uppercase tracking-widest text-[#8f8fa0]" for="businessEmail">Business Email</label>
+                  <input class="w-full rounded-md border border-white/10 bg-[#161616] px-3 py-2 text-sm text-white" id="businessEmail" maxlength="120" name="businessEmail" required type="email" />
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <label class="mb-2 block text-xs uppercase tracking-widest text-[#8f8fa0]" for="phone">Phone</label>
+                  <input class="w-full rounded-md border border-white/10 bg-[#161616] px-3 py-2 text-sm text-white" id="phone" maxlength="32" minlength="7" name="phone" required type="tel" />
+                </div>
+                <div>
+                  <label class="mb-2 block text-xs uppercase tracking-widest text-[#8f8fa0]" for="restaurantName">Restaurant Name</label>
+                  <input class="w-full rounded-md border border-white/10 bg-[#161616] px-3 py-2 text-sm text-white" id="restaurantName" maxlength="120" minlength="2" name="restaurantName" required type="text" />
+                </div>
+              </div>
+
+              <div>
+                <label class="mb-2 block text-xs uppercase tracking-widest text-[#8f8fa0]" for="outletCount">Number of Outlets</label>
+                <select class="w-full rounded-md border border-white/10 bg-[#161616] px-3 py-2 text-sm text-white" id="outletCount" name="outletCount" required>
+                  <option value="1 Outlet">1 Outlet</option>
+                  <option value="2-5 Outlets">2-5 Outlets</option>
+                  <option value="6-20 Outlets">6-20 Outlets</option>
+                  <option value="20+ Outlets">20+ Outlets</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="mb-2 block text-xs uppercase tracking-widest text-[#8f8fa0]" for="qrRequirements">QR and Workflow Requirements</label>
+                <textarea class="w-full rounded-md border border-white/10 bg-[#161616] px-3 py-2 text-sm text-white" id="qrRequirements" maxlength="1200" name="qrRequirements" placeholder="Tell us about your setup and rollout goals" rows="4"></textarea>
+              </div>
+
+              <div class="hidden rounded-md border px-3 py-2 text-sm" id="demoRequestStatus"></div>
+              <button class="w-full rounded-md bg-[#3e54d3] px-4 py-3 text-base font-semibold text-[#d8dbff] transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60" id="demoSubmitBtn" type="submit">
+                Submit Demo Request
+              </button>
+            </form>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="border-t border-white/5 bg-black/60">
+      <div class="mx-auto grid max-w-7xl gap-8 px-6 py-12 md:grid-cols-4 lg:px-8">
+        <div class="md:col-span-2">
+          <div class="flex items-center gap-2">
+            <img
+              alt="NexResto logo mark"
+              class="h-7 w-7 rounded-md border border-white/15 bg-black/30 p-1"
+              src="/nexresto-mark.svg?v=20260401"
+            />
+            <p class="font-headline text-lg font-bold text-white">NexResto</p>
+          </div>
+          <p class="mt-3 max-w-sm text-sm text-stone-400">Crafting the digital future of premium dining operations.</p>
+        </div>
+        <div>
+          <p class="mb-3 text-sm font-medium text-white">Company</p>
+          <div class="space-y-2 text-sm text-stone-400">
+            <a class="block hover:text-emerald-400" href="#">Discover</a>
+            <a class="block hover:text-emerald-400" href="#">Reservations</a>
+            <a class="block hover:text-emerald-400" href="#">Menu</a>
+          </div>
+        </div>
+        <div>
+          <p class="mb-3 text-sm font-medium text-white">Legal</p>
+          <div class="space-y-2 text-sm text-stone-400">
+            <a class="block hover:text-emerald-400" href="/privacy">Privacy</a>
+            <a class="block hover:text-emerald-400" href="/terms">Terms</a>
+          </div>
+        </div>
+      </div>
+      <div class="mx-auto max-w-7xl px-6 pb-10 text-sm text-stone-500 lg:px-8">(c) 2026 NexResto. Premium Dining Experience.</div>
+    </footer>
+  </div>
+
+  <script>
+    (function () {
+      const demoSection = document.getElementById("demo-request");
+      const ctaButtons = document.querySelectorAll("[data-go-demo='true']");
+      const form = document.getElementById("demoRequestForm");
+      const statusEl = document.getElementById("demoRequestStatus");
+      const submitBtn = document.getElementById("demoSubmitBtn");
+      const progressBar = document.getElementById("scrollProgress");
+      const revealNodes = Array.from(document.querySelectorAll(".reveal"));
+      const staggerGroups = Array.from(document.querySelectorAll("[data-stagger]"));
+      const parallaxNodes = Array.from(document.querySelectorAll("[data-parallax]"));
+      const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+      function showStatus(type, text) {
+        if (!statusEl) return;
+        statusEl.classList.remove("hidden", "border-emerald-500/40", "bg-emerald-500/10", "text-emerald-300", "border-rose-500/40", "bg-rose-500/10", "text-rose-300");
+        if (type === "success") {
+          statusEl.classList.add("border-emerald-500/40", "bg-emerald-500/10", "text-emerald-300");
+        } else {
+          statusEl.classList.add("border-rose-500/40", "bg-rose-500/10", "text-rose-300");
+        }
+        statusEl.textContent = text;
+      }
+
+      ctaButtons.forEach(function (button) {
+        button.addEventListener("click", function () {
+          if (!demoSection) return;
+          demoSection.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
+      });
+
+      if (!prefersReduced && "IntersectionObserver" in window) {
+        const observer = new IntersectionObserver(
+          function (entries, io) {
+            entries.forEach(function (entry) {
+              if (!entry.isIntersecting) return;
+              entry.target.classList.add("is-visible");
+              io.unobserve(entry.target);
+            });
+          },
+          { threshold: 0.14, rootMargin: "0px 0px -8% 0px" }
+        );
+
+        revealNodes.forEach(function (node) { observer.observe(node); });
+        staggerGroups.forEach(function (node) { observer.observe(node); });
+      } else {
+        revealNodes.forEach(function (node) { node.classList.add("is-visible"); });
+        staggerGroups.forEach(function (node) { node.classList.add("is-visible"); });
+      }
+
+      if (!prefersReduced && parallaxNodes.length > 0) {
+        var ticking = false;
+        function updateParallax() {
+          var scrollY = window.scrollY || window.pageYOffset || 0;
+          parallaxNodes.forEach(function (node) {
+            var speed = Number(node.getAttribute("data-parallax") || "0");
+            var translateY = Math.round(scrollY * speed);
+            node.style.transform = "translate3d(0," + translateY + "px,0)";
+          });
+          ticking = false;
+        }
+
+        window.addEventListener("scroll", function () {
+          if (!ticking) {
+            window.requestAnimationFrame(updateParallax);
+            ticking = true;
+          }
+        }, { passive: true });
+
+        updateParallax();
+      }
+
+      function updateScrollProgress() {
+        if (!progressBar) return;
+        var maxScroll = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+        var current = Math.min(maxScroll, Math.max(0, window.scrollY || window.pageYOffset || 0));
+        var ratio = current / maxScroll;
+        progressBar.style.transform = "scaleX(" + ratio + ")";
+      }
+
+      window.addEventListener("scroll", updateScrollProgress, { passive: true });
+      window.addEventListener("resize", updateScrollProgress);
+      updateScrollProgress();
+
+      if (!form || !submitBtn) return;
+
+      form.addEventListener("submit", async function (event) {
+        event.preventDefault();
+
+        var formData = new FormData(form);
+        var payload = {
+          contactName: String(formData.get("contactName") || "").trim(),
+          businessEmail: String(formData.get("businessEmail") || "").trim(),
+          phone: String(formData.get("phone") || "").trim(),
+          restaurantName: String(formData.get("restaurantName") || "").trim(),
+          outletCount: String(formData.get("outletCount") || "").trim(),
+          qrRequirements: String(formData.get("qrRequirements") || "").trim()
+        };
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = "Submitting...";
+
+        try {
+          const response = await fetch("/api/demo-requests", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+          });
+
+          const json = await response.json().catch(function () { return {}; });
+
+          if (!response.ok) {
+            throw new Error(String(json.error || "Failed to submit demo request"));
+          }
+
+          form.reset();
+          showStatus("success", "Demo request submitted successfully. Our team will contact you soon.");
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Failed to submit demo request";
+          showStatus("error", message);
+        } finally {
+          submitBtn.disabled = false;
+          submitBtn.textContent = "Submit Demo Request";
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
