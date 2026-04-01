@@ -2,14 +2,23 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { adminFirestore } from './firebase-admin';
 
 const PLATFORM_SETTINGS_DOC = 'platform_settings/global_maintenance';
+const MAINTENANCE_CACHE_TTL_MS = 5000;
+
+let maintenanceCache: { value: boolean; updatedAt: number } | null = null;
 
 export async function getPlatformMaintenanceMode(): Promise<boolean> {
+    if (maintenanceCache && (Date.now() - maintenanceCache.updatedAt) < MAINTENANCE_CACHE_TTL_MS) {
+        return maintenanceCache.value;
+    }
+
     try {
         const snap = await adminFirestore.doc(PLATFORM_SETTINGS_DOC).get();
-        if (!snap.exists) return false;
-        return snap.data()?.enabled === true;
+        const value = snap.exists ? snap.data()?.enabled === true : false;
+        maintenanceCache = { value, updatedAt: Date.now() };
+        return value;
     } catch (error) {
         console.error('Failed to load platform maintenance mode:', error);
+        if (maintenanceCache) return maintenanceCache.value;
         return false;
     }
 }
@@ -23,4 +32,6 @@ export async function setPlatformMaintenanceMode(
         updated_by: updatedBy,
         updated_at: FieldValue.serverTimestamp(),
     }, { merge: true });
+
+    maintenanceCache = { value: enabled, updatedAt: Date.now() };
 }
