@@ -2,26 +2,13 @@
 
 import { useEffect, useState } from 'react';
 
-const BOOT_SPLASH_SESSION_KEY = 'nexresto-boot-splash-shown';
-
 export default function AppBootSplash() {
-    const [visible, setVisible] = useState(false);
+    const [visible, setVisible] = useState(true);
     const [fadeOut, setFadeOut] = useState(false);
 
     useEffect(() => {
-        const alreadyShown = typeof window !== 'undefined'
-            ? sessionStorage.getItem(BOOT_SPLASH_SESSION_KEY)
-            : '1';
-
-        if (alreadyShown) {
-            return;
-        }
-
-        setVisible(true);
-        sessionStorage.setItem(BOOT_SPLASH_SESSION_KEY, '1');
-
-        const holdTimer = window.setTimeout(() => setFadeOut(true), 1200);
-        const hideTimer = window.setTimeout(() => setVisible(false), 1650);
+        const holdTimer = window.setTimeout(() => setFadeOut(true), 1100);
+        const hideTimer = window.setTimeout(() => setVisible(false), 1550);
 
         return () => {
             window.clearTimeout(holdTimer);
