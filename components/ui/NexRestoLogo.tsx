@@ -6,7 +6,7 @@ type NexRestoLogoProps = {
     priority?: boolean;
 };
 
-const logoVersion = '20260321c';
+const logoVersion = '20260402a';
 
 export default function NexRestoLogo({ variant = 'mark', className, priority = false }: NexRestoLogoProps) {
     if (variant === 'full') {

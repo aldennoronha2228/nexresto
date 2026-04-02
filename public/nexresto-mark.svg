@@ -9,12 +9,9 @@
     </filter>
   </defs>
 
-  <g fill="none" stroke="#ff5a00" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" filter="url(#nrMarkGlow)">
-    <path d="M128 26L52 70L128 114L204 70L128 26" />
+  <g fill="none" stroke="#ff5a00" stroke-width="10" stroke-linecap="butt" stroke-linejoin="miter" filter="url(#nrMarkGlow)">
+    <path d="M128 30L56 72L128 114L200 72Z" />
+    <path d="M56 72V162L128 204L200 162V72" />
     <path d="M128 114V204" />
-    <path d="M52 70V160" />
-    <path d="M204 70V160" />
-    <path d="M128 204L60 164" />
-    <path d="M128 204L196 164" />
   </g>
 </svg>

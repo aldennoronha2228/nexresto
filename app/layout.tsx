@@ -19,7 +19,35 @@ const spaceGrotesk = Space_Grotesk({
   fallback: ['Segoe UI', 'Roboto', 'Helvetica', 'Arial', 'sans-serif'],
 });
 const siteOrigin = getSiteOrigin();
-const iconVersion = '20260328d';
+const iconVersion = '20260402a';
+const siteUrl = new URL('/', siteOrigin).toString();
+const brandLogoUrl = new URL('/nexresto-logo-current.png', siteOrigin).toString();
+const brandIconUrl = new URL('/icon-512.png', siteOrigin).toString();
+const organizationSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'Organization',
+  '@id': `${siteUrl}#organization`,
+  name: 'NexResto',
+  url: siteUrl,
+  logo: {
+    '@type': 'ImageObject',
+    url: brandLogoUrl,
+    width: 1200,
+    height: 420,
+  },
+  image: brandIconUrl,
+};
+const websiteSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'WebSite',
+  '@id': `${siteUrl}#website`,
+  name: 'NexResto',
+  url: siteUrl,
+  publisher: {
+    '@id': `${siteUrl}#organization`,
+  },
+  inLanguage: 'en',
+};
 const googleSiteVerification = (
   process.env.GOOGLE_SITE_VERIFICATION ||
   process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION ||
@@ -45,10 +73,10 @@ export const metadata: Metadata = {
     siteName: 'NexResto',
     images: [
       {
-        url: '/icon-192.png',
+        url: '/nexresto-logo-current.png',
         width: 1200,
-        height: 630,
-        alt: 'NexResto platform',
+        height: 420,
+        alt: 'NexResto',
       },
     ],
   },
@@ -56,7 +84,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'NexResto | Restaurant & Hotel Digital Menus',
     description: 'NexResto helps restaurants and hotels publish digital menus and streamline online ordering.',
-    images: ['/icon-192.png'],
+    images: ['/nexresto-logo-current.png'],
   },
   robots: {
     index: true,
@@ -76,7 +104,7 @@ export const metadata: Metadata = {
       },
     }
     : {}),
-  manifest: '/site.webmanifest',
+  manifest: `/site.webmanifest?v=${iconVersion}`,
   icons: {
     icon: [
       { url: `/favicon.png?v=${iconVersion}`, sizes: '32x32', type: 'image/png' },
@@ -120,6 +148,16 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={spaceGrotesk.className} suppressHydrationWarning>
+        <script
+          id="schema-org-organization"
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationSchema) }}
+        />
+        <script
+          id="schema-org-website"
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteSchema) }}
+        />
         {/*
           Two independent auth providers — each watches a different Firebase auth instance:
             AuthProvider           → firebase          → tenant admin session
