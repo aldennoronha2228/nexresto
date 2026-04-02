@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, Mail, Lock, AlertCircle, Loader2, ShieldCheck, LogOut } from 'lucide-react';
 import NexRestoLogo from '@/components/ui/NexRestoLogo';
-import { signInWithEmail, signInWithGoogle, signUpAndCreateTenant } from '@/lib/firebase-auth';
+import { signInWithEmail, signInWithGoogle } from '@/lib/firebase-auth';
 import { signInWithCredential, GoogleAuthProvider, signInWithEmailAndPassword, signOut as firebaseSignOut, type User } from 'firebase/auth';
 import { tenantAuth, adminAuth } from '@/lib/firebase';
 import { useAuth } from '@/context/AuthContext';
@@ -41,28 +41,7 @@ const Background = memo(function Background() {
     );
 });
 
-const PasswordStrength = memo(function PasswordStrength({ password }: { password: string }) {
-    const checks = useMemo(() => [
-        { label: '8+ characters', pass: password.length >= 8 },
-        { label: 'Uppercase letter', pass: /[A-Z]/.test(password) },
-        { label: 'Number', pass: /\d/.test(password) },
-        { label: 'Special character', pass: /[^A-Za-z0-9]/.test(password) },
-    ], [password]);
-    const score = useMemo(() => checks.filter(c => c.pass).length, [checks]);
-    const colors = ['bg-rose-500', 'bg-orange-500', 'bg-amber-500', 'bg-emerald-500'];
-    const labels = ['Weak', 'Fair', 'Good', 'Strong'];
-    return (
-        <div className="mt-2 space-y-2">
-            <div className="flex gap-1">{[0, 1, 2, 3].map(i => <div key={i} className={`flex-1 h-1 rounded-full transition-all duration-300 ${i < score ? colors[score - 1] : 'bg-slate-700'}`} />)}</div>
-            <div className="flex items-center justify-between">
-                <div className="flex flex-wrap gap-x-3 gap-y-1">{checks.map(c => <span key={c.label} className={`text-[10px] flex items-center gap-1 ${c.pass ? 'text-emerald-400' : 'text-slate-500'}`}><span>{c.pass ? '✓' : '○'}</span> {c.label}</span>)}</div>
-                {score > 0 && <span className={`text-xs font-medium ${score < 2 ? 'text-rose-400' : score < 4 ? 'text-amber-400' : 'text-emerald-400'}`}>{labels[score - 1]}</span>}
-            </div>
-        </div>
-    );
-});
-
-type FormMode = 'signin' | 'signup' | 'verify-otp';
+type FormMode = 'signin';
 
 type ResolvedProfile = {
     role?: string;
@@ -83,9 +62,6 @@ export default function LoginPage() {
     const [mode, setMode] = useState<FormMode>('signin');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-    const [fullName, setFullName] = useState('');
-    const [restaurantName, setRestaurantName] = useState('');
-    const [masterPin, setMasterPin] = useState('');
     const [showPass, setShowPass] = useState(false);
     const [formLoading, setFormLoading] = useState(false);
     const [googleLoading, setGoogleLoading] = useState(false);
@@ -99,10 +75,6 @@ export default function LoginPage() {
         process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID &&
         process.env.NEXT_PUBLIC_FIREBASE_APP_ID
     );
-
-    // OTP verification state
-    const [enteredOtp, setEnteredOtp] = useState('');
-    const [otpExpiry, setOtpExpiry] = useState<string | null>(null);
 
     const resolveProfileWithRetry = async (user: User, attempts = 4): Promise<ResolvedProfile | null> => {
         for (let i = 0; i < attempts; i++) {
@@ -173,26 +145,8 @@ export default function LoginPage() {
         if (password.length < 8) { setError('Password must be at least 8 characters.'); return; }
         setFormLoading(true); setError(null); setInfo(null);
         try {
-            if (mode === 'signup') {
-                if (!fullName) { setError('Please enter your full name.'); setFormLoading(false); return; }
-                if (!restaurantName) { setError('Please enter your restaurant name.'); setFormLoading(false); return; }
-                if (!masterPin || masterPin.length < 4) { setError('Please set a Master PIN (at least 4 characters).'); setFormLoading(false); return; }
-
-                // Step 1: Send OTP to email
-                const res = await fetch('/api/auth/signup-init', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, password, fullName, restaurantName, masterPin }),
-                });
-                const data = await res.json();
-                if (!res.ok) throw new Error(data.error);
-
-                setOtpExpiry(data.expiresAt);
-                setMode('verify-otp');
-                setInfo('Check your email for the verification code.');
-            } else {
-                let userCredential;
-                let savedCustomToken: string | null = null;
+            let userCredential;
+            let savedCustomToken: string | null = null;
 
                 try {
                     // Fast path for the majority of users.
@@ -293,9 +247,8 @@ export default function LoginPage() {
                     return;
                 }
 
-                // If we reach here, no valid dashboard role found
-                router.replace('/unauthorized');
-            }
+            // If we reach here, no valid dashboard role found
+            router.replace('/unauthorized');
         } catch (err: any) {
             const msg = err?.message ?? 'Authentication failed';
             const code = typeof err?.code === 'string' ? err.code : '';
@@ -324,30 +277,6 @@ export default function LoginPage() {
                 code: code || 'unknown',
                 message: msg,
             });
-        } finally { setFormLoading(false); }
-    };
-
-    const handleVerifyOtp = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!enteredOtp || enteredOtp.length !== 6) {
-            setError('Please enter the 6-digit verification code.');
-            return;
-        }
-        setFormLoading(true); setError(null);
-        try {
-            const res = await fetch('/api/auth/signup-verify', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, otp: enteredOtp }),
-            });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error);
-
-            setInfo('Account created successfully! You can now sign in.');
-            setMode('signin');
-            setEnteredOtp('');
-        } catch (err: any) {
-            setError(err?.message ?? 'Verification failed');
         } finally { setFormLoading(false); }
     };
 
@@ -480,15 +409,9 @@ export default function LoginPage() {
                                 <p className="text-slate-400 text-sm mt-1">Authorized personnel only</p>
                             </motion.div>
 
-                            {mode !== 'verify-otp' && (
-                                <div className="flex gap-1 p-1 bg-slate-800/60 rounded-xl mb-6">
-                                    {(['signin', 'signup'] as const).map(m => (
-                                        <button key={m} onClick={() => { setMode(m); setError(null); setInfo(null); setEnteredOtp(''); }} className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${mode === m ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25' : 'text-slate-400 hover:text-white'}`}>
-                                            {m === 'signin' ? 'Sign In' : 'Create Account'}
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
+                            <div className="mb-6 rounded-xl border border-slate-700/60 bg-slate-800/40 p-3 text-center text-xs text-slate-300">
+                                New accounts are invite-only and created through secure email links.
+                            </div>
 
                             <AnimatePresence mode="wait">
                                 {error && (
@@ -509,88 +432,38 @@ export default function LoginPage() {
                                 )}
                             </AnimatePresence>
 
-                            {mode === 'verify-otp' ? (
-                                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-                                    <div className="text-center">
-                                        <div className="flex items-center justify-center gap-2 mb-3 text-xs font-bold text-emerald-400 uppercase tracking-widest">
-                                            <Mail className="w-3.5 h-3.5" /> Check Your Email
-                                        </div>
-                                        <div className="bg-slate-800/80 border border-slate-700/60 rounded-2xl p-6 mb-4">
-                                            <Mail className="w-12 h-12 mx-auto text-emerald-400 mb-3" />
-                                            <p className="text-sm text-slate-300 mb-2">We sent a 6-digit code to</p>
-                                            <p className="text-emerald-400 font-medium">{email}</p>
-                                        </div>
-                                        <p className="text-[10px] text-slate-500">Code expires in 10 minutes</p>
+                            <form onSubmit={handleEmailAuth} className="space-y-4 text-left">
+                                <div>
+                                    <label className="block text-xs font-medium text-slate-400 mb-1.5 ml-1">Email</label>
+                                    <div className="relative">
+                                        <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                                        <input suppressHydrationWarning type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="admin@restaurant.com" autoComplete="email" required className="w-full h-12 pl-11 pr-4 bg-slate-800/60 border border-slate-700/60 rounded-xl text-white placeholder:text-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500/40 transition-all" />
                                     </div>
-
-                                    <form onSubmit={handleVerifyOtp} className="space-y-4">
-                                        <div>
-                                            <label className="block text-xs font-medium text-slate-400 mb-1.5 ml-1">Enter Verification Code</label>
-                                            <input suppressHydrationWarning type="text" value={enteredOtp} onChange={e => setEnteredOtp(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="000000" maxLength={6} className="w-full h-14 px-4 bg-slate-800/60 border border-slate-700/60 rounded-xl text-white text-center text-2xl font-mono tracking-[0.3em] placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500/40 transition-all" />
-                                        </div>
-                                        <motion.button type="submit" disabled={formLoading || enteredOtp.length !== 6} whileHover={{ scale: formLoading ? 1 : 1.02 }} whileTap={{ scale: formLoading ? 1 : 0.98 }} className="w-full h-12 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl font-semibold text-sm shadow-lg shadow-emerald-500/30 hover:shadow-emerald-500/50 transition-all disabled:opacity-60 flex items-center justify-center gap-2">
-                                            {formLoading ? <><Loader2 className="w-4 h-4 animate-spin" />Verifying...</> : 'Verify & Create Account →'}
-                                        </motion.button>
-                                        <button type="button" onClick={() => { setMode('signup'); setEnteredOtp(''); setError(null); }} className="w-full h-10 text-slate-400 hover:text-white text-sm transition-colors">← Back to signup</button>
-                                    </form>
-                                </motion.div>
-                            ) : (
-                                <form onSubmit={handleEmailAuth} className="space-y-4 text-left">
-                                    <AnimatePresence>
-                                        {mode === 'signup' && (
-                                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="space-y-4">
-                                                <div>
-                                                    <label className="block text-xs font-medium text-slate-400 mb-1.5 ml-1">Full Name</label>
-                                                    <input suppressHydrationWarning type="text" value={fullName} onChange={e => setFullName(e.target.value)} placeholder="John Smith" autoComplete="name" className="w-full h-12 px-4 bg-slate-800/60 border border-slate-700/60 rounded-xl text-white placeholder:text-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500/40 transition-all" />
-                                                </div>
-                                                <div>
-                                                    <label className="block text-xs font-medium text-slate-400 mb-1.5 ml-1">Restaurant Name</label>
-                                                    <input suppressHydrationWarning type="text" value={restaurantName} onChange={e => setRestaurantName(e.target.value)} placeholder="e.g. The Grand Bistro" autoComplete="organization" className="w-full h-12 px-4 bg-slate-800/60 border border-slate-700/60 rounded-xl text-white placeholder:text-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500/40 transition-all" />
-                                                    <p className="mt-1 ml-1 text-[10px] text-slate-600">Your customers will see this name on their menu.</p>
-                                                </div>
-                                                <div>
-                                                    <label className="block text-xs font-medium text-slate-400 mb-1.5 ml-1">Master PIN</label>
-                                                    <input suppressHydrationWarning type="text" value={masterPin} onChange={e => setMasterPin(e.target.value)} placeholder="e.g. 1234 or MySecretPin" autoComplete="off" className="w-full h-12 px-4 bg-slate-800/60 border border-slate-700/60 rounded-xl text-white placeholder:text-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500/40 transition-all font-mono" />
-                                                    <p className="mt-1 ml-1 text-[10px] text-slate-600">Your secret PIN for admin tasks. Save this!</p>
-                                                </div>
-                                            </motion.div>
-                                        )}
-                                    </AnimatePresence>
-                                    <div>
-                                        <label className="block text-xs font-medium text-slate-400 mb-1.5 ml-1">Email</label>
-                                        <div className="relative">
-                                            <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                                            <input suppressHydrationWarning type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="admin@restaurant.com" autoComplete="email" required className="w-full h-12 pl-11 pr-4 bg-slate-800/60 border border-slate-700/60 rounded-xl text-white placeholder:text-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500/40 transition-all" />
-                                        </div>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-slate-400 mb-1.5 ml-1">Password</label>
+                                    <div className="relative">
+                                        <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                                        <input suppressHydrationWarning type={showPass ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" autoComplete="current-password" required className="w-full h-12 pl-11 pr-12 bg-slate-800/60 border border-slate-700/60 rounded-xl text-white placeholder:text-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500/40 transition-all" />
+                                        <button type="button" onClick={() => setShowPass(p => !p)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors">
+                                            {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                        </button>
                                     </div>
-                                    <div>
-                                        <label className="block text-xs font-medium text-slate-400 mb-1.5 ml-1">Password</label>
-                                        <div className="relative">
-                                            <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                                            <input suppressHydrationWarning type={showPass ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} placeholder={mode === 'signup' ? 'Minimum 8 characters' : '••••••••'} autoComplete={mode === 'signin' ? 'current-password' : 'new-password'} required className="w-full h-12 pl-11 pr-12 bg-slate-800/60 border border-slate-700/60 rounded-xl text-white placeholder:text-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500/40 transition-all" />
-                                            <button type="button" onClick={() => setShowPass(p => !p)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors">
-                                                {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                                            </button>
-                                        </div>
-                                        {mode === 'signin' && (
-                                            <div className="mt-2 flex justify-end">
-                                                <button
-                                                    type="button"
-                                                    onClick={handleForgotPassword}
-                                                    disabled={resetLoading || formLoading || googleLoading}
-                                                    className="text-xs text-blue-400 hover:text-blue-300 disabled:opacity-60"
-                                                >
-                                                    {resetLoading ? 'Sending reset email...' : 'Forgot Password?'}
-                                                </button>
-                                            </div>
-                                        )}
-                                        {mode === 'signup' && password && <PasswordStrength password={password} />}
+                                    <div className="mt-2 flex justify-end">
+                                        <button
+                                            type="button"
+                                            onClick={handleForgotPassword}
+                                            disabled={resetLoading || formLoading || googleLoading}
+                                            className="text-xs text-blue-400 hover:text-blue-300 disabled:opacity-60"
+                                        >
+                                            {resetLoading ? 'Sending reset email...' : 'Forgot Password?'}
+                                        </button>
                                     </div>
-                                    <motion.button type="submit" disabled={formLoading} whileHover={{ scale: formLoading ? 1 : 1.02 }} whileTap={{ scale: formLoading ? 1 : 0.98 }} className="w-full h-12 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold text-sm shadow-lg shadow-blue-500/30 hover:shadow-blue-500/50 transition-all disabled:opacity-60 flex items-center justify-center gap-2">
-                                        {formLoading ? (<><Loader2 className="w-4 h-4 animate-spin" />{mode === 'signin' ? 'Signing in…' : 'Creating account…'}</>) : (mode === 'signin' ? 'Sign In →' : 'Create Account →')}
-                                    </motion.button>
-                                </form>
-                            )}
+                                </div>
+                                <motion.button type="submit" disabled={formLoading} whileHover={{ scale: formLoading ? 1 : 1.02 }} whileTap={{ scale: formLoading ? 1 : 0.98 }} className="w-full h-12 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold text-sm shadow-lg shadow-blue-500/30 hover:shadow-blue-500/50 transition-all disabled:opacity-60 flex items-center justify-center gap-2">
+                                    {formLoading ? (<><Loader2 className="w-4 h-4 animate-spin" />Signing in…</>) : 'Sign In →'}
+                                </motion.button>
+                            </form>
 
                             <div className="flex items-center gap-3 my-5"><div className="flex-1 h-px bg-slate-700/60" /><span className="text-xs text-slate-500 font-medium">or continue with</span><div className="flex-1 h-px bg-slate-700/60" /></div>
 

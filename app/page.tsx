@@ -25,7 +25,6 @@ const BRANDS = ["L'ATELIER", "SAVOY", "NOBU", "MIRA", "ZUMA", "STK"];
 
 export default function RootPage() {
   const demoSectionRef = useRef<HTMLElement | null>(null);
-  const progressRef = useRef<HTMLDivElement | null>(null);
 
   const [formData, setFormData] = useState<DemoFormData>(INITIAL_FORM);
   const [submitting, setSubmitting] = useState(false);
@@ -81,16 +80,7 @@ export default function RootPage() {
       ticking = false;
     };
 
-    const updateScrollProgress = () => {
-      if (!progressRef.current) return;
-      const maxScroll = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
-      const current = Math.min(maxScroll, Math.max(0, window.scrollY || window.pageYOffset || 0));
-      const ratio = current / maxScroll;
-      progressRef.current.style.transform = `scaleX(${ratio})`;
-    };
-
     const onScroll = () => {
-      updateScrollProgress();
       if (!shouldRunParallax()) {
         resetParallax();
         return;
@@ -102,7 +92,6 @@ export default function RootPage() {
     };
 
     const onResize = () => {
-      updateScrollProgress();
       if (shouldRunParallax()) {
         updateParallax();
       } else {
@@ -113,7 +102,6 @@ export default function RootPage() {
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", onResize);
 
-    updateScrollProgress();
     if (shouldRunParallax()) {
       updateParallax();
     } else {
@@ -180,15 +168,22 @@ export default function RootPage() {
             <a className="transition-colors hover:text-white" href="#demo-request">Demo</a>
           </nav>
 
-          <button
-            className="rounded-full bg-[#3e54d3] px-5 py-2 text-sm font-semibold text-[#d8dbff] transition hover:opacity-90"
-            onClick={scrollToDemo}
-            type="button"
-          >
-            Get Started
-          </button>
+          <div className="flex items-center gap-2">
+            <Link
+              className="rounded-full border border-white/20 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/10"
+              href="/login"
+            >
+              Login
+            </Link>
+            <button
+              className="rounded-full bg-[#3e54d3] px-5 py-2 text-sm font-semibold text-[#d8dbff] transition hover:opacity-90"
+              onClick={scrollToDemo}
+              type="button"
+            >
+              Get Started
+            </button>
+          </div>
         </div>
-        <div className="scroll-progress" ref={progressRef} />
       </header>
 
       <main className="hero-gradient pt-24 lg:pt-28">
@@ -602,21 +597,6 @@ export default function RootPage() {
           display: flex;
           width: max-content;
           animation: marquee-scroll 26s linear infinite;
-        }
-
-        .scroll-progress {
-          position: absolute;
-          left: 0;
-          right: 0;
-          bottom: -1px;
-          height: 2px;
-          width: 100%;
-          transform-origin: left center;
-          transform: scaleX(0);
-          background: linear-gradient(90deg, #3e54d3, #10b981);
-          box-shadow: 0 0 16px rgba(62, 84, 211, 0.6);
-          transition: transform 120ms linear;
-          pointer-events: none;
         }
 
         @keyframes marquee-scroll {
