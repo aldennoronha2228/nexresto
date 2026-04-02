@@ -20,7 +20,7 @@ const spaceGrotesk = Space_Grotesk({
   fallback: ['Segoe UI', 'Roboto', 'Helvetica', 'Arial', 'sans-serif'],
 });
 const siteOrigin = getSiteOrigin();
-const iconVersion = '20260402c';
+const iconVersion = '20260402d';
 const siteUrl = new URL('/', siteOrigin).toString();
 const brandLogoUrl = new URL('/nexresto-logo-current.png', siteOrigin).toString();
 const brandIconUrl = new URL('/icon-512.png', siteOrigin).toString();
