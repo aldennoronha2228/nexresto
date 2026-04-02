@@ -24,8 +24,35 @@ const STATUS_OPTIONS: Array<{ value: 'all' | DemoRequestStatus; label: string }>
 const LOGIN_LINK_COOLDOWN_MS = 10 * 60 * 1000;
 const LOGIN_LINK_MAX_SENDS_PER_DAY = 3;
 
-function formatDate(value: string | null): string {
+function formatDate(value: unknown): string {
     if (!value) return '-';
+
+    if (typeof value === 'object') {
+        const maybeTs = value as {
+            seconds?: unknown;
+            nanoseconds?: unknown;
+            _seconds?: unknown;
+            _nanoseconds?: unknown;
+        };
+        const secondsRaw = maybeTs.seconds ?? maybeTs._seconds;
+        const nanosRaw = maybeTs.nanoseconds ?? maybeTs._nanoseconds;
+        const seconds = Number(secondsRaw);
+        const nanos = Number(nanosRaw || 0);
+        if (Number.isFinite(seconds) && Number.isFinite(nanos)) {
+            const millis = Math.floor(seconds * 1000 + nanos / 1_000_000);
+            const dt = new Date(millis);
+            if (!Number.isNaN(dt.getTime())) {
+                return dt.toLocaleString('en-IN', {
+                    day: 'numeric',
+                    month: 'short',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                });
+            }
+        }
+    }
+
     const dt = new Date(value);
     if (Number.isNaN(dt.getTime())) return '-';
     return dt.toLocaleString('en-IN', {

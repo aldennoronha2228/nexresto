@@ -568,6 +568,25 @@ function toIsoString(value: unknown): string | null {
             if (!Number.isNaN(parsed.getTime())) return parsed.toISOString();
         }
 
+        if (typeof value === 'object' && value !== null) {
+            const maybeTs = value as {
+                seconds?: unknown;
+                nanoseconds?: unknown;
+                _seconds?: unknown;
+                _nanoseconds?: unknown;
+            };
+            const secondsRaw = maybeTs.seconds ?? maybeTs._seconds;
+            const nanosRaw = maybeTs.nanoseconds ?? maybeTs._nanoseconds;
+            const seconds = Number(secondsRaw);
+            const nanos = Number(nanosRaw || 0);
+
+            if (Number.isFinite(seconds) && Number.isFinite(nanos)) {
+                const millis = Math.floor(seconds * 1000 + nanos / 1_000_000);
+                const parsed = new Date(millis);
+                if (!Number.isNaN(parsed.getTime())) return parsed.toISOString();
+            }
+        }
+
         return null;
     } catch {
         return null;
