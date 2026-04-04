@@ -18,36 +18,38 @@ import { adminAuth, db, tenantAuth } from '@/lib/firebase';
 import { addDoc, collection, doc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 
 const MENU_CUSTOMER_PATH = process.env.NEXT_PUBLIC_MENU_CUSTOMER_PATH ?? '/customer';
+const PRODUCTION_MENU_BASE_URL = 'https://nexresto.in';
 
-function resolveMenuBaseUrl() {
-    if (typeof window === 'undefined') return process.env.NEXT_PUBLIC_MENU_BASE_URL ?? '';
+function isLocalHostname(hostname: string): boolean {
+    const value = (hostname || '').toLowerCase();
+    return value === 'localhost' || value === '127.0.0.1' || value === '0.0.0.0' || value.endsWith('.local');
+}
 
-    const configured = (process.env.NEXT_PUBLIC_MENU_BASE_URL ?? '').trim();
-    const origin = window.location.origin;
-    if (!configured) return origin;
+function normalizeOrigin(value: string): string | null {
+    const raw = (value || '').trim();
+    if (!raw) return null;
+    const withProtocol = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
 
     try {
-        const cfg = new URL(configured);
-        const current = new URL(origin);
-        const cfgIsLocal = cfg.hostname === 'localhost' || cfg.hostname === '127.0.0.1';
-        const currentIsLocal = current.hostname === 'localhost' || current.hostname === '127.0.0.1';
-
-        // In local dev, prefer the actual running origin if configured localhost URL
-        // has a different protocol or port (common with Next auto-switching to 3001).
-        if (cfgIsLocal && currentIsLocal) {
-            if (cfg.protocol !== current.protocol || cfg.port !== current.port) {
-                return origin;
-            }
-        }
-
-        return cfg.origin;
+        const parsed = new URL(withProtocol);
+        if (isLocalHostname(parsed.hostname)) return null;
+        return parsed.origin;
     } catch {
-        return origin;
+        return null;
     }
 }
 
+function resolveMenuBaseUrl() {
+    const configuredBase =
+        normalizeOrigin(process.env.NEXT_PUBLIC_MENU_BASE_URL ?? '') ||
+        normalizeOrigin(process.env.NEXT_PUBLIC_SITE_URL ?? '') ||
+        normalizeOrigin(process.env.NEXT_PUBLIC_APP_URL ?? '');
+
+    return configuredBase || PRODUCTION_MENU_BASE_URL;
+}
+
 function getTableMenuUrl(baseUrl: string, tableId: string, restaurantId?: string | null) {
-    const normalizedBase = (baseUrl || '').trim() || (typeof window !== 'undefined' ? window.location.origin : '');
+    const normalizedBase = normalizeOrigin(baseUrl || '') || resolveMenuBaseUrl();
     const normalizedPath = restaurantId
         ? `/${encodeURIComponent(restaurantId)}/menu`
         : (MENU_CUSTOMER_PATH.startsWith('/') ? MENU_CUSTOMER_PATH : `/${MENU_CUSTOMER_PATH}`);

@@ -35,6 +35,13 @@ export default function RootPage() {
   const [formData, setFormData] = useState<DemoFormData>(INITIAL_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const shouldBlockPublicHome =
+    loading ||
+    tenantLoading ||
+    adminLoading ||
+    mustChangePassword ||
+    Boolean(adminSession) ||
+    Boolean(session);
 
   useEffect(() => {
     if (loading || tenantLoading || adminLoading) return;
@@ -73,6 +80,7 @@ export default function RootPage() {
   ]);
 
   useEffect(() => {
+    if (shouldBlockPublicHome) return;
     if (typeof window === "undefined") return;
 
     const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -155,7 +163,11 @@ export default function RootPage() {
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", onResize);
     };
-  }, []);
+  }, [shouldBlockPublicHome]);
+
+  if (shouldBlockPublicHome) {
+    return <div className="min-h-screen bg-[#131313]" aria-hidden="true" />;
+  }
 
   const scrollToDemo = () => {
     demoSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
