@@ -20,10 +20,11 @@ import { onAuthStateChanged, signOut as firebaseSignOut, type User } from 'fireb
 import { adminAuth, ADMIN_SESSION_KEY } from '@/lib/firebase';
 import { securityLog } from '@/lib/logger';
 
-const SESSION_INACTIVITY_LIMIT_MS = 7 * 24 * 60 * 60 * 1000;
-const SUPER_ADMIN_LAST_ACTIVITY_KEY = 'nexresto-super-admin-last-activity-at';
+const SESSION_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+const SUPER_ADMIN_SESSION_EXPIRES_AT_KEY = 'nexresto-super-admin-session-expires-at';
+const SUPER_ADMIN_SESSION_UID_KEY = 'nexresto-super-admin-session-uid';
 
-function readLastActivityMs(storageKey: string): number | null {
+function readStoredMs(storageKey: string): number | null {
     if (typeof window === 'undefined') return null;
     const raw = localStorage.getItem(storageKey);
     if (!raw) return null;
@@ -31,15 +32,34 @@ function readLastActivityMs(storageKey: string): number | null {
     return Number.isFinite(ms) ? ms : null;
 }
 
-function writeLastActivityNow(storageKey: string): void {
+function writeSuperAdminSessionWindow(userId: string): void {
     if (typeof window === 'undefined') return;
-    localStorage.setItem(storageKey, String(Date.now()));
+    localStorage.setItem(SUPER_ADMIN_SESSION_UID_KEY, userId);
+    localStorage.setItem(SUPER_ADMIN_SESSION_EXPIRES_AT_KEY, String(Date.now() + SESSION_WINDOW_MS));
 }
 
-function isInactiveBeyondLimit(storageKey: string): boolean {
-    const lastMs = readLastActivityMs(storageKey);
-    if (!lastMs) return false;
-    return Date.now() - lastMs > SESSION_INACTIVITY_LIMIT_MS;
+function clearSuperAdminSessionWindow(): void {
+    if (typeof window === 'undefined') return;
+    localStorage.removeItem(SUPER_ADMIN_SESSION_UID_KEY);
+    localStorage.removeItem(SUPER_ADMIN_SESSION_EXPIRES_AT_KEY);
+}
+
+function isSuperAdminSessionExpired(userId: string): boolean {
+    if (typeof window === 'undefined') return false;
+
+    const storedUid = localStorage.getItem(SUPER_ADMIN_SESSION_UID_KEY);
+    if (!storedUid || storedUid !== userId) {
+        writeSuperAdminSessionWindow(userId);
+        return false;
+    }
+
+    const expiresAt = readStoredMs(SUPER_ADMIN_SESSION_EXPIRES_AT_KEY);
+    if (!expiresAt) {
+        writeSuperAdminSessionWindow(userId);
+        return false;
+    }
+
+    return Date.now() > expiresAt;
 }
 
 function isRecentSignIn(user: User, windowMs: number = 2 * 60 * 1000): boolean {
@@ -85,33 +105,6 @@ export function SuperAdminAuthProvider({ children }: { children: ReactNode }) {
     const hasRoleRef = useRef(false);
 
     useEffect(() => {
-        if (typeof window === 'undefined') return;
-
-        let rafId: number | null = null;
-        const markActivity = () => {
-            if (rafId !== null) return;
-            rafId = window.requestAnimationFrame(() => {
-                writeLastActivityNow(SUPER_ADMIN_LAST_ACTIVITY_KEY);
-                rafId = null;
-            });
-        };
-
-        const events: Array<keyof WindowEventMap> = ['pointerdown', 'keydown', 'scroll', 'touchstart'];
-        events.forEach((eventName) => {
-            window.addEventListener(eventName, markActivity, { passive: true });
-        });
-
-        markActivity();
-
-        return () => {
-            events.forEach((eventName) => {
-                window.removeEventListener(eventName, markActivity);
-            });
-            if (rafId !== null) window.cancelAnimationFrame(rafId);
-        };
-    }, []);
-
-    useEffect(() => {
         let isActive = true;
 
         // ── Pick up token left by login page ──────────────────────────────────
@@ -134,6 +127,7 @@ export function SuperAdminAuthProvider({ children }: { children: ReactNode }) {
             console.log(`[SuperAdminAuth] Firebase auth state changed: ${user ? 'signed in' : 'signed out'}`);
 
             if (!user) {
+                clearSuperAdminSessionWindow();
                 if (isActive) {
                     hasRoleRef.current = false;
                     setState({
@@ -146,7 +140,12 @@ export function SuperAdminAuthProvider({ children }: { children: ReactNode }) {
                 return;
             }
 
-            if (!isRecentSignIn(user) && isInactiveBeyondLimit(SUPER_ADMIN_LAST_ACTIVITY_KEY)) {
+            if (isRecentSignIn(user)) {
+                writeSuperAdminSessionWindow(user.uid);
+            }
+
+            if (isSuperAdminSessionExpired(user.uid)) {
+                clearSuperAdminSessionWindow();
                 await firebaseSignOut(adminAuth);
                 if (isActive) {
                     hasRoleRef.current = false;
@@ -161,8 +160,6 @@ export function SuperAdminAuthProvider({ children }: { children: ReactNode }) {
                 }
                 return;
             }
-
-            writeLastActivityNow(SUPER_ADMIN_LAST_ACTIVITY_KEY);
 
             const idToken = await user.getIdToken();
 
@@ -255,6 +252,7 @@ export function SuperAdminAuthProvider({ children }: { children: ReactNode }) {
      * Does NOT affect the tenant session (different Firebase App instance).
      */
     const signOut = async () => {
+        clearSuperAdminSessionWindow();
         setState({
             session: null, user: null,
             loading: false, roleLoading: false,

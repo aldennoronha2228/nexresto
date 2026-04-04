@@ -19,10 +19,11 @@ import { signOut as authSignOut } from '@/lib/firebase-auth';
 import { securityLog } from '@/lib/logger';
 import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 
-const SESSION_INACTIVITY_LIMIT_MS = 7 * 24 * 60 * 60 * 1000;
-const TENANT_LAST_ACTIVITY_KEY = 'nexresto-tenant-last-activity-at';
+const SESSION_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+const TENANT_SESSION_EXPIRES_AT_KEY = 'nexresto-tenant-session-expires-at';
+const TENANT_SESSION_UID_KEY = 'nexresto-tenant-session-uid';
 
-function readLastActivityMs(storageKey: string): number | null {
+function readStoredMs(storageKey: string): number | null {
     if (typeof window === 'undefined') return null;
     const raw = localStorage.getItem(storageKey);
     if (!raw) return null;
@@ -30,15 +31,34 @@ function readLastActivityMs(storageKey: string): number | null {
     return Number.isFinite(ms) ? ms : null;
 }
 
-function writeLastActivityNow(storageKey: string): void {
+function writeTenantSessionWindow(userId: string): void {
     if (typeof window === 'undefined') return;
-    localStorage.setItem(storageKey, String(Date.now()));
+    localStorage.setItem(TENANT_SESSION_UID_KEY, userId);
+    localStorage.setItem(TENANT_SESSION_EXPIRES_AT_KEY, String(Date.now() + SESSION_WINDOW_MS));
 }
 
-function isInactiveBeyondLimit(storageKey: string): boolean {
-    const lastMs = readLastActivityMs(storageKey);
-    if (!lastMs) return false;
-    return Date.now() - lastMs > SESSION_INACTIVITY_LIMIT_MS;
+function clearTenantSessionWindow(): void {
+    if (typeof window === 'undefined') return;
+    localStorage.removeItem(TENANT_SESSION_UID_KEY);
+    localStorage.removeItem(TENANT_SESSION_EXPIRES_AT_KEY);
+}
+
+function isTenantSessionExpired(userId: string): boolean {
+    if (typeof window === 'undefined') return false;
+
+    const storedUid = localStorage.getItem(TENANT_SESSION_UID_KEY);
+    if (!storedUid || storedUid !== userId) {
+        writeTenantSessionWindow(userId);
+        return false;
+    }
+
+    const expiresAt = readStoredMs(TENANT_SESSION_EXPIRES_AT_KEY);
+    if (!expiresAt) {
+        writeTenantSessionWindow(userId);
+        return false;
+    }
+
+    return Date.now() > expiresAt;
 }
 
 function isRecentSignIn(user: User, windowMs: number = 2 * 60 * 1000): boolean {
@@ -294,33 +314,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const resolvedUidRef = useRef<string | null>(null);
     const tenantSyncUnsubRef = useRef<(() => void) | null>(null);
 
-    useEffect(() => {
-        if (typeof window === 'undefined') return;
-
-        let rafId: number | null = null;
-        const markActivity = () => {
-            if (rafId !== null) return;
-            rafId = window.requestAnimationFrame(() => {
-                writeLastActivityNow(TENANT_LAST_ACTIVITY_KEY);
-                rafId = null;
-            });
-        };
-
-        const events: Array<keyof WindowEventMap> = ['pointerdown', 'keydown', 'scroll', 'touchstart'];
-        events.forEach((eventName) => {
-            window.addEventListener(eventName, markActivity, { passive: true });
-        });
-
-        markActivity();
-
-        return () => {
-            events.forEach((eventName) => {
-                window.removeEventListener(eventName, markActivity);
-            });
-            if (rafId !== null) window.cancelAnimationFrame(rafId);
-        };
-    }, []);
-
     // Refresh tenant info on demand (e.g. after signup completes)
     const refreshTenant = async () => {
         const user = state.user;
@@ -366,6 +359,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 console.log(`[AuthContext] Firebase auth state changed: ${user ? 'signed in' : 'signed out'}`);
 
                 if (!user) {
+                    clearTenantSessionWindow();
                     if (isActive) {
                         hasTenantRef.current = false;
                         resolvedUidRef.current = null;
@@ -391,7 +385,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     return;
                 }
 
-                if (!isRecentSignIn(user) && isInactiveBeyondLimit(TENANT_LAST_ACTIVITY_KEY)) {
+                if (isRecentSignIn(user)) {
+                    writeTenantSessionWindow(user.uid);
+                }
+
+                if (isTenantSessionExpired(user.uid)) {
+                    clearTenantSessionWindow();
                     await authSignOut();
                     if (isActive) {
                         setState({
@@ -414,8 +413,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     }
                     return;
                 }
-
-                writeLastActivityNow(TENANT_LAST_ACTIVITY_KEY);
 
                 let idToken = '';
                 try {
@@ -523,6 +520,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, []);
 
     const signOut = async () => {
+        clearTenantSessionWindow();
         hasTenantRef.current = false;
         resolvedUidRef.current = null;
         setState({

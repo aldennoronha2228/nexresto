@@ -9,6 +9,10 @@ function normalizeOrigin(raw: string): string | null {
     try {
         const parsed = new URL(withProtocol);
         if (!/^https?:$/i.test(parsed.protocol)) return null;
+        if (!isLocalHost(parsed.hostname) && parsed.protocol === 'http:') {
+            parsed.protocol = 'https:';
+        }
+        parsed.pathname = '/';
         parsed.hash = '';
         parsed.search = '';
         return parsed.toString().replace(/\/$/, '');

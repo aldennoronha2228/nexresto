@@ -1,17 +1,15 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="NexResto mark">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="NexResto cube mark">
   <defs>
-    <filter id="nrMarkGlow" x="-60%" y="-60%" width="220%" height="220%">
-      <feGaussianBlur stdDeviation="4" result="blur" />
-      <feMerge>
-        <feMergeNode in="blur" />
-        <feMergeNode in="SourceGraphic" />
-      </feMerge>
-    </filter>
+    <linearGradient id="cubeWarm" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ff7a1a" />
+      <stop offset="100%" stop-color="#ff4d00" />
+    </linearGradient>
   </defs>
 
-  <g fill="none" stroke="#ff5a00" stroke-width="10" stroke-linecap="butt" stroke-linejoin="miter" filter="url(#nrMarkGlow)">
-    <path d="M128 30L56 72L128 114L200 72Z" />
-    <path d="M56 72V162L128 204L200 162V72" />
-    <path d="M128 114V204" />
+  <g fill="none" stroke="url(#cubeWarm)" stroke-width="11" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M128 30L56 72L128 114L200 72L128 30Z" />
+    <path d="M56 72V164L128 206V114" />
+    <path d="M200 72V164L128 206" />
+    <path d="M128 30V114" opacity="0.72" />
   </g>
 </svg>

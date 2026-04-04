@@ -2,6 +2,9 @@
 
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/context/AuthContext";
+import { useSuperAdminAuth } from "@/context/SuperAdminAuthContext";
 
 type DemoFormData = {
   contactName: string;
@@ -24,11 +27,50 @@ const INITIAL_FORM: DemoFormData = {
 const BRANDS = ["L'ATELIER", "SAVOY", "NOBU", "MIRA", "ZUMA", "STK"];
 
 export default function RootPage() {
+  const router = useRouter();
+  const { session, loading, tenantLoading, userRole, tenantId, mustChangePassword } = useAuth();
+  const { session: adminSession, loading: adminLoading, userRole: adminUserRole } = useSuperAdminAuth();
   const demoSectionRef = useRef<HTMLElement | null>(null);
 
   const [formData, setFormData] = useState<DemoFormData>(INITIAL_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  useEffect(() => {
+    if (loading || tenantLoading || adminLoading) return;
+
+    if (mustChangePassword) {
+      router.replace("/change-password");
+      return;
+    }
+
+    if (adminSession && adminUserRole === "super_admin") {
+      router.replace("/super-admin");
+      return;
+    }
+
+    if (!session) return;
+
+    if (userRole === "super_admin") {
+      router.replace("/super-admin");
+      return;
+    }
+
+    if (tenantId) {
+      router.replace(`/${tenantId}/dashboard/orders`);
+    }
+  }, [
+    session,
+    loading,
+    tenantLoading,
+    userRole,
+    tenantId,
+    mustChangePassword,
+    adminSession,
+    adminLoading,
+    adminUserRole,
+    router,
+  ]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;

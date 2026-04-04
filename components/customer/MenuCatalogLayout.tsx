@@ -88,9 +88,19 @@ export function GourmetCatalogLayout({
     return (
         <div className="min-h-screen bg-[#0e0e0e] text-[#e7e5e4]" style={{ fontFamily: bodyFont }}>
             <header className="fixed top-0 z-40 flex h-20 w-full items-center justify-between border-b border-[#484848]/20 bg-[#0E0E0E] px-6 text-[#B5CCC1]">
-                <h1 className="text-2xl tracking-widest" style={{ fontFamily: headerFont }}>
-                    {restaurantName}
-                </h1>
+                <div className="flex items-center gap-4">
+                    <Image
+                        src="/nexresto-mark.svg"
+                        alt="NexResto logo"
+                        width={56}
+                        height={56}
+                        priority
+                        className="h-14 w-14"
+                    />
+                    <h1 className="text-2xl tracking-widest" style={{ fontFamily: headerFont }}>
+                        {restaurantName}
+                    </h1>
+                </div>
                 <button
                     type="button"
                     onClick={onSearch}
