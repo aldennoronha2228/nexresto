@@ -19,7 +19,7 @@ import { UpgradeModal } from '@/components/dashboard/UpgradeModal';
 import { SubscriptionGuard } from '@/components/dashboard/SubscriptionGuard';
 import NexRestoLogo from '@/components/ui/NexRestoLogo';
 import GeminiSupportChat from '@/components/dashboard/GeminiSupportChat';
-import { hasPermission, type PermissionType } from '@/components/dashboard/RoleGuard';
+import { hasPermission, getAllowedRoutes, ROUTE_PERMISSIONS, type PermissionType } from '@/components/dashboard/RoleGuard';
 import { tenantAuth, adminAuth } from '@/lib/firebase';
 import { toast } from 'sonner';
 
@@ -162,6 +162,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     } = useSuperAdminAuth();
 
     const isGodMode = !session && superAdminSession && superAdminRole === 'super_admin';
+    const currentDashboardBase = Object.keys(ROUTE_PERMISSIONS).find((basePath) => {
+        const fullBase = `/${urlStoreId}${basePath}`;
+        return pathname === fullBase || pathname.startsWith(`${fullBase}/`);
+    });
+    const currentDashboardPermission = currentDashboardBase
+        ? ROUTE_PERMISSIONS[currentDashboardBase as keyof typeof ROUTE_PERMISSIONS]
+        : null;
 
     // Instead of redirecting super admins to /super-admin, we let them view this page!
     // But if a regular tenant user has no session, redirect them to login.
@@ -179,9 +186,34 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             // Authenticated but no resolved claims/profile -> do not let dashboard query Firestore.
             if (session && !isGodMode && !userRole) {
                 router.replace('/unauthorized');
+                return;
+            }
+
+            if (
+                session &&
+                !isGodMode &&
+                userRole &&
+                !showConflict &&
+                currentDashboardPermission &&
+                !hasPermission(userRole, currentDashboardPermission)
+            ) {
+                const allowedRoutes = getAllowedRoutes(userRole);
+                const fallbackBase = allowedRoutes[0] || '/dashboard/orders';
+                router.replace(`/${urlStoreId}${fallbackBase}`);
             }
         }
-    }, [loading, superAdminLoading, session, isGodMode, mustChangePassword, userRole, router]);
+    }, [
+        loading,
+        superAdminLoading,
+        session,
+        isGodMode,
+        mustChangePassword,
+        userRole,
+        showConflict,
+        currentDashboardPermission,
+        urlStoreId,
+        router,
+    ]);
 
     // ── Session Guard (inline overlay — no redirect, no separate page) ───────────
     // If a non-super-admin user navigates to /restaurant-a/dashboard

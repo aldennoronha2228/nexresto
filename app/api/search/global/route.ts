@@ -12,6 +12,28 @@ function normalize(value: unknown): string {
     return String(value || '').trim().toLowerCase();
 }
 
+function getSearchDataPermissions(role: string) {
+    const normalized = normalize(role);
+
+    if (normalized === 'super_admin' || normalized === 'owner' || normalized === 'admin') {
+        return { canSearchOrders: true, canSearchMenu: true };
+    }
+
+    if (normalized === 'manager') {
+        return { canSearchOrders: true, canSearchMenu: true };
+    }
+
+    if (normalized === 'staff') {
+        return { canSearchOrders: true, canSearchMenu: false };
+    }
+
+    if (normalized === 'kitchen') {
+        return { canSearchOrders: false, canSearchMenu: false };
+    }
+
+    return { canSearchOrders: false, canSearchMenu: false };
+}
+
 export async function GET(request: NextRequest) {
     const authHeader = request.headers.get('authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -39,20 +61,29 @@ export async function GET(request: NextRequest) {
             }, { status: 403 });
         }
 
+        const { canSearchOrders, canSearchMenu } = getSearchDataPermissions(authz.role);
+        if (!canSearchOrders && !canSearchMenu) {
+            return NextResponse.json({ orders: [], menuItems: [] });
+        }
+
         const [ordersSnap, menuSnap] = await Promise.all([
-            adminFirestore
-                .collection(`restaurants/${restaurantId}/orders`)
-                .orderBy('created_at', 'desc')
-                .limit(80)
-                .get(),
-            adminFirestore
-                .collection(`restaurants/${restaurantId}/menu_items`)
-                .orderBy('name', 'asc')
-                .limit(120)
-                .get(),
+            canSearchOrders
+                ? adminFirestore
+                    .collection(`restaurants/${restaurantId}/orders`)
+                    .orderBy('created_at', 'desc')
+                    .limit(80)
+                    .get()
+                : null,
+            canSearchMenu
+                ? adminFirestore
+                    .collection(`restaurants/${restaurantId}/menu_items`)
+                    .orderBy('name', 'asc')
+                    .limit(120)
+                    .get()
+                : null,
         ]);
 
-        const orders = ordersSnap.docs
+        const orders = (ordersSnap?.docs || [])
             .map((doc) => {
                 const data = doc.data() as Record<string, unknown>;
                 return {
@@ -67,7 +98,7 @@ export async function GET(request: NextRequest) {
             })
             .slice(0, 5);
 
-        const menuItems = menuSnap.docs
+        const menuItems = (menuSnap?.docs || [])
             .map((doc) => {
                 const data = doc.data() as Record<string, unknown>;
                 return {

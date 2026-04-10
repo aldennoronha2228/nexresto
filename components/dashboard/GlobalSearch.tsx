@@ -1,11 +1,13 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, ShoppingBag, UtensilsCrossed, QrCode, History, ArrowRight, X, Users } from 'lucide-react';
+import { Search, ShoppingBag, UtensilsCrossed, QrCode, History, ArrowRight, X, Users, ChefHat } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { tenantAuth, adminAuth } from '@/lib/firebase';
+import { useAuth } from '@/context/AuthContext';
+import { hasPermission, type PermissionType } from '@/components/dashboard/RoleGuard';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface SearchResult {
@@ -19,13 +21,72 @@ interface SearchResult {
     badgeColor?: string;
 }
 
+interface NavLinkItem {
+    id: string;
+    type: 'nav';
+    title: string;
+    subtitle: string;
+    basePath: string;
+    icon: React.ReactNode;
+    permission: PermissionType;
+}
+
 // ─── Static quick-navigation links ───────────────────────────────────────────
-const NAV_LINKS_BASE = [
-    { id: 'nav-orders', type: 'nav', title: 'Live Orders', subtitle: 'Monitor active orders', basePath: '/dashboard/orders', icon: <ShoppingBag className="w-4 h-4" /> },
-    { id: 'nav-history', type: 'nav', title: 'Order History', subtitle: 'View past orders & revenue', basePath: '/dashboard/history', icon: <History className="w-4 h-4" /> },
-    { id: 'nav-customers', type: 'nav', title: 'Customers', subtitle: 'Track customer visits & spend', basePath: '/dashboard/customers', icon: <Users className="w-4 h-4" /> },
-    { id: 'nav-menu', type: 'nav', title: 'Menu Management', subtitle: 'Manage menu items', basePath: '/dashboard/menu', icon: <UtensilsCrossed className="w-4 h-4" /> },
-    { id: 'nav-tables', type: 'nav', title: 'Tables & QR', subtitle: 'Floor plan & QR codes', basePath: '/dashboard/tables', icon: <QrCode className="w-4 h-4" /> },
+const NAV_LINKS_BASE: NavLinkItem[] = [
+    {
+        id: 'nav-orders',
+        type: 'nav',
+        title: 'Live Orders',
+        subtitle: 'Monitor active orders',
+        basePath: '/dashboard/orders',
+        icon: <ShoppingBag className="w-4 h-4" />,
+        permission: 'can_view_orders',
+    },
+    {
+        id: 'nav-kds',
+        type: 'nav',
+        title: 'Kitchen Display',
+        subtitle: 'Kitchen Kanban board',
+        basePath: '/dashboard/kds',
+        icon: <ChefHat className="w-4 h-4" />,
+        permission: 'can_view_kds',
+    },
+    {
+        id: 'nav-history',
+        type: 'nav',
+        title: 'Order History',
+        subtitle: 'View past orders & revenue',
+        basePath: '/dashboard/history',
+        icon: <History className="w-4 h-4" />,
+        permission: 'can_view_history',
+    },
+    {
+        id: 'nav-customers',
+        type: 'nav',
+        title: 'Customers',
+        subtitle: 'Track customer visits & spend',
+        basePath: '/dashboard/customers',
+        icon: <Users className="w-4 h-4" />,
+        permission: 'can_view_history',
+    },
+    {
+        id: 'nav-menu',
+        type: 'nav',
+        title: 'Menu Management',
+        subtitle: 'Manage menu items',
+        basePath: '/dashboard/menu',
+        icon: <UtensilsCrossed className="w-4 h-4" />,
+        permission: 'can_view_menu',
+    },
+    {
+        id: 'nav-tables',
+        type: 'nav',
+        title: 'Tables & QR',
+        subtitle: 'Floor plan & QR codes',
+        basePath: '/dashboard/tables',
+        icon: <QrCode className="w-4 h-4" />,
+        permission: 'can_view_tables',
+    },
 ];
 
 const STATUS_COLORS: Record<string, string> = {
@@ -48,6 +109,9 @@ export function GlobalSearch() {
     const router = useRouter();
     const params = useParams<{ storeId: string }>();
     const urlStoreId = params?.storeId || '';
+    const { userRole } = useAuth();
+    const canSearchOrders = hasPermission(userRole, 'can_view_orders');
+    const canSearchMenu = hasPermission(userRole, 'can_view_menu');
     const getActiveToken = useCallback(async (): Promise<string> => {
         if (adminAuth.currentUser) return adminAuth.currentUser.getIdToken(true);
         if (tenantAuth.currentUser) return tenantAuth.currentUser.getIdToken(true);
@@ -64,10 +128,15 @@ export function GlobalSearch() {
     }, []);
 
     // Dynamically resolved nav links
-    const NAV_LINKS: SearchResult[] = NAV_LINKS_BASE.map(n => ({
-        ...n,
-        href: `/${urlStoreId}${n.basePath}`
-    })) as SearchResult[];
+    const NAV_LINKS: SearchResult[] = useMemo(
+        () => NAV_LINKS_BASE
+            .filter((n) => hasPermission(userRole, n.permission))
+            .map(n => ({
+                ...n,
+                href: `/${urlStoreId}${n.basePath}`
+            })) as SearchResult[],
+        [userRole, urlStoreId]
+    );
 
     // ── Search Firestore + filter nav links ──────────────────────────────────
     const runSearch = useCallback(async (q: string) => {
@@ -83,6 +152,18 @@ export function GlobalSearch() {
         setSearching(true);
 
         const executeQuery = async () => {
+            const navResults = NAV_LINKS.filter(
+                (n) =>
+                    n.title.toLowerCase().includes(lowerTrimmed) ||
+                    n.subtitle.toLowerCase().includes(lowerTrimmed)
+            );
+
+            if (!canSearchOrders && !canSearchMenu) {
+                setResults(navResults);
+                setActiveIndex(0);
+                return;
+            }
+
             const token = await getActiveToken();
             const response = await fetch(`/api/search/global?restaurantId=${encodeURIComponent(urlStoreId)}&q=${encodeURIComponent(trimmed)}`, {
                 headers: { Authorization: `Bearer ${token}` },
@@ -94,8 +175,8 @@ export function GlobalSearch() {
                 throw new Error(payload?.error || 'Search failed');
             }
 
-            const orderRows = Array.isArray(payload?.orders) ? payload.orders : [];
-            const menuRows = Array.isArray(payload?.menuItems) ? payload.menuItems : [];
+            const orderRows = canSearchOrders && Array.isArray(payload?.orders) ? payload.orders : [];
+            const menuRows = canSearchMenu && Array.isArray(payload?.menuItems) ? payload.menuItems : [];
 
             const orderResults: SearchResult[] = orderRows
                 .map((o: any) => {
@@ -125,13 +206,6 @@ export function GlobalSearch() {
                     };
                 });
 
-            // Filter nav links client-side
-            const navResults = NAV_LINKS.filter(
-                (n) =>
-                    n.title.toLowerCase().includes(lowerTrimmed) ||
-                    n.subtitle.toLowerCase().includes(lowerTrimmed)
-            );
-
             const combined = [...orderResults, ...menuResults, ...navResults];
             setResults(combined);
             setActiveIndex(0);
@@ -154,7 +228,7 @@ export function GlobalSearch() {
         } finally {
             setSearching(false);
         }
-    }, [urlStoreId, refreshTokens, getActiveToken]);
+    }, [urlStoreId, refreshTokens, getActiveToken, NAV_LINKS, canSearchOrders, canSearchMenu]);
 
     // ── Debounce ──────────────────────────────────────────────────────────────
     useEffect(() => {
