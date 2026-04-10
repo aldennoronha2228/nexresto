@@ -74,6 +74,39 @@ function sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+function serializeAuthError(err: unknown) {
+    if (err instanceof Error) {
+        const withCode = err as Error & { code?: string };
+        return {
+            code: withCode.code || 'unknown',
+            message: err.message || 'Authentication failed',
+            name: err.name || 'Error',
+            stack: err.stack || null,
+        };
+    }
+
+    if (typeof err === 'object' && err !== null) {
+        const maybe = err as { code?: unknown; message?: unknown; name?: unknown };
+        return {
+            code: typeof maybe.code === 'string' ? maybe.code : 'unknown',
+            message: typeof maybe.message === 'string' ? maybe.message : 'Authentication failed',
+            name: typeof maybe.name === 'string' ? maybe.name : 'NonErrorObject',
+            raw: JSON.stringify(err),
+        };
+    }
+
+    return {
+        code: 'unknown',
+        message: String(err || 'Authentication failed'),
+        name: typeof err,
+        raw: err,
+    };
+}
+
+function getDashboardPathForRole(role?: string | null): string {
+    return role === 'kitchen' ? '/dashboard/kds' : '/dashboard/orders';
+}
+
 
 
 export default function LoginPage() {
@@ -165,7 +198,7 @@ export default function LoginPage() {
             }
 
             if (userRole && tenantId && !cancelled) {
-                router.replace(`/${tenantId}/dashboard/orders`);
+                router.replace(`/${tenantId}${getDashboardPathForRole(userRole)}`);
             }
         };
 
@@ -230,8 +263,11 @@ export default function LoginPage() {
             return;
         }
 
-        if (!email || !password) { setError('Please fill in all fields.'); return; }
-        if (password.length < 8) { setError('Password must be at least 8 characters.'); return; }
+        const normalizedEmail = email.trim().toLowerCase();
+        const rawPassword = password;
+
+        if (!normalizedEmail || !rawPassword) { setError('Please fill in all fields.'); return; }
+        if (rawPassword.length < 8) { setError('Password must be at least 8 characters.'); return; }
         setFormLoading(true); setError(null); setInfo(null);
         try {
             let userCredential;
@@ -239,7 +275,7 @@ export default function LoginPage() {
 
             try {
                 // Fast path for the majority of users.
-                userCredential = await signInWithEmail(email, password);
+                userCredential = await signInWithEmail(normalizedEmail, rawPassword);
             } catch (tenantAuthError: any) {
                 const code = String(tenantAuthError?.code || '');
                 const isCredentialError =
@@ -257,7 +293,7 @@ export default function LoginPage() {
                 const adminVerifyRes = await fetch('/api/auth/admin-verify', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, password }),
+                    body: JSON.stringify({ email: normalizedEmail, password: rawPassword }),
                 });
 
                 if (!adminVerifyRes.ok) {
@@ -297,7 +333,7 @@ export default function LoginPage() {
                             sessionStorage.setItem('pending_admin_token', savedCustomToken);
                         } else {
                             try {
-                                await signInWithEmailAndPassword(adminAuth, email, password);
+                                await signInWithEmailAndPassword(adminAuth, normalizedEmail, rawPassword);
                             } catch (seedErr) {
                                 console.warn('Could not seed adminAuth instance with email/password:', seedErr);
                             }
@@ -306,7 +342,7 @@ export default function LoginPage() {
                     return;
                 }
                 if (profile?.role && profile?.tenant_id) {
-                    router.replace(`/${profile.tenant_id}/dashboard/orders`);
+                    router.replace(`/${profile.tenant_id}${getDashboardPathForRole(profile.role)}`);
                     return;
                 }
             }
@@ -323,7 +359,7 @@ export default function LoginPage() {
                     sessionStorage.setItem('pending_admin_token', savedCustomToken);
                 } else {
                     try {
-                        await signInWithEmailAndPassword(adminAuth, email, password);
+                        await signInWithEmailAndPassword(adminAuth, normalizedEmail, rawPassword);
                     } catch (seedErr) {
                         console.warn('Could not seed adminAuth instance with fallback role:', seedErr);
                     }
@@ -332,16 +368,25 @@ export default function LoginPage() {
                 return;
             }
             if (fallbackRole && fallbackTenant) {
-                router.replace(`/${fallbackTenant}/dashboard/orders`);
+                router.replace(`/${fallbackTenant}${getDashboardPathForRole(fallbackRole)}`);
                 return;
             }
 
             // If we reach here, no valid dashboard role found
             router.replace('/unauthorized');
-        } catch (err: any) {
-            const msg = err?.message ?? 'Authentication failed';
-            const code = typeof err?.code === 'string' ? err.code : '';
-            if (msg.includes('auth/invalid-credential') || msg.includes('auth/wrong-password') || msg.includes('auth/user-not-found') || code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') {
+        } catch (err: unknown) {
+            const parsedErr = serializeAuthError(err);
+            const msg = parsedErr.message;
+            const code = parsedErr.code;
+            const isCredentialError =
+                msg.includes('auth/invalid-credential') ||
+                msg.includes('auth/wrong-password') ||
+                msg.includes('auth/user-not-found') ||
+                code === 'auth/invalid-credential' ||
+                code === 'auth/wrong-password' ||
+                code === 'auth/user-not-found';
+
+            if (isCredentialError) {
                 setError('Incorrect email or password. Please try again.');
             } else if (code === 'auth/invalid-api-key' || code === 'auth/app-deleted') {
                 setError('Firebase API key/app config is invalid in the hosted environment. Verify NEXT_PUBLIC Firebase variables in your hosting dashboard.');
@@ -362,10 +407,13 @@ export default function LoginPage() {
             } else {
                 setError(msg);
             }
-            console.error('[LoginPage] Email auth error', {
-                code: code || 'unknown',
-                message: msg,
-            });
+
+            // Invalid credentials are expected user mistakes; keep them as warnings to avoid noisy dev overlays.
+            if (isCredentialError) {
+                console.warn('[LoginPage] Email auth rejected', parsedErr);
+            } else {
+                console.error('[LoginPage] Email auth error', parsedErr);
+            }
         } finally { setFormLoading(false); }
     };
 
@@ -434,7 +482,7 @@ export default function LoginPage() {
 
             if (profile?.role && profile?.tenant_id) {
                 await user.getIdToken(true).catch(() => { });
-                router.replace(`/${profile.tenant_id}/dashboard/orders`);
+                router.replace(`/${profile.tenant_id}${getDashboardPathForRole(profile.role)}`);
                 return;
             }
 
@@ -453,7 +501,7 @@ export default function LoginPage() {
             }
 
             if (claimRole && claimTenant) {
-                router.replace(`/${claimTenant}/dashboard/orders`);
+                router.replace(`/${claimTenant}${getDashboardPathForRole(claimRole)}`);
                 return;
             }
 

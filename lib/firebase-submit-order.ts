@@ -16,6 +16,7 @@ import { db } from './firebase';
 import { validateOrderPayload } from './validate';
 import { securityLog } from './logger';
 import { env } from './env';
+import { attachOrderToCustomer, normalizePhone } from './customer-tracking';
 import type { CartItem } from '@/context/CartContext';
 
 export interface SubmitOrderResult {
@@ -27,7 +28,8 @@ export async function submitOrderToFirestore(
     cartItems: CartItem[],
     tableId: string,
     total: number,
-    restaurantIdOverride?: string
+    restaurantIdOverride?: string,
+    customer?: { name: string; phone: string }
 ): Promise<SubmitOrderResult> {
     const restaurantId = restaurantIdOverride ?? env.restaurantId;
 
@@ -84,9 +86,27 @@ export async function submitOrderToFirestore(
         total: payload.total,
         status: 'new',
         daily_order_number: dailyOrderNumber,
+        customer_name: customer?.name?.trim() || null,
+        customer_phone: customer?.phone ? normalizePhone(customer.phone) : null,
         items: orderItems,
         created_at: serverTimestamp(),
     });
+
+    if (customer?.phone) {
+        try {
+            await attachOrderToCustomer(
+                db,
+                payload.restaurantId,
+                customer.phone,
+                orderDocRef.id,
+                payload.total,
+                customer.name,
+                payload.tableId
+            );
+        } catch {
+            // Do not fail order placement if customer linkage update fails.
+        }
+    }
 
     securityLog.info('ORDER_SUBMITTED', {
         ok: true,

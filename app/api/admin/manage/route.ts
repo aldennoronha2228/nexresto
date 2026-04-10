@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminAuth, adminFirestore } from '@/lib/firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
-
-const ADMIN_ACCESS_KEY = process.env.ADMIN_ACCESS_KEY ?? '';
+import { authorizeTenantAccess } from '@/lib/server/authz/tenant';
 
 // Team limits per tier
 const TEAM_LIMITS: Record<string, number> = {
@@ -13,46 +12,44 @@ const TEAM_LIMITS: Record<string, number> = {
     '2.5k': 10,
 };
 
-// Role badge colors for UI reference
-const ROLE_COLORS = {
-    owner: { bg: 'bg-purple-100', text: 'text-purple-700', label: 'Owner' },
-    manager: { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Manager' },
-    staff: { bg: 'bg-slate-100', text: 'text-slate-700', label: 'Staff' },
-};
-
 /**
  * /api/admin/manage  (Firebase)
  * 
  * Handles management of admin/staff users.
  * Uses Firebase Admin SDK to manage users and Firestore staff sub-collections.
- * Requires the ADMIN_ACCESS_KEY in the headers for all operations.
+ * Requires a valid owner Bearer token scoped to the current tenant.
  */
 
-function verifyKey(req: NextRequest) {
-    const key = (req.headers.get('x-admin-key') || '').trim();
-    const secret = (process.env.ADMIN_ACCESS_KEY || '').trim();
+async function authorizeOwner(req: NextRequest, tenantId: string) {
+    const authHeader = req.headers.get('authorization') || '';
+    if (!authHeader.startsWith('Bearer ')) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
-    if (!secret) return { isValid: false, reason: 'SERVER_CONFIG_MISSING' };
+    const idToken = authHeader.replace('Bearer ', '').trim();
 
-    const isValid = key === secret;
-    return { isValid, reason: isValid ? null : 'KEY_MISMATCH' };
+    try {
+        const authz = await authorizeTenantAccess(idToken, tenantId, 'manage');
+        if (!authz) {
+            return NextResponse.json({
+                error: `Forbidden: tenant mismatch. You are not allowed to manage members for tenantId=${tenantId}.`,
+            }, { status: 403 });
+        }
+
+        if (authz.role !== 'owner') {
+            return NextResponse.json({ error: 'Only the hotel owner can manage members.' }, { status: 403 });
+        }
+
+        return null;
+    } catch {
+        return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
+    }
 }
 
 export async function GET(req: NextRequest) {
     console.log('[admin-manage] GET request received');
 
     try {
-        const { isValid, reason } = verifyKey(req);
-        if (!isValid) {
-            if (reason === 'SERVER_CONFIG_MISSING') {
-                return NextResponse.json({
-                    error: 'Server Misconfigured: Missing ADMIN_ACCESS_KEY',
-                    detail: 'Please add ADMIN_ACCESS_KEY to your hosting environment variables.'
-                }, { status: 500 });
-            }
-            return NextResponse.json({ error: 'Auth Error: Invalid Master Key (Manage)' }, { status: 401 });
-        }
-
         const tenantId =
             req.nextUrl.searchParams.get('tenant_id') ||
             req.nextUrl.searchParams.get('tenantId') ||
@@ -61,6 +58,9 @@ export async function GET(req: NextRequest) {
         if (!tenantId) {
             return NextResponse.json({ error: 'Missing tenant_id parameter' }, { status: 400 });
         }
+
+        const authError = await authorizeOwner(req, tenantId);
+        if (authError) return authError;
 
         console.log(`[admin-manage] Fetching staff list for tenant: ${tenantId}`);
         const staffSnap = await adminFirestore
@@ -90,40 +90,45 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-    const { isValid, reason } = verifyKey(req);
-    if (!isValid) {
-        if (reason === 'SERVER_CONFIG_MISSING') {
-            return NextResponse.json({ error: 'Server Config Error: Secret Missing' }, { status: 500 });
-        }
-        return NextResponse.json({ error: 'Auth Error: Invalid Master Key (Action)' }, { status: 401 });
-    }
-
     try {
-        const { email, action, role, tenantId, subscriptionTier } = await req.json();
+        const { email, action, role, tenantId } = await req.json();
+
+        if (!tenantId) {
+            return NextResponse.json({ error: 'Missing tenantId' }, { status: 400 });
+        }
+
+        const authError = await authorizeOwner(req, tenantId);
+        if (authError) return authError;
 
         if (action === 'add' || action === 'invite') {
+            const restDoc = await adminFirestore.doc(`restaurants/${tenantId}`).get();
+            const restData = restDoc.data() || {};
+            const effectiveTier = String(restData.subscription_tier || 'starter').toLowerCase();
+
             // Server-side limit enforcement
-            if (tenantId && subscriptionTier) {
-                const limit = TEAM_LIMITS[subscriptionTier] || 2;
+            const limit = TEAM_LIMITS[effectiveTier] || 2;
 
-                // Count current staff members for this tenant
-                const staffSnap = await adminFirestore
-                    .collection(`restaurants/${tenantId}/staff`)
-                    .get();
+            // Count current staff members for this tenant
+            const staffSnap = await adminFirestore
+                .collection(`restaurants/${tenantId}/staff`)
+                .get();
 
-                const currentCount = staffSnap.size;
+            const currentCount = staffSnap.size;
 
-                if (currentCount >= limit) {
-                    const tierName = subscriptionTier === 'pro' || subscriptionTier === '2k' ? 'Pro' : 'Starter';
-                    return NextResponse.json({
-                        error: `${tierName} tier allows maximum ${limit} team members. ${tierName === 'Starter' ? 'Upgrade to Pro for up to 10 staff accounts.' : 'Contact support if you need more.'}`
-                    }, { status: 403 });
-                }
+            if (currentCount >= limit) {
+                const tierName = effectiveTier === 'pro' || effectiveTier === '2k' || effectiveTier === '2.5k' ? 'Pro' : 'Starter';
+                return NextResponse.json({
+                    error: `${tierName} tier allows maximum ${limit} team members. ${tierName === 'Starter' ? 'Upgrade to Pro for up to 10 staff accounts.' : 'Contact support if you need more.'}`
+                }, { status: 403 });
             }
 
-            // Determine final role (Starter tier only gets owner)
-            const isStarterTier = ['starter', '1k'].includes(subscriptionTier || '');
-            const finalRole = isStarterTier ? 'owner' : (role || 'staff');
+            // Validate requested role. Kitchen accounts are dedicated KDS users.
+            const requestedRole = String(role || 'staff').toLowerCase();
+            const allowedRoles = new Set(['owner', 'manager', 'staff', 'kitchen']);
+            if (!allowedRoles.has(requestedRole)) {
+                return NextResponse.json({ error: 'Invalid role. Allowed: owner, manager, staff, kitchen.' }, { status: 400 });
+            }
+            const finalRole = requestedRole;
 
             // Check if user already exists in Firebase Auth
             let existingUser;
@@ -215,10 +220,6 @@ export async function POST(req: NextRequest) {
             }
         } else if (action === 'remove') {
             // Deactivate: mark staff as inactive
-            if (!tenantId) {
-                return NextResponse.json({ error: 'Missing tenantId' }, { status: 400 });
-            }
-
             // Find user by email in staff
             const staffSnap = await adminFirestore
                 .collection(`restaurants/${tenantId}/staff`)
@@ -231,10 +232,6 @@ export async function POST(req: NextRequest) {
 
             return NextResponse.json({ message: 'Staff member deactivated' });
         } else if (action === 'reactivate') {
-            if (!tenantId) {
-                return NextResponse.json({ error: 'Missing tenantId' }, { status: 400 });
-            }
-
             const staffSnap = await adminFirestore
                 .collection(`restaurants/${tenantId}/staff`)
                 .where('email', '==', email.toLowerCase().trim())
@@ -263,10 +260,6 @@ export async function POST(req: NextRequest) {
 
             return NextResponse.json({ message: 'Staff member deleted' });
         } else if (action === 'issue_temp_password') {
-            if (!tenantId) {
-                return NextResponse.json({ error: 'Missing tenantId' }, { status: 400 });
-            }
-
             const user = await adminAuth.getUserByEmail(email);
             const staffRef = adminFirestore.doc(`restaurants/${tenantId}/staff/${user.uid}`);
             const staffSnap = await staffRef.get();

@@ -7,7 +7,7 @@ import {
     ShoppingBag, History, UtensilsCrossed, QrCode,
     ChevronLeft, Bell, Search, Menu, X, LogOut, UserCircle,
     BarChart3, Package, Palette, Sparkles, Lock,
-    AlertTriangle, Shield, LogIn, ArrowLeft
+    AlertTriangle, Shield, LogIn, ArrowLeft, Users
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
@@ -28,12 +28,14 @@ import { toast } from 'sonner';
 const baseNavigation = [
     { name: 'Live Orders', basePath: '/dashboard/orders', icon: ShoppingBag, shortName: 'Orders', proOnly: false, permission: 'can_view_orders' as PermissionType },
     { name: 'Order History', basePath: '/dashboard/history', icon: History, shortName: 'History', proOnly: false, permission: 'can_view_history' as PermissionType },
+    { name: 'Customers', basePath: '/dashboard/customers', icon: Users, shortName: 'Customers', proOnly: false, permission: 'can_view_history' as PermissionType },
     { name: 'Menu Management', basePath: '/dashboard/menu', icon: UtensilsCrossed, shortName: 'Menu', proOnly: false, permission: 'can_view_menu' as PermissionType },
     { name: 'Tables & QR', basePath: '/dashboard/tables', icon: QrCode, shortName: 'Tables', proOnly: false, permission: 'can_view_tables' as PermissionType },
     { name: 'Analytics', basePath: '/dashboard/analytics', icon: BarChart3, shortName: 'Analytics', proOnly: true, permission: 'can_view_analytics' as PermissionType },
     { name: 'Inventory', basePath: '/dashboard/inventory', icon: Package, shortName: 'Inventory', proOnly: true, permission: 'can_view_inventory' as PermissionType },
     { name: 'Branding', basePath: '/dashboard/branding', icon: Palette, shortName: 'Brand', proOnly: true, permission: 'can_view_branding' as PermissionType },
     { name: 'Account Settings', basePath: '/dashboard/account', icon: UserCircle, shortName: 'Account', proOnly: false, permission: 'can_view_account' as PermissionType },
+    { name: 'Members', basePath: '/dashboard/members', icon: Shield, shortName: 'Members', proOnly: false, permission: 'can_manage_admins' as PermissionType },
 ];
 
 // Helper: build full nav href always scoped to the URL slug (not the session restId)
@@ -411,6 +413,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         item.basePath === '/dashboard/analytics'
     );
 
+    const membersNavigation = filteredNavigation.filter((item) => item.basePath === '/dashboard/members');
+    const primaryNavigation = filteredNavigation.filter((item) => item.basePath !== '/dashboard/members');
+
     // Handle clicking on a Pro-only feature when on Starter tier
     const handleNavClick = (item: typeof navigation[0]) => {
         // Check role permission first (super admins bypass)
@@ -673,7 +678,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
                         {/* Navigation */}
                         <nav className="flex-1 px-3 py-4 space-y-1">
-                            {filteredNavigation.map((item) => {
+                            {primaryNavigation.map((item) => {
                                 const isActive = pathname === item.href || (pathname === `/${urlStoreId}/dashboard` && item.href === `/${urlStoreId}/dashboard/orders`);
                                 const isLocked = item.proOnly && !isPro;
                                 return (
@@ -687,6 +692,44 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                             className={cn(
                                                     "flex items-center gap-3 px-3 py-2.5 rounded-full transition-all duration-200 premium-sidebar-text",
                                                     isActive ? "bg-white/12 border border-white/15 text-white" : "hover:bg-white/5 hover:text-white",
+                                                isLocked && "opacity-60"
+                                            )}
+                                        >
+                                            <item.icon className="w-5 h-5 flex-shrink-0" />
+                                            {!collapsed && (
+                                                <>
+                                                    <span className="text-sm font-medium flex-1">{item.name}</span>
+                                                    {isLocked && (
+                                                        <span className="flex items-center gap-1 px-1.5 py-0.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-[9px] font-bold uppercase tracking-wider rounded-full">
+                                                            <Sparkles className="w-2.5 h-2.5" />
+                                                            Pro
+                                                        </span>
+                                                    )}
+                                                </>
+                                            )}
+                                        </motion.div>
+                                    </button>
+                                );
+                            })}
+
+                            {membersNavigation.length > 0 && !collapsed && (
+                                <div className="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400/80">Members</div>
+                            )}
+
+                            {membersNavigation.map((item) => {
+                                const isActive = pathname === item.href || (pathname === `/${urlStoreId}/dashboard` && item.href === `/${urlStoreId}/dashboard/orders`);
+                                const isLocked = item.proOnly && !isPro;
+                                return (
+                                    <button
+                                        key={item.name}
+                                        onClick={() => handleNavClick(item)}
+                                        className="w-full text-left"
+                                    >
+                                        <motion.div
+                                            whileHover={{ x: 4 }}
+                                            className={cn(
+                                                "flex items-center gap-3 px-3 py-2.5 rounded-full transition-all duration-200 premium-sidebar-text",
+                                                isActive ? "bg-white/12 border border-white/15 text-white" : "hover:bg-white/5 hover:text-white",
                                                 isLocked && "opacity-60"
                                             )}
                                         >
@@ -747,7 +790,35 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         </div>
 
                         <nav className="flex-1 px-2 py-4 space-y-2">
-                            {filteredNavigation.map((item) => {
+                            {primaryNavigation.map((item) => {
+                                const isActive = pathname === item.href || (pathname === `/${urlStoreId}/dashboard` && item.href === `/${urlStoreId}/dashboard/orders`);
+                                const isLocked = item.proOnly && !isPro;
+
+                                return (
+                                    <button
+                                        key={`tablet-${item.name}`}
+                                        onClick={() => handleNavClick(item)}
+                                        className="w-full"
+                                        title={item.name}
+                                    >
+                                        <div
+                                            className={cn(
+                                                'h-11 rounded-2xl flex items-center justify-center transition-all premium-sidebar-text',
+                                                isActive ? 'bg-white/12 border border-white/15 text-white' : 'hover:bg-white/5 hover:text-white',
+                                                isLocked && 'opacity-60'
+                                            )}
+                                        >
+                                            <item.icon className="w-5 h-5" />
+                                        </div>
+                                    </button>
+                                );
+                            })}
+
+                            {membersNavigation.length > 0 && (
+                                <div className="mx-2 my-1 h-px bg-white/10" />
+                            )}
+
+                            {membersNavigation.map((item) => {
                                 const isActive = pathname === item.href || (pathname === `/${urlStoreId}/dashboard` && item.href === `/${urlStoreId}/dashboard/orders`);
                                 const isLocked = item.proOnly && !isPro;
 
@@ -839,7 +910,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                                 </button>
                                             </div>
                                         )}
-                                        {filteredNavigation.map((item) => {
+                                        {primaryNavigation.map((item) => {
                                             const isActive = pathname === item.href;
                                             const isLocked = item.proOnly && !isPro;
                                             return (
@@ -865,6 +936,38 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                                 </button>
                                             );
                                         })}
+
+                                        {membersNavigation.length > 0 && (
+                                            <div className="pt-2 mt-2 border-t border-white/10 space-y-1">
+                                                <div className="px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400/80">Members</div>
+                                                {membersNavigation.map((item) => {
+                                                    const isActive = pathname === item.href;
+                                                    const isLocked = item.proOnly && !isPro;
+                                                    return (
+                                                        <button
+                                                            key={`mobile-${item.name}`}
+                                                            onClick={() => { setMobileMenuOpen(false); handleNavClick(item); }}
+                                                            className="w-full text-left"
+                                                        >
+                                                            <div className={cn(
+                                                                "flex items-center gap-3 px-3 py-2.5 rounded-full transition-all duration-200 premium-sidebar-text",
+                                                                isActive ? "bg-white/12 border border-white/15 text-white" : "hover:bg-white/5 hover:text-white",
+                                                                isLocked && "opacity-60"
+                                                            )}>
+                                                                <item.icon className="w-5 h-5 flex-shrink-0" />
+                                                                <span className="text-sm font-medium flex-1">{item.name}</span>
+                                                                {isLocked && (
+                                                                    <span className="flex items-center gap-1 px-1.5 py-0.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-[9px] font-bold uppercase tracking-wider rounded-full">
+                                                                        <Sparkles className="w-2.5 h-2.5" />
+                                                                        Pro
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
 
                                         <button
                                             onClick={() => { setMobileMenuOpen(false); handleSignOut(); }}

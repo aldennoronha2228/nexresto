@@ -74,12 +74,19 @@ export async function signInWithGoogle(): Promise<UserCredential> {
 
 // ─── Sign in with Email + Password ───────────────────────────────────────────
 export async function signInWithEmail(email: string, password: string): Promise<UserCredential> {
+    const normalizedEmail = email.trim().toLowerCase();
+
     try {
-        const result = await signInWithEmailAndPassword(tenantAuth, email, password);
-        securityLog.info('AUTH_LOGIN_SUCCESS', { method: 'email', email, userId: result.user.uid });
+        const result = await signInWithEmailAndPassword(tenantAuth, normalizedEmail, password);
+        securityLog.info('AUTH_LOGIN_SUCCESS', { method: 'email', email: normalizedEmail, userId: result.user.uid });
         return result;
     } catch (error: any) {
-        securityLog.warn('AUTH_LOGIN_FAILURE', { method: 'email', email, message: error.message });
+        securityLog.warn('AUTH_LOGIN_FAILURE', {
+            method: 'email',
+            email: normalizedEmail,
+            code: typeof error?.code === 'string' ? error.code : 'unknown',
+            message: error?.message || 'Authentication failed',
+        });
         throw error;
     }
 }

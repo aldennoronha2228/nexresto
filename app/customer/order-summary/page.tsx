@@ -4,7 +4,8 @@ import React, { Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCart } from '@/context/CartContext';
 import { submitOrderToFirestore } from '@/lib/firebase-submit-order';
-import { getTenantTableStorageKey } from '@/lib/client/storage/tenantKeys';
+import { getTenantCustomerStorageKey, getTenantTableStorageKey } from '@/lib/client/storage/tenantKeys';
+import { isValidPhone, normalizePhone } from '@/lib/customer-tracking';
 
 function formatINR(value: number): string {
     return new Intl.NumberFormat('en-IN', {
@@ -26,6 +27,7 @@ function OrderSummaryContent() {
     const [status, setStatus] = React.useState<'submitting' | 'success' | 'error'>('submitting');
     const [error, setError] = React.useState('');
     const [orderNumber, setOrderNumber] = React.useState<number>(0);
+    const [customerProfile, setCustomerProfile] = React.useState<{ name: string; phone: string } | null>(null);
 
     const frozenCartRef = React.useRef(cart);
     const frozenTotalRef = React.useRef(totalPrice);
@@ -41,6 +43,33 @@ function OrderSummaryContent() {
         if (!restaurantId) return;
         setTableId((localStorage.getItem(getTenantTableStorageKey(restaurantId)) || '').trim());
     }, [queryTable, restaurantId]);
+
+    React.useEffect(() => {
+        if (!restaurantId) {
+            setCustomerProfile(null);
+            return;
+        }
+
+        const raw = localStorage.getItem(getTenantCustomerStorageKey(restaurantId));
+        if (!raw) {
+            setCustomerProfile(null);
+            return;
+        }
+
+        try {
+            const parsed = JSON.parse(raw) as { name?: string; phone?: string };
+            const normalizedPhone = normalizePhone(parsed.phone || '');
+            const normalizedName = String(parsed.name || '').trim();
+            if (normalizedName.length >= 2 && isValidPhone(normalizedPhone)) {
+                setCustomerProfile({ name: normalizedName, phone: normalizedPhone });
+                return;
+            }
+        } catch {
+            // Ignore invalid local profile.
+        }
+
+        setCustomerProfile(null);
+    }, [restaurantId]);
 
     const backToMenuUrl = React.useMemo(() => {
         const params = new URLSearchParams();
@@ -58,7 +87,13 @@ function OrderSummaryContent() {
 
         submittedRef.current = true;
 
-        submitOrderToFirestore(frozenCartRef.current, tableId, frozenTotalRef.current + 5, restaurantId || undefined)
+        submitOrderToFirestore(
+            frozenCartRef.current,
+            tableId,
+            frozenTotalRef.current + 5,
+            restaurantId || undefined,
+            customerProfile || undefined
+        )
             .then(({ orderId, dailyOrderNumber }) => {
                 const now = new Date();
                 saveOrder({
@@ -77,7 +112,7 @@ function OrderSummaryContent() {
                 setStatus('error');
                 setError(err instanceof Error ? err.message : 'Could not submit order');
             });
-    }, [router, backToMenuUrl, clearCart, restaurantId, saveOrder, tableId]);
+    }, [router, backToMenuUrl, clearCart, restaurantId, saveOrder, tableId, customerProfile]);
 
     return (
         <div className="min-h-screen bg-[#131313] px-4 py-10 text-stone-200">

@@ -2,12 +2,14 @@
 
 import React from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { AnimatePresence, motion } from 'motion/react';
 import { collection, getDocs, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { useCart } from '@/context/CartContext';
 import { db, tenantAuth, adminAuth } from '@/lib/firebase';
 import { applyAvailabilityOverrides, seedAvailabilityMap } from '@/lib/menuAvailability';
 import { getOptimizedHeroImageSrc, getOptimizedMenuItemImageSrc } from '@/lib/image-optimization';
-import { getTenantTableStorageKey } from '@/lib/client/storage/tenantKeys';
+import { getTenantCustomerStorageKey, getTenantTableStorageKey } from '@/lib/client/storage/tenantKeys';
+import { isValidPhone, normalizePhone } from '@/lib/customer-tracking';
 import MenuCatalogLayout from './MenuCatalogLayout';
 import { CartDrawer } from './CartDrawer';
 
@@ -104,12 +106,36 @@ function getErrorCode(error: unknown): string {
     return typeof code === 'string' ? code : '';
 }
 
+function formatRestaurantDisplayName(value: string): string {
+    const raw = value.trim();
+    if (!raw) return 'Restaurant';
+
+    const withoutRandomSuffix = raw.replace(/-[a-z0-9]{6,}$/i, '');
+    const readable = withoutRandomSuffix
+        .replace(/[-_]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    if (!readable) return 'Restaurant';
+
+    return readable
+        .split(' ')
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+        .join(' ');
+}
+
 export function CustomerMenuShell({ restaurantIdOverride, tenantHomePath, restaurantName }: CustomerMenuShellProps) {
     const [categories, setCategories] = React.useState<string[]>(['All']);
     const [menuItems, setMenuItems] = React.useState<Array<{ id: string; name: string; description: string; price: number; image: string; category: string; available: boolean; type?: 'veg' | 'non-veg' }>>([]);
     const [loading, setLoading] = React.useState(true);
     const [error, setError] = React.useState<string | null>(null);
     const [branding, setBranding] = React.useState<CustomerBranding>(DEFAULT_BRANDING);
+    const [capturedCustomer, setCapturedCustomer] = React.useState<{ name: string; phone: string } | null>(null);
+    const [showCaptureModal, setShowCaptureModal] = React.useState(false);
+    const [captureName, setCaptureName] = React.useState('');
+    const [capturePhone, setCapturePhone] = React.useState('');
+    const [savingCapture, setSavingCapture] = React.useState(false);
+    const [captureError, setCaptureError] = React.useState<string | null>(null);
 
     const { addToCart, setIsCartOpen, totalItems, totalPrice } = useCart();
     const router = useRouter();
@@ -137,6 +163,52 @@ export function CustomerMenuShell({ restaurantIdOverride, tenantHomePath, restau
 
         setResolvedTableId((localStorage.getItem(getTenantTableStorageKey(restaurantId)) || '').trim());
     }, [queryTableId, restaurantId]);
+
+    React.useEffect(() => {
+        if (!restaurantId) {
+            setCapturedCustomer(null);
+            setShowCaptureModal(false);
+            return;
+        }
+
+        const raw = localStorage.getItem(getTenantCustomerStorageKey(restaurantId));
+        if (!raw) {
+            setCapturedCustomer(null);
+            setShowCaptureModal(true);
+            return;
+        }
+
+        try {
+            const parsed = JSON.parse(raw) as { name?: string; phone?: string };
+            const name = String(parsed.name || '').trim();
+            const phone = normalizePhone(parsed.phone || '');
+
+            if (name.length >= 2 && isValidPhone(phone)) {
+                setCapturedCustomer({ name, phone });
+                setCaptureName(name);
+                setCapturePhone(phone);
+                setShowCaptureModal(false);
+
+                    fetch('/api/customers/capture', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            restaurantId,
+                            name,
+                            phone,
+                            tableNumber: resolvedTableId || null,
+                            incrementVisit: false,
+                        }),
+                    }).catch(() => { });
+                return;
+            }
+        } catch {
+            // Ignore broken local profile data.
+        }
+
+        setCapturedCustomer(null);
+        setShowCaptureModal(true);
+    }, [restaurantId, resolvedTableId]);
 
     React.useEffect(() => {
         let active = true;
@@ -307,6 +379,77 @@ export function CustomerMenuShell({ restaurantIdOverride, tenantHomePath, restau
         return `${path}${params.toString() ? `?${params.toString()}` : ''}`;
     };
 
+    const displayRestaurantName = React.useMemo(() => {
+        const source = (restaurantName || '').trim() || restaurantId;
+        return formatRestaurantDisplayName(source);
+    }, [restaurantName, restaurantId]);
+
+    const handleCaptureSubmit = async () => {
+        if (!restaurantId) {
+            setCaptureError('Restaurant session not found. Please refresh this page.');
+            return;
+        }
+
+        const name = captureName.trim();
+        const phone = normalizePhone(capturePhone);
+
+        if (name.length < 2) {
+            setCaptureError('Please enter your name.');
+            return;
+        }
+
+        if (!isValidPhone(phone)) {
+            setCaptureError('Please enter a valid 10-digit phone number.');
+            return;
+        }
+
+        setCaptureError(null);
+        setSavingCapture(true);
+
+        try {
+            const response = await fetch('/api/customers/capture', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    restaurantId,
+                    name,
+                    phone,
+                    tableNumber: resolvedTableId || null,
+                    incrementVisit: true,
+                }),
+            });
+
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                throw new Error(payload?.error || 'Unable to save your details right now.');
+            }
+
+            const stored = {
+                name: String(payload?.name || name),
+                phone: normalizePhone(String(payload?.phone || phone)),
+            };
+
+            setCapturedCustomer(stored);
+            localStorage.setItem(getTenantCustomerStorageKey(restaurantId), JSON.stringify(stored));
+            setShowCaptureModal(false);
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Unable to save your details. Please try again.';
+            if (/insufficient|permission|missing/i.test(message)) {
+                setCaptureError('Save is blocked by Firestore permissions. Please deploy latest rules or keep using server capture API.');
+            } else {
+                setCaptureError(message);
+            }
+        } finally {
+            setSavingCapture(false);
+        }
+    };
+
+    const requireCapture = () => {
+        if (capturedCustomer) return true;
+        setShowCaptureModal(true);
+        return false;
+    };
+
     return (
         <div className="min-h-screen">
             {error && (
@@ -319,21 +462,91 @@ export function CustomerMenuShell({ restaurantIdOverride, tenantHomePath, restau
                 categories={categories}
                 items={menuItems}
                 tableId={resolvedTableId}
-                restaurantName={restaurantName || restaurantId || 'Restaurant'}
+                restaurantName={displayRestaurantName}
                 totalItems={totalItems}
                 totalPrice={totalPrice}
                 loading={loading}
-                onSearch={() => setIsCartOpen(true)}
+                onSearch={() => {
+                    if (!requireCapture()) return;
+                    setIsCartOpen(true);
+                }}
                 onSelectCategory={() => {
                     // Filtering is handled in the layout component.
                 }}
                 onAddToCart={(item) => {
+                    if (!requireCapture()) return;
                     if (item.available) addToCart(item);
                 }}
-                onOpenCart={() => setIsCartOpen(true)}
+                onOpenCart={() => {
+                    if (!requireCapture()) return;
+                    setIsCartOpen(true);
+                }}
                 onOpenOrders={() => router.push(buildCustomerUrl('/customer/order-history'))}
             />
             <CartDrawer tableId={resolvedTableId} restaurantId={restaurantId || undefined} />
+
+            <AnimatePresence>
+                {showCaptureModal && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[90] bg-black/60 backdrop-blur-md"
+                    >
+                        <div className="flex min-h-full items-center justify-center px-4 py-6">
+                            <motion.div
+                                initial={{ opacity: 0, y: 24, scale: 0.96 }}
+                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                exit={{ opacity: 0, y: 12, scale: 0.98 }}
+                                transition={{ duration: 0.28, ease: 'easeOut' }}
+                                className="w-full max-w-md rounded-3xl border border-white/15 bg-white/10 p-6 shadow-[0_22px_70px_rgba(0,0,0,0.5)] backdrop-blur-2xl"
+                            >
+                                <div className="mb-5">
+                                    <p className="text-[11px] uppercase tracking-[0.22em] text-[#9ab8aa]">Welcome</p>
+                                    <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">Before You Continue</h2>
+                                    <p className="mt-2 text-sm text-[#d4d7d5]">Share your name and phone so we can place and track your order.</p>
+                                </div>
+
+                                <div className="space-y-3">
+                                    <div>
+                                        <label className="mb-1 block text-xs uppercase tracking-[0.16em] text-[#a9adab]">Name</label>
+                                        <input
+                                            value={captureName}
+                                            onChange={(e) => setCaptureName(e.target.value)}
+                                            placeholder="Your name"
+                                            className="w-full rounded-2xl border border-white/15 bg-black/25 px-4 py-3 text-sm text-white outline-none transition focus:border-[#9cb7aa]"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="mb-1 block text-xs uppercase tracking-[0.16em] text-[#a9adab]">Phone Number</label>
+                                        <input
+                                            value={capturePhone}
+                                            onChange={(e) => setCapturePhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                                            inputMode="numeric"
+                                            placeholder="10-digit mobile number"
+                                            className="w-full rounded-2xl border border-white/15 bg-black/25 px-4 py-3 text-sm text-white outline-none transition focus:border-[#9cb7aa]"
+                                        />
+                                    </div>
+                                </div>
+
+                                {captureError ? (
+                                    <p className="mt-3 text-sm text-rose-300">{captureError}</p>
+                                ) : null}
+
+                                <motion.button
+                                    whileHover={{ scale: 1.01 }}
+                                    whileTap={{ scale: 0.98 }}
+                                    disabled={savingCapture}
+                                    onClick={handleCaptureSubmit}
+                                    className="mt-5 w-full rounded-2xl bg-gradient-to-r from-[#9cb7aa] to-[#88a99a] px-4 py-3 text-sm font-semibold uppercase tracking-[0.16em] text-[#12211b] transition disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                    {savingCapture ? 'Saving...' : 'Enter Menu'}
+                                </motion.button>
+                            </motion.div>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     );
 }

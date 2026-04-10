@@ -101,6 +101,25 @@ service cloud.firestore {
         // Only restaurant staff/owners can update/delete orders
         allow update, delete: if isSuperAdmin() || belongsToRestaurant(resId);
       }
+
+      // ─── Customers Sub-collection ─────────────────────────────────────
+      // Customer profile capture from QR menu + live owner dashboard view.
+      match /customers/{customerId} {
+        // Dashboard users (staff/owners/super-admin) can read customer activity.
+        allow read: if isSuperAdmin() || belongsToRestaurant(resId);
+
+        // Customers are captured anonymously from QR menu.
+        // Restrict shape and require doc id to be the normalized 10-digit phone number.
+        allow create, update: if
+          customerId.matches('^[0-9]{10}$') &&
+          request.resource.data.phone == customerId &&
+          request.resource.data.name is string &&
+          request.resource.data.visitCount is int &&
+          request.resource.data.orders is list &&
+          request.resource.data.totalSpend is number;
+
+        allow delete: if isSuperAdmin() || isOwnerOrAdmin(resId);
+      }
       
       // ─── Staff Sub-collection ─────────────────────────────────────────
       // Tier-based constraints:

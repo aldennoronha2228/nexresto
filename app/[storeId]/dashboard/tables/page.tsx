@@ -39,6 +39,19 @@ function normalizeOrigin(value: string): string | null {
     }
 }
 
+function normalizeOriginAllowLocal(value: string): string | null {
+    const raw = (value || '').trim();
+    if (!raw) return null;
+    const withProtocol = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+
+    try {
+        const parsed = new URL(withProtocol);
+        return parsed.origin;
+    } catch {
+        return null;
+    }
+}
+
 function resolveMenuBaseUrl() {
     const configuredBase =
         normalizeOrigin(process.env.NEXT_PUBLIC_MENU_BASE_URL ?? '') ||
@@ -49,7 +62,7 @@ function resolveMenuBaseUrl() {
 }
 
 function getTableMenuUrl(baseUrl: string, tableId: string, restaurantId?: string | null) {
-    const normalizedBase = normalizeOrigin(baseUrl || '') || resolveMenuBaseUrl();
+    const normalizedBase = normalizeOriginAllowLocal(baseUrl || '') || resolveMenuBaseUrl();
     const normalizedPath = restaurantId
         ? `/${encodeURIComponent(restaurantId)}/menu`
         : (MENU_CUSTOMER_PATH.startsWith('/') ? MENU_CUSTOMER_PATH : `/${MENU_CUSTOMER_PATH}`);
@@ -1661,7 +1674,11 @@ export default function TablesQRCodesPage() {
         let active = true;
 
         const loadState = async () => {
-        setBaseUrl(resolveMenuBaseUrl());
+        if (typeof window !== 'undefined' && isLocalHostname(window.location.hostname)) {
+            setBaseUrl(window.location.origin);
+        } else {
+            setBaseUrl(resolveMenuBaseUrl());
+        }
 
         const defaultSeedTables: Table[] = getDefaultTables();
         const defaultSeedWalls: Wall[] = [];
@@ -1930,6 +1947,8 @@ export default function TablesQRCodesPage() {
     };
 
     const filteredTables = tables.filter(t => t.id.toLowerCase().includes(searchQuery.toLowerCase()) || t.name.toLowerCase().includes(searchQuery.toLowerCase()));
+    const localhostMenuUrl = useMemo(() => getTableMenuUrl('http://localhost:3000', 'T-XX', tenantId), [tenantId]);
+    const loopbackMenuUrl = useMemo(() => getTableMenuUrl('http://127.0.0.1:3000', 'T-XX', tenantId), [tenantId]);
 
     return (
         <div className="relative">
@@ -1994,7 +2013,20 @@ export default function TablesQRCodesPage() {
                         )}
                         <div className="flex items-start gap-3 p-4 bg-blue-50 border border-blue-100 rounded-xl text-sm text-blue-700">
                             <QrCode className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                            <div><span className="font-medium">QR codes link to: </span><code className="text-xs bg-blue-100 px-1.5 py-0.5 rounded font-mono">{baseUrl}{MENU_CUSTOMER_PATH}?table=T-XX</code><span className="ml-2 text-blue-500 text-xs">Set <code className="font-mono">NEXT_PUBLIC_MENU_BASE_URL</code> in .env.local for production</span></div>
+                            <div className="space-y-2">
+                                <div>
+                                    <span className="font-medium">QR codes link to: </span>
+                                    <code className="text-xs bg-blue-100 px-1.5 py-0.5 rounded font-mono">{baseUrl}{MENU_CUSTOMER_PATH}?table=T-XX</code>
+                                    <span className="ml-2 text-blue-500 text-xs">Set <code className="font-mono">NEXT_PUBLIC_MENU_BASE_URL</code> in .env.local for production</span>
+                                </div>
+                                <div className="text-xs text-blue-600">
+                                    <span className="font-medium">Temporary localhost links:</span>
+                                    <div className="mt-1 space-y-1">
+                                        <code className="block bg-blue-100/80 px-1.5 py-0.5 rounded font-mono break-all">{localhostMenuUrl}</code>
+                                        <code className="block bg-blue-100/80 px-1.5 py-0.5 rounded font-mono break-all">{loopbackMenuUrl}</code>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </motion.div>
                 )}

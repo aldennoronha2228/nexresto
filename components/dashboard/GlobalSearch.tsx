@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, ShoppingBag, UtensilsCrossed, QrCode, History, ArrowRight, X } from 'lucide-react';
+import { Search, ShoppingBag, UtensilsCrossed, QrCode, History, ArrowRight, X, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { tenantAuth, adminAuth } from '@/lib/firebase';
 
@@ -23,6 +23,7 @@ interface SearchResult {
 const NAV_LINKS_BASE = [
     { id: 'nav-orders', type: 'nav', title: 'Live Orders', subtitle: 'Monitor active orders', basePath: '/dashboard/orders', icon: <ShoppingBag className="w-4 h-4" /> },
     { id: 'nav-history', type: 'nav', title: 'Order History', subtitle: 'View past orders & revenue', basePath: '/dashboard/history', icon: <History className="w-4 h-4" /> },
+    { id: 'nav-customers', type: 'nav', title: 'Customers', subtitle: 'Track customer visits & spend', basePath: '/dashboard/customers', icon: <Users className="w-4 h-4" /> },
     { id: 'nav-menu', type: 'nav', title: 'Menu Management', subtitle: 'Manage menu items', basePath: '/dashboard/menu', icon: <UtensilsCrossed className="w-4 h-4" /> },
     { id: 'nav-tables', type: 'nav', title: 'Tables & QR', subtitle: 'Floor plan & QR codes', basePath: '/dashboard/tables', icon: <QrCode className="w-4 h-4" /> },
 ];

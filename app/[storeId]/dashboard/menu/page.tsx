@@ -492,12 +492,12 @@ export default function MenuManagementPage() {
                         <h1 className="text-2xl lg:text-4xl font-bold text-slate-900 tracking-tight">Menu Management</h1>
                         <p className="text-sm text-slate-500 mt-1">Manage your restaurant menu items and availability</p>
                     </div>
-                    <div className="flex items-center gap-2">
-                        <button onClick={loadData} className="p-2.5 rounded-xl bg-white/70 border border-white/40 hover:bg-white transition-colors shadow-sm" title="Refresh"><RefreshCw className="w-4 h-4 text-rose-500" /></button>
-                        <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={() => setShowExcelModal(true)} className="flex items-center justify-center gap-2 px-4 py-2.5 premium-glass text-slate-700 rounded-xl font-medium text-sm hover:bg-white transition-colors">
+                    <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                        <button onClick={loadData} className="p-2.5 rounded-xl bg-white/70 border border-white/40 hover:bg-white transition-colors shadow-sm shrink-0" title="Refresh"><RefreshCw className="w-4 h-4 text-rose-500" /></button>
+                        <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={() => setShowExcelModal(true)} className="flex-1 sm:flex-none min-w-[140px] flex items-center justify-center gap-2 px-4 py-2.5 premium-glass text-slate-700 rounded-xl font-medium text-sm hover:bg-white transition-colors">
                             <FileSpreadsheet className="w-4 h-4" />Import Excel
                         </motion.button>
-                        <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={() => { setEditItem(null); setShowModal(true); }} className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-[#ff4757] to-[#ff6b81] text-white rounded-xl font-medium text-sm shadow-lg shadow-rose-500/35 hover:shadow-rose-500/50 transition-shadow">
+                        <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={() => { setEditItem(null); setShowModal(true); }} className="flex-1 sm:flex-none min-w-[140px] flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-[#ff4757] to-[#ff6b81] text-white rounded-xl font-medium text-sm shadow-lg shadow-rose-500/35 hover:shadow-rose-500/50 transition-shadow">
                             <Plus className="w-4 h-4" />Add Item
                         </motion.button>
                     </div>
@@ -511,12 +511,11 @@ export default function MenuManagementPage() {
                             <h3 className="text-sm font-semibold text-slate-900 mb-3">Categories</h3>
                             <div className="lg:space-y-1 flex lg:flex-col gap-2 overflow-x-auto pb-2 lg:pb-0 -mx-1 px-1 lg:mx-0 lg:px-0">
                                 {categoryList.map(cat => (
-                                    <div key={cat.id} className="flex items-center group">
-                                        <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={() => setSelectedCategory(cat.id)} className={cn('flex-1 flex items-center gap-3 px-3 py-2 rounded-2xl text-sm font-medium transition-all whitespace-nowrap lg:w-full', selectedCategory === cat.id ? 'bg-gradient-to-r from-rose-50 to-orange-50 text-rose-600 border border-rose-200/60 shadow-sm' : 'text-slate-600 hover:bg-white/70')}>
+                                    <div key={cat.id} className="flex items-center group shrink-0 lg:shrink">
+                                        <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={() => setSelectedCategory(cat.id)} className={cn('flex items-center gap-2 px-3 py-2 rounded-2xl text-sm font-medium transition-all whitespace-nowrap min-w-fit lg:w-full', selectedCategory === cat.id ? 'bg-gradient-to-r from-rose-50 to-orange-50 text-rose-600 border border-rose-200/60 shadow-sm' : 'text-slate-600 hover:bg-white/70')}>
                                             <span className={cn('inline-block w-2.5 h-2.5 rounded-full', selectedCategory === cat.id ? 'bg-rose-500' : 'bg-slate-300')} />
-                                            <span className="flex-1 text-left hidden lg:inline">{cat.name}</span>
-                                            <span className="lg:hidden">{cat.name.split(' ')[0]}</span>
-                                            <span className={cn('px-2 py-0.5 rounded-md text-xs font-medium hidden lg:inline', selectedCategory === cat.id ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-600')}>{cat.count}</span>
+                                            <span className="text-left truncate max-w-[120px] lg:max-w-none lg:flex-1">{cat.name}</span>
+                                            <span className={cn('px-2 py-0.5 rounded-md text-[11px] font-medium', selectedCategory === cat.id ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-600')}>{cat.count}</span>
                                         </motion.button>
                                         {cat.id !== 'all' && (
                                             <button
@@ -525,7 +524,7 @@ export default function MenuManagementPage() {
                                                     void handleDeleteCategory(cat.id, cat.name, cat.count);
                                                 }}
                                                 title={`Delete ${cat.name}`}
-                                                className="ml-1 p-2 rounded-lg text-rose-500 hover:bg-rose-50 transition-colors"
+                                                className="ml-1 p-2 rounded-lg text-rose-500 hover:bg-rose-50 transition-colors shrink-0"
                                                 disabled={actionLoading === cat.id}
                                             >
                                                 {actionLoading === cat.id ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}

@@ -6,6 +6,9 @@ export async function POST(request: NextRequest) {
     try {
         const { email, password } = await request.json();
 
+        const normalizedEmail = String(email || '').trim().toLowerCase();
+        const rawPassword = String(password || '');
+
         const superAdminEmail = process.env.SUPER_ADMIN_EMAIL;
         const superAdminPassword = process.env.SUPER_ADMIN_PASSWORD;
 
@@ -13,7 +16,11 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Super Admin not configured' }, { status: 500 });
         }
 
-        if (email !== superAdminEmail || password !== superAdminPassword) {
+        const normalizedSuperAdminEmail = String(superAdminEmail).trim().toLowerCase();
+        const normalizedSuperAdminPassword = String(superAdminPassword).trim();
+
+        // Keep password exact from user input but ignore accidental env whitespace.
+        if (normalizedEmail !== normalizedSuperAdminEmail || rawPassword !== normalizedSuperAdminPassword) {
             return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
         }
 
@@ -21,14 +28,14 @@ export async function POST(request: NextRequest) {
         // Ensure this user exists in Firebase Auth
         let user;
         try {
-            user = await adminAuth.getUserByEmail(email);
+            user = await adminAuth.getUserByEmail(normalizedSuperAdminEmail);
             // Update password in Firebase to match .env
-            await adminAuth.updateUser(user.uid, { password: superAdminPassword });
+            await adminAuth.updateUser(user.uid, { password: normalizedSuperAdminPassword });
         } catch (error: any) {
             if (error.code === 'auth/user-not-found') {
                 user = await adminAuth.createUser({
-                    email,
-                    password: superAdminPassword,
+                    email: normalizedSuperAdminEmail,
+                    password: normalizedSuperAdminPassword,
                     emailVerified: true,
                     displayName: 'Super Admin',
                 });
@@ -41,7 +48,7 @@ export async function POST(request: NextRequest) {
         // 1. Ensure the CURRENT super admin has a profile record
         const { Timestamp } = await import('firebase-admin/firestore');
         await adminFirestore.doc(`admin_profiles/${user.uid}`).set({
-            email: superAdminEmail,
+            email: normalizedSuperAdminEmail,
             role: 'super_admin',
             updated_at: Timestamp.now(),
         }, { merge: true });

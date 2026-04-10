@@ -10,9 +10,13 @@ import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
 import NexRestoLogo from '@/components/ui/NexRestoLogo';
 
+function getDashboardPathForRole(role?: string | null): string {
+    return role === 'kitchen' ? '/dashboard/kds' : '/dashboard/orders';
+}
+
 export default function ChangePasswordPage() {
     const router = useRouter();
-    const { session, tenantId, loading, mustChangePassword } = useAuth();
+    const { session, tenantId, userRole, loading, mustChangePassword } = useAuth();
     const [currentPassword, setCurrentPassword] = useState('');
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
@@ -29,7 +33,7 @@ export default function ChangePasswordPage() {
         }
         if (!mustChangePassword) {
             if (tenantId) {
-                router.replace(`/${tenantId}/dashboard/orders`);
+                router.replace(`/${tenantId}${getDashboardPathForRole(userRole)}`);
             } else {
                 const user = tenantAuth.currentUser;
                 if (!user) {
@@ -49,7 +53,7 @@ export default function ChangePasswordPage() {
                         }
 
                         if (claimRole && claimTenant) {
-                            router.replace(`/${claimTenant}/dashboard/orders`);
+                            router.replace(`/${claimTenant}${getDashboardPathForRole(claimRole)}`);
                             return;
                         }
 
@@ -67,7 +71,7 @@ export default function ChangePasswordPage() {
                         }
 
                         if (profile?.role && profile?.tenant_id) {
-                            router.replace(`/${profile.tenant_id}/dashboard/orders`);
+                            router.replace(`/${profile.tenant_id}${getDashboardPathForRole(profile.role)}`);
                             return;
                         }
 
@@ -78,7 +82,7 @@ export default function ChangePasswordPage() {
                 })();
             }
         }
-    }, [loading, session, mustChangePassword, tenantId, router]);
+    }, [loading, session, mustChangePassword, tenantId, userRole, router]);
 
     const validatePassword = (password: string) => {
         if (password.length < 8) return 'Password must be at least 8 characters.';
@@ -149,7 +153,7 @@ export default function ChangePasswordPage() {
 
             toast.success('Password updated successfully.');
             if (nextTenant) {
-                router.replace(`/${nextTenant}/dashboard/orders`);
+                router.replace(`/${nextTenant}${getDashboardPathForRole(profilePayload?.profile?.role)}`);
             } else {
                 router.replace('/login');
             }
