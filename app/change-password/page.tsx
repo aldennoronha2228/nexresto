@@ -21,7 +21,7 @@ function getDashboardPathForRole(role?: string | null): string {
 
 export default function ChangePasswordPage() {
     const router = useRouter();
-    const { session, tenantId, userRole, loading, mustChangePassword } = useAuth();
+    const { session, tenantId, userRole, loading, mustChangePassword, refreshTenant } = useAuth();
     const [currentPassword, setCurrentPassword] = useState('');
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
@@ -155,6 +155,10 @@ export default function ChangePasswordPage() {
                     JSON.stringify({ uid: user.uid, expiresAt: Date.now() + PASSWORD_CHANGE_BYPASS_MS })
                 );
             }
+
+            // Immediately re-resolve auth/profile state so route guards stop
+            // redirecting back to /change-password while claims are propagating.
+            await refreshTenant().catch(() => { });
 
             const profileRes = await fetch('/api/auth/profile', {
                 headers: { Authorization: `Bearer ${await user.getIdToken()}` },
