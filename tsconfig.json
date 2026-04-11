@@ -3,8 +3,7 @@
     "next-env.d.ts",
     "app/**/*",
     "client/src/**/*",
-    "**/*.ts",
-    "**/*.tsx",
+    "shared/**/*",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"
   ],
