@@ -27,6 +27,7 @@ function OrderSummaryContent() {
     const [status, setStatus] = React.useState<'submitting' | 'success' | 'error'>('submitting');
     const [error, setError] = React.useState('');
     const [orderNumber, setOrderNumber] = React.useState<number>(0);
+    const [tableReady, setTableReady] = React.useState(false);
     const [customerProfile, setCustomerProfile] = React.useState<{ name: string; phone: string } | null>(null);
 
     const frozenCartRef = React.useRef(cart);
@@ -37,11 +38,17 @@ function OrderSummaryContent() {
         if (queryTable) {
             setTableId(queryTable);
             if (restaurantId) localStorage.setItem(getTenantTableStorageKey(restaurantId), queryTable);
+            setTableReady(true);
             return;
         }
 
-        if (!restaurantId) return;
+        if (!restaurantId) {
+            setTableReady(true);
+            return;
+        }
+
         setTableId((localStorage.getItem(getTenantTableStorageKey(restaurantId)) || '').trim());
+        setTableReady(true);
     }, [queryTable, restaurantId]);
 
     React.useEffect(() => {
@@ -79,7 +86,21 @@ function OrderSummaryContent() {
     }, [tableId, restaurantId]);
 
     React.useEffect(() => {
+        if (!tableReady) return;
         if (submittedRef.current) return;
+
+        if (!restaurantId) {
+            setStatus('error');
+            setError('Missing restaurant context. Please return to menu and try again.');
+            return;
+        }
+
+        if (!tableId) {
+            setStatus('error');
+            setError('Missing table number. Please return to menu and enter your table before checkout.');
+            return;
+        }
+
         if (frozenCartRef.current.length === 0) {
             router.replace(backToMenuUrl);
             return;
@@ -91,7 +112,7 @@ function OrderSummaryContent() {
             frozenCartRef.current,
             tableId,
             frozenTotalRef.current + 5,
-            restaurantId || undefined,
+            restaurantId,
             customerProfile || undefined
         )
             .then(({ orderId, dailyOrderNumber }) => {
@@ -112,7 +133,7 @@ function OrderSummaryContent() {
                 setStatus('error');
                 setError(err instanceof Error ? err.message : 'Could not submit order');
             });
-    }, [router, backToMenuUrl, clearCart, restaurantId, saveOrder, tableId, customerProfile]);
+    }, [router, backToMenuUrl, clearCart, restaurantId, saveOrder, tableId, customerProfile, tableReady]);
 
     return (
         <div className="min-h-screen bg-[#131313] px-4 py-10 text-stone-200">

@@ -12,6 +12,7 @@ import {
     Crown,
     Briefcase,
     ChefHat,
+    Bell,
     ToggleLeft,
     ToggleRight,
     Trash2,
@@ -38,6 +39,7 @@ const ROLES = [
     { value: 'owner', label: 'Owner', description: 'Full access to all features', icon: Crown },
     { value: 'manager', label: 'Manager', description: 'Can manage operations but not billing', icon: Briefcase },
     { value: 'kitchen', label: 'Kitchen', description: 'Kitchen Display (KDS) access only', icon: ChefHat },
+    { value: 'waiter', label: 'Waiter', description: 'Ready-to-serve notifications only', icon: Bell },
     { value: 'staff', label: 'Staff', description: 'Orders and tables only', icon: Users },
 ];
 
@@ -238,7 +240,7 @@ export default function MembersPage() {
                     <p className="text-slate-500 text-sm mt-1">Owner-only control for dashboard members.</p>
                 </header>
 
-                <div className="bg-white rounded-3xl border border-slate-200/60 shadow-sm overflow-hidden">
+                <div className="bg-white rounded-3xl border border-slate-200/60 shadow-sm overflow-visible">
                     <div className="px-6 py-5 border-b border-slate-100 flex items-center gap-3">
                         <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center">
                             <Key className="w-5 h-5 text-slate-500" />
@@ -449,6 +451,7 @@ export default function MembersPage() {
                                                 owner: 'bg-purple-100 text-purple-700',
                                                 manager: 'bg-blue-100 text-blue-700',
                                                 kitchen: 'bg-orange-100 text-orange-700',
+                                                waiter: 'bg-emerald-100 text-emerald-700',
                                                 staff: 'bg-slate-100 text-slate-600',
                                             };
                                             const badgeColor = roleColors[adminRole as keyof typeof roleColors] || roleColors.staff;

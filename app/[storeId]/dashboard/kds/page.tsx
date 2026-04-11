@@ -103,6 +103,9 @@ function parseOrder(rowId: string, data: Record<string, unknown>): KdsOrder | nu
     const status = normalizeStatus(data.status);
     if (!status) return null;
 
+    // Served orders are handled by waiter display and should no longer appear in KDS.
+    if (status === 'done' && data.waiter_served_at) return null;
+
     return {
         id: rowId,
         orderNumber: data.daily_order_number ? String(data.daily_order_number) : rowId.slice(-6).toUpperCase(),

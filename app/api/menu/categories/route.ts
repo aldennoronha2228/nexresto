@@ -103,14 +103,7 @@ export async function DELETE(request: NextRequest) {
             .orderBy('display_order')
             .get();
 
-        if (categoriesSnap.size <= 1) {
-            return NextResponse.json({ error: 'At least one category is required' }, { status: 400 });
-        }
-
         const fallbackCategory = categoriesSnap.docs.find((doc) => doc.id !== categoryId);
-        if (!fallbackCategory) {
-            return NextResponse.json({ error: 'No fallback category available' }, { status: 400 });
-        }
 
         const menuItemsSnap = await adminFirestore
             .collection(`restaurants/${restaurantId}/menu_items`)
@@ -119,12 +112,18 @@ export async function DELETE(request: NextRequest) {
 
         if (!menuItemsSnap.empty) {
             const batch = adminFirestore.batch();
-            for (const itemDoc of menuItemsSnap.docs) {
-                batch.update(itemDoc.ref, {
-                    category_id: fallbackCategory.id,
-                    category_name: String(fallbackCategory.data().name || ''),
-                    updated_at: FieldValue.serverTimestamp(),
-                });
+            if (fallbackCategory) {
+                for (const itemDoc of menuItemsSnap.docs) {
+                    batch.update(itemDoc.ref, {
+                        category_id: fallbackCategory.id,
+                        category_name: String(fallbackCategory.data().name || ''),
+                        updated_at: FieldValue.serverTimestamp(),
+                    });
+                }
+            } else {
+                for (const itemDoc of menuItemsSnap.docs) {
+                    batch.delete(itemDoc.ref);
+                }
             }
             await batch.commit();
         }
@@ -134,7 +133,8 @@ export async function DELETE(request: NextRequest) {
         return NextResponse.json({
             success: true,
             movedItems: menuItemsSnap.size,
-            fallbackCategoryId: fallbackCategory.id,
+            fallbackCategoryId: fallbackCategory?.id || null,
+            deletedItems: fallbackCategory ? 0 : menuItemsSnap.size,
         });
     } catch (error: unknown) {
         return NextResponse.json({ error: errorMessage(error, 'Failed to delete category') }, { status: 500 });

@@ -14,7 +14,9 @@ const PASSWORD_CHANGE_BYPASS_KEY = 'nexresto-password-change-bypass';
 const PASSWORD_CHANGE_BYPASS_MS = 10 * 60 * 1000;
 
 function getDashboardPathForRole(role?: string | null): string {
-    return role === 'kitchen' ? '/dashboard/kds' : '/dashboard/orders';
+    if (role === 'kitchen') return '/dashboard/kds';
+    if (role === 'waiter') return '/dashboard/waiter';
+    return '/dashboard/orders';
 }
 
 export default function ChangePasswordPage() {

@@ -18,17 +18,46 @@ import * as XLSX from 'xlsx';
 import { authorizeTenantAccess } from '@/lib/server/authz/tenant';
 
 interface ExcelRow {
-    Name?: string;
-    name?: string;
-    Price?: number | string;
-    price?: number | string;
-    Category?: string;
-    category?: string;
-    Type?: string;
-    type?: string;
-    'Image URL'?: string;
-    image_url?: string;
-    ImageURL?: string;
+    [key: string]: string | number | undefined;
+}
+
+const NAME_KEYS = ['name', 'itemname', 'dishname', 'item'];
+const PRICE_KEYS = ['price', 'rate', 'amount', 'cost'];
+const CATEGORY_KEYS = ['category', 'categoryname', 'section'];
+const TYPE_KEYS = ['type', 'itemtype', 'vegornonveg', 'veg'];
+const IMAGE_KEYS = ['imageurl', 'image', 'image_link', 'imagepath'];
+
+function normalizeHeaderKey(value: string): string {
+    return value.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function normalizeCategoryKey(value: string): string {
+    return value.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function getRowValue(row: ExcelRow, expectedKeys: string[]): string {
+    for (const [rawKey, rawValue] of Object.entries(row)) {
+        const key = normalizeHeaderKey(rawKey);
+        if (!expectedKeys.includes(key)) continue;
+        if (rawValue === undefined || rawValue === null) continue;
+        return String(rawValue).trim();
+    }
+    return '';
+}
+
+function parsePrice(value: string): number {
+    if (!value) return NaN;
+    const cleaned = value.replace(/[₹$,]/g, '').replace(/\s+/g, '');
+    const parsed = Number(cleaned);
+    return Number.isFinite(parsed) ? parsed : NaN;
+}
+
+function normalizeType(value: string): 'veg' | 'non-veg' {
+    const typeRaw = value.trim().toLowerCase().replace(/\s+/g, '');
+    if (['nonveg', 'non-veg', 'nveg', 'nv', 'nonvegetarian'].includes(typeRaw)) {
+        return 'non-veg';
+    }
+    return 'veg';
 }
 
 function errorMessage(error: unknown, fallback: string): string {
@@ -78,7 +107,11 @@ export async function POST(request: Request) {
         }
 
         const sheet = workbook.Sheets[sheetName];
-        const rows: ExcelRow[] = XLSX.utils.sheet_to_json(sheet);
+        const rows: ExcelRow[] = XLSX.utils.sheet_to_json(sheet, {
+            defval: '',
+            raw: false,
+            blankrows: false,
+        });
 
         if (rows.length === 0) {
             return NextResponse.json({ error: 'No data found in Excel file' }, { status: 400 });
@@ -95,7 +128,7 @@ export async function POST(request: Request) {
         categoriesSnap.forEach(doc => {
             const data = doc.data();
             if (data.name) {
-                categoryMap.set(data.name.toLowerCase(), doc.id);
+                categoryMap.set(normalizeCategoryKey(String(data.name)), doc.id);
             }
             if (data.display_order > maxSortOrder) {
                 maxSortOrder = data.display_order;
@@ -109,8 +142,16 @@ export async function POST(request: Request) {
             categoriesCreated: [] as string[],
         };
 
-        const batch = adminFirestore.batch();
+        let batch = adminFirestore.batch();
         let batchCount = 0;
+
+        const commitBatchIfNeeded = async (force = false) => {
+            if (!force && batchCount < 450) return;
+            if (batchCount === 0) return;
+            await batch.commit();
+            batch = adminFirestore.batch();
+            batchCount = 0;
+        };
 
         // Process each row
         for (let i = 0; i < rows.length; i++) {
@@ -118,11 +159,11 @@ export async function POST(request: Request) {
             const rowNum = i + 2; // Excel row number (1-indexed + header row)
 
             // Extract values (handle different column name formats)
-            const name = (row.Name || row.name || '').toString().trim();
-            const price = parseFloat((row.Price ?? row.price ?? '').toString());
-            const categoryName = (row.Category || row.category || '').toString().trim();
-            const typeRaw = (row.Type || row.type || 'veg').toString().toLowerCase().trim();
-            const imageUrl = (row['Image URL'] || row.image_url || row.ImageURL || '').toString().trim();
+            const name = getRowValue(row, NAME_KEYS);
+            const price = parsePrice(getRowValue(row, PRICE_KEYS));
+            const categoryName = getRowValue(row, CATEGORY_KEYS);
+            const typeValue = getRowValue(row, TYPE_KEYS);
+            const imageUrl = getRowValue(row, IMAGE_KEYS);
 
             // Validate required fields
             if (!name) {
@@ -144,7 +185,8 @@ export async function POST(request: Request) {
             }
 
             // Find or create category
-            let categoryId = categoryMap.get(categoryName.toLowerCase());
+            const normalizedCategory = normalizeCategoryKey(categoryName);
+            let categoryId = categoryMap.get(normalizedCategory);
 
             if (!categoryId) {
                 // Create new category
@@ -157,13 +199,13 @@ export async function POST(request: Request) {
                 });
 
                 categoryId = newCatRef.id;
-                categoryMap.set(categoryName.toLowerCase(), categoryId);
+                categoryMap.set(normalizedCategory, categoryId);
                 results.categoriesCreated.push(categoryName);
                 batchCount++;
             }
 
             // Normalize type
-            const type: 'veg' | 'non-veg' = typeRaw.includes('non') || typeRaw === 'nonveg' ? 'non-veg' : 'veg';
+            const type = normalizeType(typeValue || 'veg');
 
             // Insert menu item
             const newItemRef = adminFirestore.collection(`restaurants/${tenantId}/menu_items`).doc();
@@ -179,18 +221,13 @@ export async function POST(request: Request) {
             batchCount++;
 
             // Commit batch if it gets too large (Firestore limit is 500 ops per batch)
-            if (batchCount >= 450) {
-                await batch.commit();
-                batchCount = 0;
-            }
+            await commitBatchIfNeeded();
 
             results.imported++;
         }
 
         // Commit remaining batch
-        if (batchCount > 0) {
-            await batch.commit();
-        }
+        await commitBatchIfNeeded(true);
 
         return NextResponse.json({
             success: true,

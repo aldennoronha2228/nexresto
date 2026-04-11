@@ -124,9 +124,9 @@ export async function POST(req: NextRequest) {
 
             // Validate requested role. Kitchen accounts are dedicated KDS users.
             const requestedRole = String(role || 'staff').toLowerCase();
-            const allowedRoles = new Set(['owner', 'manager', 'staff', 'kitchen']);
+            const allowedRoles = new Set(['owner', 'manager', 'staff', 'kitchen', 'waiter']);
             if (!allowedRoles.has(requestedRole)) {
-                return NextResponse.json({ error: 'Invalid role. Allowed: owner, manager, staff, kitchen.' }, { status: 400 });
+                return NextResponse.json({ error: 'Invalid role. Allowed: owner, manager, staff, kitchen, waiter.' }, { status: 400 });
             }
             const finalRole = requestedRole;
 
@@ -289,9 +289,9 @@ export async function POST(req: NextRequest) {
             });
         } else if (action === 'update_role') {
             const requestedRole = String(role || '').toLowerCase();
-            const allowedRoles = new Set(['owner', 'manager', 'staff', 'kitchen']);
+            const allowedRoles = new Set(['owner', 'manager', 'staff', 'kitchen', 'waiter']);
             if (!allowedRoles.has(requestedRole)) {
-                return NextResponse.json({ error: 'Invalid role. Allowed: owner, manager, staff, kitchen.' }, { status: 400 });
+                return NextResponse.json({ error: 'Invalid role. Allowed: owner, manager, staff, kitchen, waiter.' }, { status: 400 });
             }
 
             const normalizedEmail = String(email || '').toLowerCase().trim();

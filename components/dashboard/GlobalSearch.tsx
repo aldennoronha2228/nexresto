@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, ShoppingBag, UtensilsCrossed, QrCode, History, ArrowRight, X, Users, ChefHat } from 'lucide-react';
+import { Search, ShoppingBag, UtensilsCrossed, QrCode, History, ArrowRight, X, Users, ChefHat, Bell } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { tenantAuth, adminAuth } from '@/lib/firebase';
 import { useAuth } from '@/context/AuthContext';
@@ -50,6 +50,15 @@ const NAV_LINKS_BASE: NavLinkItem[] = [
         basePath: '/dashboard/kds',
         icon: <ChefHat className="w-4 h-4" />,
         permission: 'can_view_kds',
+    },
+    {
+        id: 'nav-waiter',
+        type: 'nav',
+        title: 'Waiter Display',
+        subtitle: 'Ready-to-serve notifications',
+        basePath: '/dashboard/waiter',
+        icon: <Bell className="w-4 h-4" />,
+        permission: 'can_view_waiter',
     },
     {
         id: 'nav-history',

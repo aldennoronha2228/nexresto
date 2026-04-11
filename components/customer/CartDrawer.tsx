@@ -23,6 +23,7 @@ export function CartDrawer({ tableId = '', restaurantId }: CartDrawerProps) {
     const { cart, isCartOpen, setIsCartOpen, totalPrice, updateQuantity, removeFromCart } = useCart();
     const router = useRouter();
     const [manualTable, setManualTable] = React.useState('');
+    const [tableError, setTableError] = React.useState<string | null>(null);
 
     React.useEffect(() => {
         const normalized = (tableId || '').trim();
@@ -44,6 +45,12 @@ export function CartDrawer({ tableId = '', restaurantId }: CartDrawerProps) {
 
     const goCheckout = () => {
         const finalTable = manualTable.trim();
+        if (!finalTable) {
+            setTableError('Please enter your table number before checkout.');
+            return;
+        }
+
+        setTableError(null);
         if (restaurantId && finalTable) {
             localStorage.setItem(getTenantTableStorageKey(restaurantId), finalTable);
         }
@@ -121,11 +128,15 @@ export function CartDrawer({ tableId = '', restaurantId }: CartDrawerProps) {
                             <input
                                 id="tableInput"
                                 value={manualTable}
-                                onChange={(e) => setManualTable(e.target.value)}
+                                onChange={(e) => {
+                                    setManualTable(e.target.value);
+                                    if (tableError) setTableError(null);
+                                }}
                                 readOnly={Boolean(tableId)}
                                 placeholder="e.g. T-05"
                                 className="w-full rounded border border-stone-600 bg-[#171717] px-3 py-2 text-sm outline-none focus:border-emerald-500"
                             />
+                            {tableError ? <p className="mt-2 text-xs text-rose-300">{tableError}</p> : null}
                         </div>
 
                         <div className="flex items-center justify-between">
@@ -136,7 +147,8 @@ export function CartDrawer({ tableId = '', restaurantId }: CartDrawerProps) {
                         <button
                             type="button"
                             onClick={goCheckout}
-                            className="w-full bg-emerald-600 px-4 py-3 text-sm font-semibold uppercase tracking-[0.14em] text-white hover:bg-emerald-500"
+                            disabled={!manualTable.trim()}
+                            className="w-full bg-emerald-600 px-4 py-3 text-sm font-semibold uppercase tracking-[0.14em] text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-55"
                         >
                             Proceed to Checkout
                         </button>

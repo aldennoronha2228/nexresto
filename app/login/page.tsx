@@ -104,7 +104,9 @@ function serializeAuthError(err: unknown) {
 }
 
 function getDashboardPathForRole(role?: string | null): string {
-    return role === 'kitchen' ? '/dashboard/kds' : '/dashboard/orders';
+    if (role === 'kitchen') return '/dashboard/kds';
+    if (role === 'waiter') return '/dashboard/waiter';
+    return '/dashboard/orders';
 }
 
 

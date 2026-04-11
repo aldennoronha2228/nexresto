@@ -29,6 +29,7 @@ const baseNavigation = [
     { name: 'Live Orders', basePath: '/dashboard/orders', icon: ShoppingBag, shortName: 'Orders', proOnly: false, permission: 'can_view_orders' as PermissionType },
     { name: 'Order History', basePath: '/dashboard/history', icon: History, shortName: 'History', proOnly: false, permission: 'can_view_history' as PermissionType },
     { name: 'Customers', basePath: '/dashboard/customers', icon: Users, shortName: 'Customers', proOnly: false, permission: 'can_view_history' as PermissionType },
+    { name: 'Waiter Display', basePath: '/dashboard/waiter', icon: Bell, shortName: 'Waiter', proOnly: false, permission: 'can_view_waiter' as PermissionType },
     { name: 'Menu Management', basePath: '/dashboard/menu', icon: UtensilsCrossed, shortName: 'Menu', proOnly: false, permission: 'can_view_menu' as PermissionType },
     { name: 'Tables & QR', basePath: '/dashboard/tables', icon: QrCode, shortName: 'Tables', proOnly: false, permission: 'can_view_tables' as PermissionType },
     { name: 'Analytics', basePath: '/dashboard/analytics', icon: BarChart3, shortName: 'Analytics', proOnly: true, permission: 'can_view_analytics' as PermissionType },

@@ -147,7 +147,7 @@ export function GourmetCatalogLayout({
                 </button>
             </header>
 
-            <main className="mx-auto w-full max-w-5xl pb-24 pt-20">
+            <main className="mx-auto w-full max-w-5xl pb-16 pt-20">
                 <div className="sticky top-20 z-30 border-b border-white/10 bg-[#0c0d0e]/78 px-4 py-4 backdrop-blur-xl sm:px-6">
                     <div className="no-scrollbar flex w-full items-center gap-3 overflow-x-auto whitespace-nowrap">
                         {safeCategories.map((category) => {
@@ -312,10 +312,10 @@ export function GourmetCatalogLayout({
                 </section>
             </main>
 
-            <nav className="fixed bottom-0 left-0 z-40 flex h-20 w-full items-center justify-around border-t border-white/10 bg-[#0c0d0e]/72 px-4 pb-4 backdrop-blur-3xl">
+            <nav className="fixed bottom-0 left-0 z-40 flex h-14 w-full items-center justify-around border-t border-white/10 bg-[#0c0d0e]/72 px-3 pb-1 backdrop-blur-3xl">
                 <div className="flex flex-col items-center justify-center text-[#d7d9d7]">
                     <BookOpen className="h-4 w-4" />
-                    <span className="mt-1 text-[10px] font-semibold uppercase tracking-[0.08em]">Menu</span>
+                    <span className="mt-0 text-[10px] font-semibold uppercase tracking-[0.08em] leading-none">Menu</span>
                 </div>
                 <button
                     type="button"
@@ -323,7 +323,7 @@ export function GourmetCatalogLayout({
                     className="flex flex-col items-center justify-center text-[#8f9391] transition-colors hover:text-white"
                 >
                     <ClipboardList className="h-4 w-4" />
-                    <span className="mt-1 text-[10px] font-semibold uppercase tracking-[0.08em]">Orders</span>
+                    <span className="mt-0 text-[10px] font-semibold uppercase tracking-[0.08em] leading-none">Orders</span>
                 </button>
                 <button
                     type="button"
@@ -331,10 +331,10 @@ export function GourmetCatalogLayout({
                     className="flex flex-col items-center justify-center text-[#e5e6e5]"
                 >
                     <ShoppingBag className="h-4 w-4" />
-                    <span className="mt-1 text-[10px] font-semibold uppercase tracking-[0.08em]">Cart ({totalItems})</span>
-                    <span className="text-[10px] text-[#9b9f9c]">{formatINR(totalPrice)}</span>
+                    <span className="mt-0 text-[10px] font-semibold uppercase tracking-[0.08em] leading-none">Cart ({totalItems})</span>
+                    <span className="text-[10px] leading-none text-[#9b9f9c]">{formatINR(totalPrice)}</span>
                 </button>
-                <p className="absolute bottom-1 left-1/2 -translate-x-1/2 text-[9px] uppercase tracking-[0.12em] text-[#6f7572]">
+                <p className="absolute -top-3 left-1/2 -translate-x-1/2 text-[9px] uppercase tracking-[0.12em] text-[#6f7572]">
                     Powered by NexResto
                 </p>
             </nav>

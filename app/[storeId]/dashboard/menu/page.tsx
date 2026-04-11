@@ -23,6 +23,20 @@ interface ImportResult {
     categoriesCreated: string[];
 }
 
+interface MenuMemoryPreset {
+    id: string;
+    name: string;
+    createdAt: number;
+    categories: Array<{ name: string; display_order?: number }>;
+    items: Array<{
+        name: string;
+        price: number;
+        categoryName: string;
+        type: 'veg' | 'non-veg';
+        image_url?: string;
+    }>;
+}
+
 function ExcelUploadModal({ open, onClose, tenantId, onImportComplete }: { open: boolean; onClose: () => void; tenantId: string | null; onImportComplete: () => void; }) {
     const [file, setFile] = useState<File | null>(null);
     const [uploading, setUploading] = useState(false);
@@ -313,9 +327,15 @@ export default function MenuManagementPage() {
     const [showExcelModal, setShowExcelModal] = useState(false);
     const [editItem, setEditItem] = useState<MenuItem | null>(null);
     const [actionLoading, setActionLoading] = useState<string | null>(null);
+    const [memoryEnabled, setMemoryEnabled] = useState(false);
+    const [presetName, setPresetName] = useState('');
+    const [presets, setPresets] = useState<MenuMemoryPreset[]>([]);
+    const [presetBusyId, setPresetBusyId] = useState<string | null>(null);
     const { storeId: tenantId, db: contextDb, loading: tenantLoading } = useRestaurant();
 
-    const loadDataViaServer = async () => {
+    const presetStorageKey = tenantId ? `menu-memory-presets:${tenantId}` : null;
+
+    const loadDataViaServer = async (): Promise<{ menuData: MenuItem[]; catData: Category[] }> => {
         if (!tenantId) {
             throw new Error('Missing tenant context');
         }
@@ -344,6 +364,7 @@ export default function MenuManagementPage() {
         seedAvailabilityMap(menuData.map(i => ({ id: i.id, available: i.available ?? true })), tenantId);
         setItems(applyAvailabilityOverrides(menuData, tenantId));
         setCategories(catData);
+        return { menuData, catData };
     };
 
     const loadData = async () => {
@@ -374,6 +395,33 @@ export default function MenuManagementPage() {
 
     useEffect(() => { loadData(); }, [tenantId, contextDb]);
 
+    useEffect(() => {
+        if (!presetStorageKey || typeof window === 'undefined') {
+            setPresets([]);
+            return;
+        }
+        try {
+            const raw = window.localStorage.getItem(presetStorageKey);
+            if (!raw) {
+                setPresets([]);
+                return;
+            }
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) {
+                setPresets(parsed);
+            } else {
+                setPresets([]);
+            }
+        } catch {
+            setPresets([]);
+        }
+    }, [presetStorageKey]);
+
+    useEffect(() => {
+        if (!presetStorageKey || typeof window === 'undefined') return;
+        window.localStorage.setItem(presetStorageKey, JSON.stringify(presets));
+    }, [presets, presetStorageKey]);
+
     const filteredItems = items.filter(item => {
         const matchesCat = selectedCategory === 'all' || item.category_id === selectedCategory;
         return matchesCat && item.name.toLowerCase().includes(searchQuery.toLowerCase());
@@ -395,9 +443,16 @@ export default function MenuManagementPage() {
     const handleDelete = async (itemId: string) => {
         if (!tenantId || !contextDb) return;
         if (!confirm('Delete this menu item? This cannot be undone.')) return;
+        const prevItems = items;
         setActionLoading(itemId);
         setItems(prev => prev.filter(i => i.id !== itemId));
-        try { await deleteMenuItem(tenantId, itemId, contextDb); } catch { loadData(); }
+        try {
+            await deleteMenuItem(tenantId, itemId, contextDb);
+        } catch {
+            // Roll back immediately if server delete fails.
+            setItems(prevItems);
+            loadData();
+        }
         setActionLoading(null);
     };
 
@@ -431,13 +486,12 @@ export default function MenuManagementPage() {
 
     const handleDeleteCategory = async (categoryId: string, categoryName: string, categoryItemCount: number) => {
         if (!tenantId || !contextDb) return;
-        if (categories.length <= 1) {
-            setError('At least one category is required.');
-            return;
-        }
 
+        const hasFallback = categories.some((c) => c.id !== categoryId);
         const confirmMessage = categoryItemCount > 0
-            ? `Delete "${categoryName}"? ${categoryItemCount} item(s) will be moved to another category.`
+            ? hasFallback
+                ? `Delete "${categoryName}"? ${categoryItemCount} item(s) will be moved to another category.`
+                : `Delete "${categoryName}"? ${categoryItemCount} item(s) in this category will be deleted.`
             : `Delete "${categoryName}"?`;
 
         if (!confirm(confirmMessage)) {
@@ -445,6 +499,29 @@ export default function MenuManagementPage() {
         }
 
         try {
+            const fallbackCategory = categories.find((c) => c.id !== categoryId) || null;
+
+            // Optimistic UI: remove category instantly and update/remove affected items locally.
+            setCategories((prev) => prev.filter((c) => c.id !== categoryId));
+            setItems((prev) => {
+                if (fallbackCategory) {
+                    return prev.map((item) =>
+                        item.category_id === categoryId
+                            ? {
+                                ...item,
+                                category_id: fallbackCategory.id,
+                                categories: { id: fallbackCategory.id, name: fallbackCategory.name },
+                            }
+                            : item
+                    );
+                }
+                return prev.filter((item) => item.category_id !== categoryId);
+            });
+
+            if (selectedCategory === categoryId) {
+                setSelectedCategory('all');
+            }
+
             setActionLoading(categoryId);
             const activeUser = adminAuth.currentUser || tenantAuth.currentUser;
             if (!activeUser) throw new Error('Missing active session');
@@ -459,16 +536,162 @@ export default function MenuManagementPage() {
             if (!res.ok) {
                 throw new Error(payload?.error || 'Failed to delete category');
             }
+        } catch (err: any) {
+            // If server rejects, recover canonical state.
+            await loadData();
+            setError(err?.message || 'Failed to delete category');
+        } finally {
+            setActionLoading(null);
+        }
+    };
 
-            if (selectedCategory === categoryId) {
-                setSelectedCategory('all');
+    const handleClearAllItems = async () => {
+        if (!tenantId) return;
+        if (items.length === 0) {
+            setError('Menu is already empty.');
+            return;
+        }
+
+        if (!confirm('Delete all menu items? Categories will be kept. This cannot be undone.')) {
+            return;
+        }
+
+        try {
+            setActionLoading('__clear__');
+            const activeUser = adminAuth.currentUser || tenantAuth.currentUser;
+            if (!activeUser) throw new Error('Missing active session');
+
+            const idToken = await activeUser.getIdToken(true);
+            const res = await fetch('/api/menu/clear', {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${idToken}` },
+                body: JSON.stringify({ restaurantId: tenantId }),
+            });
+            const payload = await res.json();
+            if (!res.ok) {
+                throw new Error(payload?.error || 'Failed to clear menu');
             }
 
             await loadData();
         } catch (err: any) {
-            setError(err?.message || 'Failed to delete category');
+            setError(err?.message || 'Failed to clear menu');
         } finally {
             setActionLoading(null);
+        }
+    };
+
+    const saveCurrentAsPreset = () => {
+        const name = presetName.trim();
+        if (!name) {
+            setError('Enter a preset name to save menu memory.');
+            return;
+        }
+
+        const categoryById = new Map(categories.map((c) => [c.id, c.name]));
+        const preset: MenuMemoryPreset = {
+            id: `${Date.now()}`,
+            name,
+            createdAt: Date.now(),
+            categories: categories.map((c) => ({ name: c.name, display_order: c.display_order })),
+            items: items.map((i) => ({
+                name: i.name,
+                price: i.price,
+                categoryName: categoryById.get(i.category_id) || i.categories?.name || 'Uncategorized',
+                type: i.type,
+                image_url: i.image_url || undefined,
+            })),
+        };
+
+        setPresets((prev) => {
+            const withoutSameName = prev.filter((p) => p.name.toLowerCase() !== name.toLowerCase());
+            return [preset, ...withoutSameName].slice(0, 12);
+        });
+        setPresetName('');
+        setError(null);
+    };
+
+    const deletePreset = (id: string) => {
+        setPresets((prev) => prev.filter((p) => p.id !== id));
+    };
+
+    const applyPreset = async (preset: MenuMemoryPreset) => {
+        if (!tenantId || !contextDb) return;
+        if (!confirm(`Load preset "${preset.name}"? Current menu items will be deleted first.`)) {
+            return;
+        }
+
+        try {
+            setPresetBusyId(preset.id);
+            setError(null);
+
+            const activeUser = adminAuth.currentUser || tenantAuth.currentUser;
+            if (!activeUser) throw new Error('Missing active session');
+            const idToken = await activeUser.getIdToken(true);
+
+            const clearRes = await fetch('/api/menu/clear', {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${idToken}` },
+                body: JSON.stringify({ restaurantId: tenantId }),
+            });
+            const clearPayload = await clearRes.json();
+            if (!clearRes.ok) {
+                throw new Error(clearPayload?.error || 'Failed to clear current menu');
+            }
+
+            const firstReload = await loadDataViaServer();
+            let latestCategories = [...firstReload.catData];
+            const nameToId = new Map<string, string>();
+            for (const cat of latestCategories) {
+                nameToId.set(cat.name.trim().toLowerCase(), cat.id);
+            }
+
+            for (const presetCat of preset.categories) {
+                const normalized = presetCat.name.trim().toLowerCase();
+                if (!normalized || nameToId.has(normalized)) continue;
+
+                const res = await fetch('/api/menu/categories', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: `Bearer ${idToken}`,
+                    },
+                    body: JSON.stringify({ restaurantId: tenantId, name: presetCat.name }),
+                });
+                const payload = await res.json();
+                if (!res.ok) {
+                    throw new Error(payload?.error || `Failed to create category ${presetCat.name}`);
+                }
+                const createdId = payload?.category?.id;
+                if (createdId) {
+                    nameToId.set(normalized, createdId);
+                }
+            }
+
+            // Refresh to get full canonical category list after creation.
+            const secondReload = await loadDataViaServer();
+            latestCategories = [...secondReload.catData];
+            for (const cat of latestCategories) {
+                nameToId.set(cat.name.trim().toLowerCase(), cat.id);
+            }
+
+            for (const presetItem of preset.items) {
+                const key = presetItem.categoryName.trim().toLowerCase();
+                const categoryId = nameToId.get(key);
+                if (!categoryId) continue;
+                await createMenuItem(tenantId, {
+                    name: presetItem.name,
+                    price: Number(presetItem.price),
+                    category_id: categoryId,
+                    type: presetItem.type,
+                    image_url: presetItem.image_url,
+                }, contextDb);
+            }
+
+            await loadData();
+        } catch (err: any) {
+            setError(err?.message || 'Failed to load preset');
+        } finally {
+            setPresetBusyId(null);
         }
     };
 
@@ -494,6 +717,9 @@ export default function MenuManagementPage() {
                     </div>
                     <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
                         <button onClick={loadData} className="p-2.5 rounded-xl bg-white/70 border border-white/40 hover:bg-white transition-colors shadow-sm shrink-0" title="Refresh"><RefreshCw className="w-4 h-4 text-rose-500" /></button>
+                        <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={() => void handleClearAllItems()} disabled={actionLoading === '__clear__'} className="flex-1 sm:flex-none min-w-[140px] flex items-center justify-center gap-2 px-4 py-2.5 bg-rose-50 text-rose-600 border border-rose-200 rounded-xl font-medium text-sm hover:bg-rose-100 disabled:opacity-60 transition-colors">
+                            {actionLoading === '__clear__' ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}Clear All Items
+                        </motion.button>
                         <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={() => setShowExcelModal(true)} className="flex-1 sm:flex-none min-w-[140px] flex items-center justify-center gap-2 px-4 py-2.5 premium-glass text-slate-700 rounded-xl font-medium text-sm hover:bg-white transition-colors">
                             <FileSpreadsheet className="w-4 h-4" />Import Excel
                         </motion.button>
@@ -504,6 +730,66 @@ export default function MenuManagementPage() {
                 </div>
 
                 {error && <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="flex items-start gap-3 p-4 bg-rose-50 border border-rose-200 rounded-xl text-sm text-rose-700"><AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" /><span>{error}</span></motion.div>}
+
+                <div className="premium-glass p-4 sm:p-5 space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <div>
+                            <h3 className="text-sm font-semibold text-black">Menu Memory</h3>
+                            <p className="text-xs text-black/80">Save a named menu and restore it later.</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs text-black">Memory Switch</span>
+                            <Switch checked={memoryEnabled} onCheckedChange={setMemoryEnabled} />
+                        </div>
+                    </div>
+
+                    {memoryEnabled && (
+                        <div className="space-y-3">
+                            <div className="flex flex-col sm:flex-row gap-2">
+                                <input
+                                    type="text"
+                                    value={presetName}
+                                    onChange={(e) => setPresetName(e.target.value)}
+                                    placeholder="Preset name (e.g. Weekend Menu)"
+                                    className="flex-1 h-10 px-3 border border-slate-200 rounded-xl text-sm text-black placeholder:text-black/50 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                                />
+                                <button onClick={saveCurrentAsPreset} className="h-10 px-4 rounded-xl bg-slate-900 text-white text-sm font-medium hover:bg-slate-800 transition-colors">
+                                    Save Preset
+                                </button>
+                            </div>
+
+                            {presets.length === 0 ? (
+                                <p className="text-xs text-black/80">No saved presets yet.</p>
+                            ) : (
+                                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                                    {presets.map((preset) => (
+                                        <div key={preset.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 rounded-xl border border-slate-200 bg-white/70 p-3">
+                                            <div className="min-w-0">
+                                                <p className="text-sm font-medium text-black truncate">{preset.name}</p>
+                                                <p className="text-xs text-black/80">{preset.items.length} items · {preset.categories.length} categories</p>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    onClick={() => void applyPreset(preset)}
+                                                    disabled={presetBusyId === preset.id}
+                                                    className="h-8 px-3 rounded-lg text-xs font-medium border border-emerald-200 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 disabled:opacity-60"
+                                                >
+                                                    {presetBusyId === preset.id ? 'Loading...' : 'Load'}
+                                                </button>
+                                                <button
+                                                    onClick={() => deletePreset(preset.id)}
+                                                    className="h-8 px-3 rounded-lg text-xs font-medium border border-rose-200 text-rose-600 bg-rose-50 hover:bg-rose-100"
+                                                >
+                                                    Delete
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
 
                 <div className="flex flex-col lg:flex-row gap-4 lg:gap-6">
                     <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="lg:w-64 flex-shrink-0">
