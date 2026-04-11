@@ -1,29 +1,31 @@
 @import "tailwindcss";
+
 @custom-variant dark (&:is(.dark *));
 
 :root {
   --font-size: 16px;
-  --background: #ffffff;
-  --foreground: oklch(0.145 0 0);
-  --card: #ffffff;
-  --card-foreground: oklch(0.145 0 0);
+  --background: #000000;
+  --foreground: #f4f4f5;
+  --card: #0a0a0a;
+  --card-foreground: #f4f4f5;
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
   --primary: #030213;
   --primary-foreground: oklch(1 0 0);
-  --secondary: oklch(0.95 0.0058 264.53);
-  --secondary-foreground: #030213;
-  --muted: #ececf0;
-  --muted-foreground: #717182;
+  --secondary: #18181b;
+  --secondary-foreground: #f4f4f5;
+  --muted: #27272a;
+  --muted-foreground: #a1a1aa;
   --accent: #e9ebef;
   --accent-foreground: #030213;
   --destructive: #d4183d;
   --destructive-foreground: #ffffff;
-  --border: rgba(0, 0, 0, 0.1);
+  --border: rgba(255, 255, 255, 0.08);
   --input: transparent;
-  --input-background: #f3f3f5;
-  --switch-background: #cbced4;
+  --input-background: #0a0a0a;
+  --switch-background: #3f3f46;
   --font-weight-medium: 500;
+  --font-weight-bold: 700;
   --font-weight-normal: 400;
   --ring: oklch(0.708 0 0);
   --chart-1: oklch(0.646 0.222 41.116);
@@ -40,12 +42,16 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+  --brand-accent: #ff4757;
+  --brand-accent-2: #2ed573;
+  --brand-deep: #0f172a;
+  --brand-deep-2: #111827;
 }
 
 .dark {
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
-  --card: oklch(0.145 0 0);
+  --card: oklch(0.205 0 0);
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.145 0 0);
   --popover-foreground: oklch(0.985 0 0);
@@ -62,21 +68,19 @@
   --border: oklch(0.269 0 0);
   --input: oklch(0.269 0 0);
   --ring: oklch(0.439 0 0);
-  --font-weight-medium: 500;
-  --font-weight-normal: 400;
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.769 0.188 70.08);
   --chart-4: oklch(0.627 0.265 303.9);
   --chart-5: oklch(0.645 0.246 16.439);
   --sidebar: oklch(0.205 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(0.269 0 0);
+  --sidebar-ring: oklch(0.439 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.488 0.243 264.376);
   --sidebar-primary-foreground: oklch(0.985 0 0);
   --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(0.269 0 0);
-  --sidebar-ring: oklch(0.439 0 0);
 }
 
 @theme inline {
@@ -118,6 +122,9 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --font-weight-normal: var(--font-weight-normal);
+  --font-weight-medium: var(--font-weight-medium);
+  --font-weight-bold: var(--font-weight-bold);
 }
 
 @layer base {
@@ -133,6 +140,11 @@
 
   body {
     @apply bg-background text-foreground;
+    font-family: "Space Grotesk", "Sora", "Plus Jakarta Sans", Inter, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background:
+      radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.08) 0%, transparent 30%),
+      radial-gradient(circle at 100% 0%, rgba(255, 255, 255, 0.05) 0%, transparent 28%),
+      #000000;
   }
 
   html {
@@ -142,26 +154,30 @@
 
   h1 {
     font-size: var(--text-2xl);
-    font-weight: var(--font-weight-medium);
+    font-weight: var(--font-weight-bold);
     line-height: 1.5;
   }
 
   h2 {
     font-size: var(--text-xl);
-    font-weight: var(--font-weight-medium);
+    font-weight: var(--font-weight-bold);
     line-height: 1.5;
   }
 
   h3 {
     font-size: var(--text-lg);
-    font-weight: var(--font-weight-medium);
+    font-weight: var(--font-weight-bold);
     line-height: 1.5;
   }
 
   h4 {
     font-size: var(--text-base);
-    font-weight: var(--font-weight-medium);
+    font-weight: var(--font-weight-bold);
     line-height: 1.5;
+  }
+
+  p {
+    color: #a1a1aa;
   }
 
   label {
@@ -180,5 +196,249 @@
     font-size: var(--text-base);
     font-weight: var(--font-weight-normal);
     line-height: 1.5;
+  }
+}
+
+@layer components {
+  @keyframes globalGlowSweep {
+    from {
+      --start: 0;
+    }
+    to {
+      --start: 360;
+    }
+  }
+
+  .glow {
+    position: relative;
+    width: 100%;
+    height: 100%;
+  }
+
+  .glow::after {
+    content: "";
+    position: absolute;
+    inset: calc(-1 * var(--glowingeffect-border-width, 1px));
+    border-radius: inherit;
+    border: var(--glowingeffect-border-width, 1px) solid transparent;
+    background: var(--gradient);
+    background-attachment: local;
+    opacity: calc(var(--active, 0) * 0.98);
+    transition: opacity 300ms ease;
+    mask-image:
+      linear-gradient(#0000, #0000),
+      conic-gradient(
+        from calc((var(--start, 0) - var(--spread, 20)) * 1deg),
+        #00000000 0deg,
+        #ffffff,
+        #00000000 calc(var(--spread, 20) * 2deg)
+      );
+    mask-clip: padding-box, border-box;
+    mask-composite: intersect;
+    -webkit-mask-image:
+      linear-gradient(#0000, #0000),
+      conic-gradient(
+        from calc((var(--start, 0) - var(--spread, 20)) * 1deg),
+        #00000000 0deg,
+        #ffffff,
+        #00000000 calc(var(--spread, 20) * 2deg)
+      );
+    -webkit-mask-clip: padding-box, border-box;
+    -webkit-mask-composite: source-in;
+    filter: saturate(1.25) brightness(1.18);
+  }
+
+  .global-glow-track {
+    position: relative;
+    overflow: visible;
+    isolation: isolate;
+    --active: 1;
+    --start: 0;
+    animation: globalGlowSweep 9s linear infinite;
+  }
+
+  .global-glow-track::after {
+    content: "";
+    position: absolute;
+    inset: -2px;
+    pointer-events: none;
+    border-radius: inherit;
+    border: 2px solid transparent;
+    background:
+      radial-gradient(circle, #dd7bbb 10%, #dd7bbb00 20%),
+      radial-gradient(circle at 40% 40%, #d79f1e 5%, #d79f1e00 15%),
+      radial-gradient(circle at 60% 60%, #5a922c 10%, #5a922c00 20%),
+      radial-gradient(circle at 40% 60%, #4c7894 10%, #4c789400 20%),
+      repeating-conic-gradient(
+        from calc((var(--start, 0) - 40) * 1deg) at 50% 50%,
+        #dd7bbb 0%,
+        #d79f1e 8%,
+        #5a922c 16%,
+        #4c7894 24%,
+        #dd7bbb 32%
+      ) border-box;
+    background-attachment: local;
+    opacity: calc(0.32 + (var(--active, 0) * 0.68));
+    transition: opacity 220ms ease;
+    mask-image:
+      linear-gradient(#0000, #0000),
+      conic-gradient(
+        from calc((var(--start, 0) - 40) * 1deg),
+        #00000000 0deg,
+        #ffffff,
+        #00000000 80deg
+      );
+    mask-clip: padding-box, border-box;
+    mask-composite: intersect;
+    -webkit-mask-image:
+      linear-gradient(#0000, #0000),
+      conic-gradient(
+        from calc((var(--start, 0) - 40) * 1deg),
+        #00000000 0deg,
+        #ffffff,
+        #00000000 80deg
+      );
+    -webkit-mask-clip: padding-box, border-box;
+    -webkit-mask-composite: source-in;
+    filter: saturate(1.35) brightness(1.22);
+    z-index: 3;
+  }
+
+  .premium-glass {
+    @apply rounded-2xl border border-white/30 bg-white/60 backdrop-blur-md;
+    position: relative;
+    overflow: hidden;
+    box-shadow:
+      0 10px 15px -3px rgba(2, 6, 23, 0.07),
+      0 4px 6px -2px rgba(2, 6, 23, 0.04),
+      0 0 0 1px rgba(125, 211, 252, 0.12),
+      0 0 26px -16px rgba(125, 211, 252, 0.65);
+  }
+
+  .premium-glass::after {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    pointer-events: none;
+    border-radius: inherit;
+    border: 1px solid transparent;
+    background:
+      linear-gradient(120deg, rgba(255, 255, 255, 0.18), rgba(125, 211, 252, 0.16), rgba(255, 255, 255, 0.08)) border-box;
+    -webkit-mask: linear-gradient(#000 0 0) padding-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) padding-box, linear-gradient(#000 0 0);
+    mask-composite: exclude;
+    opacity: 0.55;
+    transition: opacity 240ms ease;
+  }
+
+  .premium-glass:hover::after {
+    opacity: 0.92;
+  }
+
+  .nexo-glow-border {
+    position: relative;
+    overflow: hidden;
+    box-shadow:
+      0 0 0 1px rgba(148, 163, 184, 0.16),
+      0 0 28px -18px rgba(148, 163, 184, 0.8);
+  }
+
+  .nexo-glow-border::before {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    pointer-events: none;
+    border: 1px solid transparent;
+    background:
+      linear-gradient(130deg, rgba(255, 255, 255, 0.3), rgba(125, 211, 252, 0.2), rgba(255, 255, 255, 0.15)) border-box;
+    -webkit-mask: linear-gradient(#000 0 0) padding-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) padding-box, linear-gradient(#000 0 0);
+    mask-composite: exclude;
+    opacity: 0.75;
+  }
+
+  .premium-sidebar {
+    background: linear-gradient(180deg, var(--brand-deep) 0%, var(--brand-deep-2) 100%);
+  }
+
+  .premium-sidebar-text {
+    color: #cbd5e1;
+  }
+
+  .premium-sidebar-active {
+    background: linear-gradient(90deg, rgba(255, 71, 87, 0.2) 0%, rgba(255, 71, 87, 0.08) 100%);
+    border: 1px solid rgba(255, 71, 87, 0.35);
+    box-shadow:
+      0 0 0 1px rgba(255, 71, 87, 0.2),
+      0 10px 20px -12px rgba(255, 71, 87, 0.7),
+      0 0 18px -10px rgba(125, 211, 252, 0.9);
+  }
+
+  .nextresto-home {
+    background-color: #030712;
+  }
+
+  .nextresto-home h1,
+  .nextresto-home h2,
+  .nextresto-home h3,
+  .nextresto-home h4 {
+    color: #ffffff;
+    letter-spacing: -0.03em;
+    font-family: Inter, Geist Sans, "Plus Jakarta Sans", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  .nextresto-home p,
+  .nextresto-home li,
+  .nextresto-home label {
+    color: #9ca3af;
+  }
+
+  .nextresto-bento-card {
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 16px;
+    background: #0a0a0a;
+    backdrop-filter: blur(8px);
+    box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.02);
+  }
+
+  .nextresto-surface {
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 16px;
+    background: #0a0a0a;
+  }
+
+  .nextresto-grid-lines {
+    background-image:
+      linear-gradient(to right, rgba(255, 255, 255, 0.06) 0.5px, transparent 0.5px),
+      linear-gradient(to bottom, rgba(255, 255, 255, 0.06) 0.5px, transparent 0.5px);
+    background-size: 22px 22px;
+  }
+
+  .nextresto-floating {
+    box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.05);
+  }
+
+  .nextresto-btn-primary {
+    background-color: #e5e7eb;
+    color: #000000;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .nextresto-btn-primary:hover {
+    background-color: #f3f4f6;
+  }
+
+  .nextresto-btn-secondary {
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #ffffff;
+    background: transparent;
+  }
+
+  .nextresto-btn-secondary:hover {
+    border-color: rgba(255, 255, 255, 0.4);
+    background: rgba(255, 255, 255, 0.04);
   }
 }
