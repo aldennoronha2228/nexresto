@@ -6,16 +6,16 @@ type NexRestoLogoProps = {
     priority?: boolean;
 };
 
-const logoVersion = '20260402a';
+const logoVersion = '20260412d';
 
 export default function NexRestoLogo({ variant = 'mark', className, priority = false }: NexRestoLogoProps) {
     if (variant === 'full') {
         return (
             <Image
-                src={`/nexresto-logo.svg?v=${logoVersion}`}
+                src={`/nexresto-mark.svg?v=${logoVersion}`}
                 alt="NexResto"
-                width={420}
-                height={148}
+                width={64}
+                height={64}
                 className={className}
                 priority={priority}
                 unoptimized

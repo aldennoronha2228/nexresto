@@ -26,6 +26,24 @@ const INITIAL_FORM: DemoFormData = {
 
 const BRANDS = ["L'ATELIER", "SAVOY", "NOBU", "MIRA", "ZUMA", "STK"];
 
+type ComparisonRow = {
+  feature: string;
+  petpooja: string;
+  nexresto: string;
+};
+
+const FEATURE_COMPARISON_ROWS: ComparisonRow[] = [
+  { feature: "QR-Based Self Ordering", petpooja: "Not available", nexresto: "Full QR ordering" },
+  { feature: "Kitchen Display System", petpooja: "Manual / Paper KOT", nexresto: "Real-time digital KDS" },
+  { feature: "Order Accuracy", petpooja: "8-12% error rate", nexresto: "<1% error rate" },
+  { feature: "Customer Wait Time", petpooja: "15-30 min average", nexresto: "5-8 min average" },
+  { feature: "Billing Speed", petpooja: "5-10 min for bill", nexresto: "Instant digital bill" },
+  { feature: "Customer Support", petpooja: "Basic support", nexresto: "Dedicated support" },
+  { feature: "AI-Powered Insights", petpooja: "Basic reports only", nexresto: "AI menu and staff insights" },
+  { feature: "Setup Time", petpooja: "2-4 weeks", nexresto: "24-48 hours" },
+  { feature: "Monthly Cost", petpooja: "Starts around Rs 1,500/mo", nexresto: "Rs 999 flat/mo" },
+];
+
 export default function RootPage() {
   const router = useRouter();
   const { session, loading, tenantLoading, userRole, tenantId, mustChangePassword } = useAuth();
@@ -211,13 +229,14 @@ export default function RootPage() {
             <img
               alt="NexResto logo mark"
               className="h-9 w-9 rounded-xl border border-white/15 bg-black/30 p-1"
-              src="/nexresto-mark.svg?v=20260402a"
+              src="/nexresto-mark.svg?v=20260412d"
             />
             <span className="text-xl font-bold tracking-tight text-white">NexResto</span>
           </div>
 
           <nav className="hidden items-center gap-6 text-sm text-stone-300 md:flex">
             <a className="transition-colors hover:text-white" href="#features">Features</a>
+            <Link className="transition-colors hover:text-white" href="/roi">ROI</Link>
             <a className="transition-colors hover:text-white" href="#platform">Platform</a>
             <a className="transition-colors hover:text-white" href="#demo-request">Demo</a>
           </nav>
@@ -268,6 +287,9 @@ export default function RootPage() {
                 <a className="rounded-lg border border-white/15 bg-white/5 px-6 py-3.5 text-center text-sm font-medium text-white transition hover:bg-white/10" href="#features">
                   Explore Features
                 </a>
+                <Link className="rounded-lg border border-emerald-400/45 bg-emerald-500/15 px-6 py-3.5 text-center text-sm font-semibold text-emerald-300 transition hover:bg-emerald-500/25" href="/roi">
+                  Try ROI Calculator
+                </Link>
               </div>
 
               <div className="stagger-group mt-10 grid gap-3 sm:grid-cols-3" data-stagger>
@@ -344,6 +366,39 @@ export default function RootPage() {
                 <h3 className="text-xl font-bold text-white">Unified Margin Feed</h3>
                 <p className="mt-3 text-sm leading-relaxed text-[#c5c5d6]">Connect item level margin data to live ticket and table behavior.</p>
               </article>
+            </div>
+          </div>
+        </section>
+
+        <section className="px-6 pb-20 lg:px-8" id="comparison">
+          <div className="mx-auto max-w-7xl rounded-2xl border border-white/10 bg-[#171717] p-6 md:p-8 lg:p-10">
+            <div className="reveal reveal-left mb-7" data-reveal>
+              <p className="text-[11px] uppercase tracking-[0.2em] text-[#8f8fa0]">Head-to-Head</p>
+              <h2 className="mt-3 text-3xl font-bold text-white sm:text-4xl">Petpooja vs NexResto</h2>
+              <p className="mt-3 max-w-3xl text-sm leading-relaxed text-[#c5c5d6] sm:text-base">
+                A practical comparison of common operational gaps in basic POS workflows versus the all-in-one NexResto platform.
+              </p>
+            </div>
+
+            <div className="reveal reveal-right overflow-x-auto rounded-xl border border-white/10" data-reveal>
+              <table className="w-full min-w-[760px] border-collapse text-left">
+                <thead className="bg-[#20201f]">
+                  <tr>
+                    <th className="px-4 py-4 text-xs uppercase tracking-[0.12em] text-[#8f8fa0] sm:px-5">Feature</th>
+                    <th className="px-4 py-4 text-xs uppercase tracking-[0.12em] text-[#8f8fa0] sm:px-5">Petpooja / Basic POS</th>
+                    <th className="px-4 py-4 text-xs uppercase tracking-[0.12em] text-[#8f8fa0] sm:px-5">NexResto</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {FEATURE_COMPARISON_ROWS.map((row, index) => (
+                    <tr className={index % 2 === 0 ? "bg-[#1b1b1b]" : "bg-[#1f1f1f]"} key={row.feature}>
+                      <td className="border-t border-white/10 px-4 py-4 text-sm font-semibold text-white sm:px-5">{row.feature}</td>
+                      <td className="border-t border-white/10 px-4 py-4 text-sm text-rose-300 sm:px-5">{row.petpooja}</td>
+                      <td className="border-t border-white/10 px-4 py-4 text-sm text-emerald-300 sm:px-5">{row.nexresto}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         </section>
@@ -560,7 +615,7 @@ export default function RootPage() {
               <img
                 alt="NexResto logo mark"
                 className="h-7 w-7 rounded-md border border-white/15 bg-black/30 p-1"
-                src="/nexresto-mark.svg?v=20260402a"
+                src="/nexresto-mark.svg?v=20260412d"
               />
               <p className="text-lg font-bold text-white">NexResto</p>
             </div>
@@ -571,6 +626,7 @@ export default function RootPage() {
             <div className="space-y-2 text-sm text-stone-400">
               <a className="block hover:text-emerald-400" href="#platform">Platform</a>
               <a className="block hover:text-emerald-400" href="#features">Features</a>
+              <Link className="block hover:text-emerald-400" href="/roi">ROI</Link>
               <a className="block hover:text-emerald-400" href="#demo-request">Demo</a>
             </div>
           </div>

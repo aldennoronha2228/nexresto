@@ -32,7 +32,7 @@ export type TenantSeoMetadataOptions = {
 
 const SAFE_FALLBACK_DESCRIPTION = 'NexResto powers digital menus for restaurants and hotels.';
 const FALLBACK_KEYWORDS = ['restaurant menu', 'digital menu', 'hotel dining', 'nexresto'];
-const DEFAULT_OG_IMAGE = '/icon-192.png?v=20260328';
+const DEFAULT_OG_IMAGE = '/icon-192.png?v=20260412c';
 const TENANT_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/i;
 
 function asString(value: unknown): string {

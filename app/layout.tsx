@@ -8,6 +8,11 @@ export const metadata: Metadata = {
         template: '%s | NexResto',
     },
     description: 'NexResto helps restaurants and hotels publish digital menus and streamline online ordering.',
+    icons: {
+        icon: '/nexresto-mark.svg?v=20260412d',
+        shortcut: '/nexresto-mark.svg?v=20260412d',
+        apple: '/apple-icon.png',
+    },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
