@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif:ital,wght@0,400;0,700;1,400&amp;family=Inter:wght@400;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "primary-container": "#374b43",
+                      "error-dim": "#bb5551",
+                      "surface-container-low": "#131313",
+                      "on-surface-variant": "#acabaa",
+                      "outline": "#767575",
+                      "primary-fixed": "#d1e8dd",
+                      "error-container": "#7f2927",
+                      "surface-tint": "#b5ccc1",
+                      "surface-container-highest": "#252626",
+                      "tertiary": "#fcf9f8",
+                      "on-primary": "#30443c",
+                      "inverse-surface": "#fcf8f8",
+                      "surface-bright": "#2c2c2c",
+                      "primary": "#b5ccc1",
+                      "surface-dim": "#0e0e0e",
+                      "tertiary-fixed-dim": "#e7e5e4",
+                      "on-tertiary": "#605f5f",
+                      "on-secondary-container": "#efb199",
+                      "on-primary-fixed": "#2f433c",
+                      "on-secondary-fixed": "#5e3523",
+                      "inverse-primary": "#4f635b",
+                      "secondary": "#ca917a",
+                      "on-tertiary-fixed-variant": "#676666",
+                      "on-secondary-fixed-variant": "#7f503c",
+                      "surface-container-high": "#1f2020",
+                      "surface-container": "#191a1a",
+                      "on-secondary": "#381607",
+                      "primary-fixed-dim": "#c3dacf",
+                      "on-primary-fixed-variant": "#4b6057",
+                      "on-primary-container": "#bfd6cb",
+                      "secondary-container": "#59311f",
+                      "inverse-on-surface": "#565554",
+                      "on-background": "#e7e5e4",
+                      "on-surface": "#e7e5e4",
+                      "on-error-container": "#ff9993",
+                      "on-tertiary-fixed": "#4a4949",
+                      "tertiary-fixed": "#f6f3f2",
+                      "tertiary-container": "#edeaea",
+                      "on-tertiary-container": "#575656",
+                      "background": "#0e0e0e",
+                      "primary-dim": "#a7beb3",
+                      "tertiary-dim": "#edeaea",
+                      "surface": "#0e0e0e",
+                      "secondary-fixed": "#ffdbcd",
+                      "error": "#ee7d77",
+                      "outline-variant": "#484848",
+                      "secondary-dim": "#ca917a",
+                      "surface-container-lowest": "#000000",
+                      "on-error": "#490106",
+                      "surface-variant": "#252626",
+                      "secondary-fixed-dim": "#ffc8b3"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0px",
+                      "lg": "0px",
+                      "xl": "0px",
+                      "full": "9999px"
+              },
+              "fontFamily": {
+                      "headline": ["Noto Serif"],
+                      "body": ["Inter"],
+                      "label": ["Inter"]
+              }
+            },
+          },
+        }
+      </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-surface font-body selection:bg-primary/30">
+<!-- Top Navigation Anchor (Based on JSON) -->
+<header class="bg-[#0E0E0E] text-[#B5CCC1] fixed top-0 w-full z-50 border-b border-[#484848]/20 flex justify-between items-center px-6 h-20 w-full">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-[#B5CCC1]" data-icon="menu">menu</span>
+<h1 class="font-['Noto_Serif'] text-2xl text-[#B5CCC1] tracking-widest">NexResto</h1>
+</div>
+<span class="material-symbols-outlined text-[#B5CCC1]" data-icon="search">search</span>
+</header>
+<main class="pt-20 pb-24 min-h-screen">
+<!-- Category Scroll Section -->
+<div class="sticky top-20 z-40 bg-background/95 backdrop-blur-md overflow-x-auto no-scrollbar py-4 px-6 border-b border-outline-variant/20">
+<div class="flex space-x-8 items-baseline min-w-max">
+<button class="text-[#B5CCC1] font-headline text-lg italic tracking-wide">Starters</button>
+<button class="text-on-surface-variant font-body text-xs uppercase tracking-[0.2em] font-bold hover:text-on-surface transition-colors">Mains</button>
+<button class="text-on-surface-variant font-body text-xs uppercase tracking-[0.2em] font-bold hover:text-on-surface transition-colors">Molecular</button>
+<button class="text-on-surface-variant font-body text-xs uppercase tracking-[0.2em] font-bold hover:text-on-surface transition-colors">Desserts</button>
+</div>
+</div>
+<!-- Featured Section Header -->
+<section class="px-6 py-12">
+<div class="mb-1">
+<span class="font-label text-[10px] tracking-[0.3em] text-secondary uppercase">Signature Selection</span>
+</div>
+<h2 class="font-headline text-5xl md:text-7xl tracking-tighter leading-none italic text-primary">Chef's Table</h2>
+</section>
+<!-- Menu Grid List -->
+<section class="divide-y divide-[#222]">
+<!-- Item 1 -->
+<article class="flex px-6 py-10 items-start group">
+<div class="flex-1 pr-6 flex flex-col justify-between min-h-[140px]">
+<div>
+<h3 class="font-headline text-3xl mb-3 leading-tight tracking-tight">Black Truffle Risotto</h3>
+<p class="font-body text-sm text-on-surface-variant leading-relaxed mb-4 max-w-[240px]">Aged carnaroli rice, fermented black garlic, and hand-shaved Perigord truffles.</p>
+</div>
+<div class="flex items-center justify-between">
+<span class="font-body font-bold text-lg text-on-surface tracking-tighter">$24.00</span>
+<button class="bg-primary text-on-primary px-6 py-3 font-label text-[10px] font-bold uppercase tracking-widest active:scale-95 transition-transform">
+                            Add
+                        </button>
+</div>
+</div>
+<div class="w-32 h-32 flex-shrink-0 relative">
+<img alt="Black Truffle Risotto" class="w-full h-full object-cover rounded-[8px]" data-alt="Gourmet creamy truffle risotto topped with fresh truffle shavings and microgreens on a dark ceramic plate with dramatic moody lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDLZfe7hHxgFx4564cY9RdhCHsXNdaJTQK1yJVigKTOP2JgclgbpOunFWWhpRZ0kU6tcQqzvVacttZZzluKPR1_QZ1nlo7A4hnx029Kn9rJji-AgpEjnAsmL4jDTZ8e1czF8Av3p1krf8MYcrRR6bRnoXyO5FV1DwNz7G_uDgrn0ShYAgLfhtT4bD8Yl-WV0lhUKHLgY2QknVOgj7Pq2KBrt9JQ5M4W3_yxNDUGfpo1C7Rn8tEFJlb7Ad7mokcuM4_3i_-GJlgKJIo"/>
+</div>
+</article>
+<!-- Item 2 -->
+<article class="flex px-6 py-10 items-start group">
+<div class="flex-1 pr-6 flex flex-col justify-between min-h-[140px]">
+<div>
+<div class="mb-1">
+<span class="font-label text-[10px] tracking-[0.2em] text-secondary uppercase">Reserve</span>
+</div>
+<h3 class="font-headline text-3xl mb-3 leading-tight tracking-tight">A5 Wagyu Ribeye</h3>
+<p class="font-body text-sm text-on-surface-variant leading-relaxed mb-4 max-w-[240px]">Charcoal-grilled A5 Miyazaki Wagyu, smoked sea salt, and bone marrow emulsion.</p>
+</div>
+<div class="flex items-center justify-between">
+<span class="font-body font-bold text-lg text-on-surface tracking-tighter">$185.00</span>
+<button class="bg-primary text-on-primary px-6 py-3 font-label text-[10px] font-bold uppercase tracking-widest active:scale-95 transition-transform">
+                            Add
+                        </button>
+</div>
+</div>
+<div class="w-32 h-32 flex-shrink-0 relative">
+<img alt="A5 Wagyu Ribeye" class="w-full h-full object-cover rounded-[8px]" data-alt="Exquisite slice of perfectly marbled A5 wagyu beef grilled over charcoal, showing a pink center and charred edges on a black slate" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC_rMcBD2Tj0SRdpZQt6VrxnyFNd5zFnWIp4P_pec_g6vy50cs8aXzHP6yvqcMheMDlNHKuf-xL-kxIlpqhLtSRUpzQd9-NacynIrFmf-yQbDllRAqWKykgXUcmDcdaX6098ijR7pCcp5WFq-iuZ5ekGkEcyRfpr4bjdb02zKFq4xwOETw47r2C_fv-ftZQAxfenapbW83hGwiQv7z91inmRmb__NUoiEVrTDrzF_ilz9d-T-QqBe2OAgN8bLDKuyx1NMWi48R1A2U"/>
+</div>
+</article>
+<!-- Item 3 -->
+<article class="flex px-6 py-10 items-start group">
+<div class="flex-1 pr-6 flex flex-col justify-between min-h-[140px]">
+<div>
+<h3 class="font-headline text-3xl mb-3 leading-tight tracking-tight">Miso Glazed Sea Bass</h3>
+<p class="font-body text-sm text-on-surface-variant leading-relaxed mb-4 max-w-[240px]">Pan-seared Chilean sea bass with a sweet miso glaze and charred bok choy.</p>
+</div>
+<div class="flex items-center justify-between">
+<span class="font-body font-bold text-lg text-on-surface tracking-tighter">$42.00</span>
+<button class="bg-primary text-on-primary px-6 py-3 font-label text-[10px] font-bold uppercase tracking-widest active:scale-95 transition-transform">
+                            Add
+                        </button>
+</div>
+</div>
+<div class="w-32 h-32 flex-shrink-0 relative">
+<img alt="Miso Glazed Sea Bass" class="w-full h-full object-cover rounded-[8px]" data-alt="Pan-seared white fish with a golden miso glaze, served with vibrant green bok choy in a minimal dark bowl with soft directional light" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD9FgXYRZWsw3e1tKdG4io_7SnudoiHblSRUGxquQ9iK3hUKnS-7r7i3yg7kqADR3zeb05j22IubJgGRdmti3ebSPlr4oRKedtXw2VkV0rAWFy_0EAfcM0tK0-5NRQHSqLceN3lmO7kn7967-qYBaUtDg3NNU8n0Nw6dH6gmFt-z43Er4sTVhdpYVmMcyT1k7xla2vc8JLbi3hI0FZp7Z4O522a5jlEXThLb5572_Fgi9TDJvyrPk2f0JIL8UOpj5D4fCPPKchSXOI"/>
+</div>
+</article>
+<!-- Decorative Full Width Image Break -->
+<div class="w-full h-[300px] overflow-hidden grayscale contrast-125 opacity-40 py-10">
+<img alt="Restaurant Atmosphere" class="w-full h-full object-cover" data-alt="Abstract atmospheric close-up of crystal wine glasses reflecting soft warm light in a dark high-end restaurant setting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB_bLBhq4C0LFUrmOon5-qpH5rlvMuKnRRWqG1VqM7JjRRT3w7NPFHvzviS61M1V6AxlpMiE7RjV4ylRqSqGCUmzG6KJIAk4f7u0u5e_01-GFddbRJXH4OZgcDCRjPF6EkYnUgjVlN4PnF0xegeUw27ng82Z2Y8MDOAQtUjrnvn0MfE2XU8p1XEH15l3y4C91gikpyZimaw5pPk-xrNHlBIRAxAt3n8IS9uTdCsWryF79ExmxQV5kO8tk1L2JogrWQMLG-8oV03nK0"/>
+</div>
+</section>
+<!-- Provenance Note -->
+<section class="p-10 text-center">
+<p class="font-headline italic text-on-surface-variant text-xl">"Cuisine is the bridge between earth and the soul."</p>
+<div class="mt-4 flex justify-center space-x-2">
+<span class="w-1 h-1 bg-secondary rounded-full"></span>
+<span class="w-1 h-1 bg-secondary rounded-full"></span>
+<span class="w-1 h-1 bg-secondary rounded-full"></span>
+</div>
+</section>
+</main>
+<!-- Bottom Navigation Shell (Based on JSON) -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center h-16 px-4 bg-[#131313] border-t border-[#484848]/20">
+<!-- Active Tab: Menu -->
+<div class="flex flex-col items-center justify-center text-[#B5CCC1] opacity-100">
+<span class="material-symbols-outlined" data-icon="restaurant_menu">restaurant_menu</span>
+<span class="font-['Inter'] text-[10px] uppercase tracking-[0.1em] font-bold">Menu</span>
+</div>
+<!-- Inactive Tab: Orders -->
+<div class="flex flex-col items-center justify-center text-[#484848] opacity-80 hover:text-white transition-colors duration-300">
+<span class="material-symbols-outlined" data-icon="receipt_long">receipt_long</span>
+<span class="font-['Inter'] text-[10px] uppercase tracking-[0.1em] font-bold">Orders</span>
+</div>
+<!-- Inactive Tab: Account -->
+<div class="flex flex-col items-center justify-center text-[#484848] opacity-80 hover:text-white transition-colors duration-300">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span class="font-['Inter'] text-[10px] uppercase tracking-[0.1em] font-bold">Account</span>
+</div>
+</nav>
+<style>
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</body></html>

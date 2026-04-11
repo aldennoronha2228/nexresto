@@ -1,0 +1,7 @@
+[dotenv@17.3.1] injecting env (16) from .env -- tip: ⚙️  write to custom object with { processEnv: myObject }
+Fetching users...
+--- Current Users in Project ---
+Fetched 2 users in batch.
+aldennoronhaschool@gmail.com (UID: 4SAJ2MJbpgdIJSWWHBiDUWmXh9g2) - Claims: { role: 'super_admin' }
+aldenengineeringentranceexam@gmail.com (UID: ECjNKnfVXlTapShpKcYISIperYT2) - Claims: { role: 'owner', restaurant_id: 'the-grand-mmg66q4p' }
+--- Total Users: 2 ---

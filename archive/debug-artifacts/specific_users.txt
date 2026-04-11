@@ -1,0 +1,4 @@
+[dotenv@17.3.1] injecting env (16) from .env -- tip: ⚙️  enable debug logging with { debug: true }
+User NOT found: aldennoronha2228@gmail.com
+Found user: aldenengineeringentranceexam@gmail.com (UID: 4x8hqsZjf4dMIPj6wUBWPuFrqXF3) - Claims: { role: 'super_admin' }
+User NOT found: admin@restaurant.com

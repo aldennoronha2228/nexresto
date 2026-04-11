@@ -1,36 +1,22 @@
 {
-  "include": [
-    "next-env.d.ts",
-    "app/**/*",
-    "client/src/**/*",
-    "shared/**/*",
-    ".next/types/**/*.ts",
-    ".next/dev/types/**/*.ts"
-  ],
-  "exclude": [
-    "node_modules"
-  ],
   "compilerOptions": {
-    "incremental": true,
-    "tsBuildInfoFile": "./node_modules/typescript/tsbuildinfo",
-    "noEmit": true,
-    "module": "esnext",
-    "strict": true,
+    "target": "ES2017",
     "lib": [
-      "esnext",
       "dom",
-      "dom.iterable"
+      "dom.iterable",
+      "esnext"
     ],
-    "jsx": "react-jsx",
-    "esModuleInterop": true,
+    "allowJs": true,
     "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "baseUrl": ".",
-    "types": [
-      "node"
-    ],
+    "jsx": "react-jsx",
+    "incremental": false,
     "plugins": [
       {
         "name": "next"
@@ -38,13 +24,22 @@
     ],
     "paths": {
       "@/*": [
-        "./client/src/*"
-      ],
-      "@shared/*": [
-        "./shared/*"
+        "./*"
       ]
-    },
-    "target": "ES2017",
-    "allowJs": true
-  }
+    }
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts",
+    "**/*.mts"
+  ],
+  "exclude": [
+    "node_modules",
+    "functions/**/*",
+    "vite.config.ts",
+    "vite.config.mts"
+  ]
 }

@@ -1,0 +1,7 @@
+[dotenv@17.3.1] injecting env (16) from .env -- tip: ⚙️  write to custom object with { processEnv: myObject }
+--- Environment Variables ---
+NEXT_PUBLIC_FIREBASE_PROJECT_ID: nexresto
+FIREBASE_CLIENT_EMAIL: firebase-adminsdk-fbsvc@nexresto.iam.gserviceaccount.com
+SUPER_ADMIN_EMAIL: aldennoronhaschool@gmail.com
+--- Process Env ---
+PROJECT_ID in process: nexresto
