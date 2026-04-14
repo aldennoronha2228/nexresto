@@ -358,36 +358,42 @@ export function GourmetCatalogLayout({
                 </section>
             </main>
 
-            <nav className="fixed bottom-0 left-0 z-40 w-full border-t border-white/10 bg-[#090c0d]/90 px-3 py-2 backdrop-blur-2xl">
-                <div className="mx-auto grid w-full max-w-xl grid-cols-3 gap-2">
-                    <div className="flex h-12 items-center justify-center gap-1.5 rounded-2xl border border-[#384045] bg-[#171d20] text-[#f1f3f2] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
-                        <BookOpen className="h-4 w-4" />
-                        <span className="text-[11px] font-semibold uppercase tracking-[0.1em] leading-none">Menu</span>
+            <nav className="fixed bottom-0 left-0 z-40 w-full px-3 pb-[max(0.55rem,env(safe-area-inset-bottom))] pt-2">
+                <div className="mx-auto w-full max-w-xl rounded-[26px] border border-[#2b3438] bg-[#0d1214]/96 p-2 shadow-[0_20px_45px_rgba(0,0,0,0.52)] backdrop-blur-xl">
+                    <div className="grid grid-cols-3 gap-2">
+                        <div className="flex h-12 items-center justify-center gap-2 rounded-2xl border border-[#3a4449] bg-[#1a2124] text-[#f1f3f3] shadow-[inset_0_1px_0_rgba(255,255,255,0.07)]">
+                            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#242c30]">
+                                <BookOpen className="h-3.5 w-3.5" />
+                            </span>
+                            <span className="text-[11px] font-semibold uppercase tracking-[0.1em] leading-none">Menu</span>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={onOpenOrders}
+                            className="flex h-12 items-center justify-center gap-2 rounded-2xl border border-[#2f393e] bg-[#12181b] text-[#a4afb3] transition-all hover:border-[#435057] hover:bg-[#182024] hover:text-[#e4e8e7]"
+                        >
+                            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#20292d]">
+                                <ClipboardList className="h-3.5 w-3.5" />
+                            </span>
+                            <span className="text-[11px] font-semibold uppercase tracking-[0.1em] leading-none">Orders</span>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={onOpenCart}
+                            className="relative flex h-12 items-center justify-center gap-2 rounded-2xl border border-[#553417] bg-gradient-to-r from-[#f97316] to-[#ff8b3d] text-[#26170a] shadow-[0_10px_24px_rgba(249,115,22,0.28)] transition-all hover:brightness-105"
+                        >
+                            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#2a1a0c]/15">
+                                <ShoppingBag className="h-3.5 w-3.5" />
+                            </span>
+                            <span className="text-[11px] font-semibold uppercase tracking-[0.1em] leading-none">Cart</span>
+                            <span className="rounded-full bg-[#2a1a0c]/18 px-1.5 py-0.5 text-[10px] font-semibold leading-none">{totalItems}</span>
+                        </button>
                     </div>
-                    <button
-                        type="button"
-                        onClick={onOpenOrders}
-                        className="flex h-12 items-center justify-center gap-1.5 rounded-2xl border border-[#2b3236] bg-[#111619] text-[#9da7ab] transition-colors hover:border-[#3a4348] hover:text-[#e5e8e7]"
-                    >
-                        <ClipboardList className="h-4 w-4" />
-                        <span className="text-[11px] font-semibold uppercase tracking-[0.1em] leading-none">Orders</span>
-                    </button>
-                    <button
-                        type="button"
-                        onClick={onOpenCart}
-                        className="flex h-12 items-center justify-center gap-1.5 rounded-2xl border border-[#4a3219] bg-[#f97316] text-[#1f140a] transition-colors hover:bg-[#fb8a3e]"
-                    >
-                        <ShoppingBag className="h-4 w-4" />
-                        <span className="text-[11px] font-semibold uppercase tracking-[0.1em] leading-none">Cart</span>
-                        <span className="rounded-full bg-[#1f140a]/12 px-1.5 py-0.5 text-[10px] font-semibold leading-none">{totalItems}</span>
-                    </button>
+                    <div className="mt-1.5 flex items-center justify-between px-1">
+                        <span className="text-[10px] uppercase tracking-[0.12em] text-[#6f7a7f]">Powered by NexResto</span>
+                        <span className="text-[11px] font-semibold text-[#c6cccf]">{formatINR(totalPrice)}</span>
+                    </div>
                 </div>
-                <div className="mt-1 flex justify-center">
-                    <span className="text-[10px] font-medium text-[#9aa1a4]">{formatINR(totalPrice)}</span>
-                </div>
-                <p className="absolute -top-3 left-1/2 -translate-x-1/2 text-[9px] uppercase tracking-[0.12em] text-[#6f7572]">
-                    Powered by NexResto
-                </p>
             </nav>
 
             <style jsx>{`
