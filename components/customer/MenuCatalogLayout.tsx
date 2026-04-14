@@ -80,6 +80,7 @@ export function GourmetCatalogLayout({
     const [foodTypeFilter, setFoodTypeFilter] = React.useState<'all' | 'veg' | 'non-veg'>('all');
     const [justAddedItemId, setJustAddedItemId] = React.useState<string | null>(null);
     const justAddedTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+    const searchInputRef = React.useRef<HTMLInputElement | null>(null);
 
     const listVariants = {
         hidden: { opacity: 0 },
@@ -124,6 +125,15 @@ export function GourmetCatalogLayout({
         }, 1200);
     }, [onAddToCart]);
 
+    const handleSearchClick = React.useCallback(() => {
+        const input = searchInputRef.current;
+        if (input) {
+            input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            input.focus();
+        }
+        onSearch?.();
+    }, [onSearch]);
+
     const visibleItems = React.useMemo(() => {
         const q = query.trim().toLowerCase();
         return items.filter((item) => {
@@ -164,7 +174,7 @@ export function GourmetCatalogLayout({
                 </div>
                 <button
                     type="button"
-                    onClick={onSearch}
+                    onClick={handleSearchClick}
                     aria-label="Search"
                     className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#d0d2d0] transition hover:bg-white/10 sm:text-xs"
                 >
@@ -217,6 +227,7 @@ export function GourmetCatalogLayout({
                     <p className="mt-3 max-w-2xl text-sm leading-relaxed text-[#aaadab]">{heroSubtitle}</p>
                     <div className="mt-4 w-full max-w-md">
                         <input
+                            ref={searchInputRef}
                             suppressHydrationWarning
                             value={query}
                             onChange={(e) => setQuery(e.target.value)}

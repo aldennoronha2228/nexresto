@@ -493,10 +493,6 @@ export function CustomerMenuShell({ restaurantIdOverride, tenantHomePath, restau
                 totalItems={totalItems}
                 totalPrice={totalPrice}
                 loading={loading}
-                onSearch={() => {
-                    if (!requireCapture()) return;
-                    setIsCartOpen(true);
-                }}
                 onSelectCategory={() => {
                     // Filtering is handled in the layout component.
                 }}
