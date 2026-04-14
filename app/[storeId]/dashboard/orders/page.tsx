@@ -6,7 +6,7 @@ import { Clock, X, Plus, Trash2, Search, RefreshCw, AlertCircle, Lock, Sparkles 
 import { Canvas } from '@react-three/fiber';
 import { ContactShadows, OrbitControls } from '@react-three/drei';
 import { cn } from '@/lib/utils';
-import { getDefaultTables, getTables, menuItems, type Table } from '@/data/sharedData';
+import { getTables, menuItems, type Table } from '@/data/sharedData';
 import { fetchActiveOrders, updateOrderStatus, deleteOrder, subscribeToOrders } from '@/lib/firebase-api';
 import type { DashboardOrder } from '@/lib/types';
 import { useAuth } from '@/context/AuthContext';
@@ -307,25 +307,10 @@ export default function LiveOrdersPage() {
             return;
         }
 
-        const seedTables = getDefaultTables();
-        await fetch('/api/tables/layout', {
-            method: 'POST',
-            headers: {
-                Authorization: `Bearer ${token}`,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                restaurantId: tenantId,
-                tables: seedTables,
-                walls: [],
-                desks: [],
-                floorPlans: [{ id: '1', name: 'Default Layout', tables: seedTables, walls: [], desks: [] }],
-            }),
-        });
-
-        setFloorTables(seedTables);
+        const cachedTables = getTables(tenantId);
+        setFloorTables(Array.isArray(cachedTables) ? cachedTables : []);
         const { setTables } = await import('@/data/sharedData');
-        setTables(seedTables, tenantId);
+        setTables(Array.isArray(cachedTables) ? cachedTables : [], tenantId);
     }, [tenantId, getActiveToken]);
 
     const syncTablesToServer = useCallback(async (nextTables: Table[]) => {
@@ -360,7 +345,8 @@ export default function LiveOrdersPage() {
 
     useEffect(() => {
         loadTablesViaServer().catch(() => {
-            setFloorTables(getDefaultTables());
+            const cachedTables = getTables(tenantId);
+            setFloorTables(Array.isArray(cachedTables) ? cachedTables : []);
         });
     }, [tenantId, loadTablesViaServer]);
 
