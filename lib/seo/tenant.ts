@@ -344,35 +344,40 @@ type TenantSitemapEntry = {
 const listPublicTenantEntriesCached = unstable_cache(
     async (): Promise<TenantSitemapEntry[]> => {
         if (!isFirebaseAdminAvailable()) return [];
+        try {
+            const restaurantsSnap = await adminFirestore.collection('restaurants').get();
+            if (restaurantsSnap.empty) return [];
 
-        const restaurantsSnap = await adminFirestore.collection('restaurants').get();
-        if (restaurantsSnap.empty) return [];
+            const entries = await Promise.all(restaurantsSnap.docs.map(async (restaurantDoc) => {
+                const storeId = normalizeStoreId(restaurantDoc.id);
+                if (!storeId) return null;
 
-        const entries = await Promise.all(restaurantsSnap.docs.map(async (restaurantDoc) => {
-            const storeId = normalizeStoreId(restaurantDoc.id);
-            if (!storeId) return null;
+                const restaurant = (restaurantDoc.data() || {}) as UnknownRecord;
+                const [publicSettingSnap, menuSnap] = await Promise.all([
+                    adminFirestore.doc(`restaurants/${storeId}/settings/is_site_public`).get(),
+                    adminFirestore.collection(`restaurants/${storeId}/menu_items`).limit(1).get(),
+                ]);
 
-            const restaurant = (restaurantDoc.data() || {}) as UnknownRecord;
-            const [publicSettingSnap, menuSnap] = await Promise.all([
-                adminFirestore.doc(`restaurants/${storeId}/settings/is_site_public`).get(),
-                adminFirestore.collection(`restaurants/${storeId}/menu_items`).limit(1).get(),
-            ]);
+                if (menuSnap.empty) return null;
+                const settingData = (publicSettingSnap.data() || {}) as UnknownRecord;
+                if (!isPublicTenant(settingData, restaurant)) return null;
 
-            if (menuSnap.empty) return null;
-            const settingData = (publicSettingSnap.data() || {}) as UnknownRecord;
-            if (!isPublicTenant(settingData, restaurant)) return null;
+                const lastModified =
+                    toDate(restaurant.updated_at) ||
+                    toDate(restaurant.created_at) ||
+                    new Date();
 
-            const lastModified =
-                toDate(restaurant.updated_at) ||
-                toDate(restaurant.created_at) ||
-                new Date();
+                return { storeId, lastModified };
+            }));
 
-            return { storeId, lastModified };
-        }));
-
-        return entries
-            .filter((entry): entry is TenantSitemapEntry => Boolean(entry))
-            .sort((a, b) => a.storeId.localeCompare(b.storeId));
+            return entries
+                .filter((entry): entry is TenantSitemapEntry => Boolean(entry))
+                .sort((a, b) => a.storeId.localeCompare(b.storeId));
+        } catch (error) {
+            // Build should still succeed even if Firestore quota is temporarily exhausted.
+            console.warn('[seo] listPublicTenantEntries fallback:', error);
+            return [];
+        }
     },
     ['tenant-public-sitemap-v1'],
     { revalidate: 900, tags: ['seo', 'sitemap'] }

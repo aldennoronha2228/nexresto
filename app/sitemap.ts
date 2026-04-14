@@ -6,7 +6,14 @@ export const revalidate = 900;
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     const now = new Date();
-    const tenantEntries = await listPublicTenantEntries();
+    let tenantEntries: Awaited<ReturnType<typeof listPublicTenantEntries>> = [];
+
+    try {
+        tenantEntries = await listPublicTenantEntries();
+    } catch (error) {
+        // Never fail the whole build because dynamic tenant reads are throttled.
+        console.warn('[sitemap] Falling back to base sitemap:', error);
+    }
 
     const urls: MetadataRoute.Sitemap = [
         {
