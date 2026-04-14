@@ -51,6 +51,9 @@ type GourmetCatalogLayoutProps = {
     onSearch?: () => void;
     onSelectCategory: (category: string) => void;
     onAddToCart: (item: CatalogItem) => boolean | void;
+    onIncrementItem: (item: CatalogItem) => void;
+    onDecrementItem: (item: CatalogItem) => void;
+    getItemQuantity: (itemId: string) => number;
     onOpenCart: () => void;
     onOpenOrders: () => void;
 };
@@ -82,6 +85,9 @@ export function GourmetCatalogLayout({
     onSearch,
     onSelectCategory,
     onAddToCart,
+    onIncrementItem,
+    onDecrementItem,
+    getItemQuantity,
     onOpenCart,
     onOpenOrders,
 }: GourmetCatalogLayoutProps) {
@@ -144,6 +150,8 @@ export function GourmetCatalogLayout({
         onSearch?.();
     }, [onSearch]);
 
+    const safeCategories = categories.length > 0 ? categories : ['All'];
+
     const visibleItems = React.useMemo(() => {
         const q = query.trim().toLowerCase();
         return items.filter((item) => {
@@ -156,7 +164,25 @@ export function GourmetCatalogLayout({
         });
     }, [items, activeCategory, foodTypeFilter, query]);
 
-    const safeCategories = categories.length > 0 ? categories : ['All'];
+    const groupedVisibleItems = React.useMemo(() => {
+        const knownCategoryOrder = safeCategories.filter((c) => c !== 'All');
+        const discoveredCategories = Array.from(new Set(visibleItems.map((item) => item.category)));
+
+        const categoryOrder = activeCategory === 'All'
+            ? [
+                ...knownCategoryOrder,
+                ...discoveredCategories.filter((c) => !knownCategoryOrder.includes(c)),
+            ]
+            : [activeCategory];
+
+        return categoryOrder
+            .map((category) => ({
+                category,
+                items: visibleItems.filter((item) => item.category === category),
+            }))
+            .filter((group) => group.items.length > 0);
+    }, [safeCategories, visibleItems, activeCategory]);
+
     const bodyFont = branding.fontFamily || manrope.style.fontFamily;
     const heroTitle = (branding.heroHeadline || "Chef's Table").trim();
     const heroSubtitle = (branding.heroTagline || 'A curated menu crafted for your table.').trim();
@@ -285,55 +311,94 @@ export function GourmetCatalogLayout({
                     ) : visibleItems.length === 0 ? (
                         <div className="py-10 text-sm text-slate-500">No dishes found.</div>
                     ) : (
-                        <motion.div
-                            variants={listVariants}
-                            initial="hidden"
-                            animate="show"
-                            className="grid grid-cols-2 gap-3 pb-2 sm:grid-cols-3 sm:gap-4"
-                        >
-                            {visibleItems.map((item) => (
-                                <motion.article
-                                    key={item.id}
-                                    variants={cardVariants}
-                                    className="overflow-hidden rounded-3xl border border-slate-200 bg-white p-3 shadow-[0_10px_24px_rgba(15,23,42,0.08)]"
-                                >
-                                    <div className="relative h-28 w-full overflow-hidden rounded-2xl bg-[#f7f7f8]">
-                                        <img
-                                            src={item.image}
-                                            alt={`${item.name} image`}
-                                            className={`h-full w-full object-cover ${item.available ? '' : 'opacity-60 grayscale'}`}
-                                        />
-                                        {item.type ? (
-                                            <span className={`absolute left-2 top-2 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] ${item.type === 'veg' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                                                {item.type}
-                                            </span>
-                                        ) : null}
-                                    </div>
+                        <div className="space-y-6 pb-2">
+                            {groupedVisibleItems.map((group) => (
+                                <section key={group.category}>
+                                    <h4 className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                                        {getCategoryLabel(group.category)}
+                                    </h4>
+                                    <motion.div
+                                        variants={listVariants}
+                                        initial="hidden"
+                                        animate="show"
+                                        className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4"
+                                    >
+                                        {group.items.map((item) => {
+                                            const quantity = getItemQuantity(item.id);
 
-                                    <div className="mt-3 flex items-start justify-between gap-2">
-                                        <div className="min-w-0">
-                                            <h4 className="truncate text-sm font-semibold text-[#161a1d]">{item.name}</h4>
-                                            <p className="mt-0.5 truncate text-[11px] text-slate-500">{item.category}</p>
-                                            <p className="mt-1 text-sm font-semibold text-[#13161a]">{formatINR(item.price)}</p>
-                                        </div>
-                                        <motion.button
-                                            type="button"
-                                            disabled={!item.available}
-                                            onClick={() => handleAddClick(item)}
-                                            whileHover={item.available ? { scale: 1.06 } : undefined}
-                                            whileTap={item.available ? { scale: 0.98 } : undefined}
-                                            className="shrink-0 rounded-full border border-slate-300 bg-white px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-700 transition hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
-                                        >
-                                            {!item.available
-                                                ? 'Sold Out'
-                                                : justAddedItemId === item.id
-                                                    ? 'Added'
-                                                    : '+ Add'}
-                                        </motion.button>
-                                    </div>
-                                </motion.article>
+                                            return (
+                                                <motion.article
+                                                    key={item.id}
+                                                    variants={cardVariants}
+                                                    className="overflow-hidden rounded-3xl border border-slate-200 bg-white p-3 shadow-[0_10px_24px_rgba(15,23,42,0.08)]"
+                                                >
+                                                    <div className="relative h-28 w-full overflow-hidden rounded-2xl bg-[#f7f7f8]">
+                                                        <img
+                                                            src={item.image}
+                                                            alt={`${item.name} image`}
+                                                            className={`h-full w-full object-cover ${item.available ? '' : 'opacity-60 grayscale'}`}
+                                                        />
+                                                        {item.type ? (
+                                                            <span className={`absolute left-2 top-2 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] ${item.type === 'veg' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                                {item.type}
+                                                            </span>
+                                                        ) : null}
+                                                    </div>
+
+                                                    <div className="mt-3">
+                                                        <div className="min-w-0">
+                                                            <h4 className="text-sm font-semibold leading-tight text-[#161a1d] break-words">{item.name}</h4>
+                                                            <p className="mt-0.5 text-[11px] text-slate-500">{item.category}</p>
+                                                            <p className="mt-1 text-sm font-semibold text-[#13161a]">{formatINR(item.price)}</p>
+                                                        </div>
+
+                                                        {item.available === false ? (
+                                                            <button
+                                                                type="button"
+                                                                disabled
+                                                                className="mt-2 w-full rounded-full border border-slate-200 bg-slate-100 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400"
+                                                            >
+                                                                Sold Out
+                                                            </button>
+                                                        ) : quantity > 0 ? (
+                                                            <div className="mt-2 flex items-center justify-between rounded-full border border-slate-300 bg-white px-2 py-1.5">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => onDecrementItem(item)}
+                                                                    className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-300 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                                                                    aria-label={`Decrease ${item.name}`}
+                                                                >
+                                                                    -
+                                                                </button>
+                                                                <span className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-700">{quantity}</span>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => onIncrementItem(item)}
+                                                                    className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-300 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                                                                    aria-label={`Increase ${item.name}`}
+                                                                >
+                                                                    +
+                                                                </button>
+                                                            </div>
+                                                        ) : (
+                                                            <motion.button
+                                                                type="button"
+                                                                onClick={() => handleAddClick(item)}
+                                                                whileHover={{ scale: 1.02 }}
+                                                                whileTap={{ scale: 0.98 }}
+                                                                className="mt-2 w-full rounded-full border border-slate-300 bg-white px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
+                                                            >
+                                                                {justAddedItemId === item.id ? 'Added' : '+ Add'}
+                                                            </motion.button>
+                                                        )}
+                                                    </div>
+                                                </motion.article>
+                                            );
+                                        })}
+                                    </motion.div>
+                                </section>
                             ))}
-                        </motion.div>
+                        </div>
                     )}
                 </section>
             </main>

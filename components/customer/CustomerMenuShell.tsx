@@ -196,7 +196,7 @@ export function CustomerMenuShell({ restaurantIdOverride, tenantHomePath, restau
     const [savingCapture, setSavingCapture] = React.useState(false);
     const [captureError, setCaptureError] = React.useState<string | null>(null);
 
-    const { addToCart, setIsCartOpen, totalItems, totalPrice } = useCart();
+    const { cart, addToCart, updateQuantity, setIsCartOpen, totalItems, totalPrice } = useCart();
     const router = useRouter();
     const searchParams = useSearchParams();
 
@@ -552,6 +552,41 @@ export function CustomerMenuShell({ restaurantIdOverride, tenantHomePath, restau
         return true;
     };
 
+    const cartQuantityById = React.useMemo(() => {
+        const map = new Map<string, number>();
+        cart.forEach((entry) => map.set(entry.id, entry.quantity));
+        return map;
+    }, [cart]);
+
+    const incrementMenuItem = (item: {
+        id: string;
+        name: string;
+        description?: string;
+        category?: string;
+        image?: string;
+        price: number;
+        available?: boolean;
+    }) => {
+        if (!requireCapture()) return;
+        if (item.available === false) return;
+
+        addToCart({
+            id: item.id,
+            name: item.name,
+            description: item.description || '',
+            category: item.category || 'Others',
+            image: item.image || '',
+            price: item.price,
+        });
+    };
+
+    const decrementMenuItem = (item: { id: string }) => {
+        if (!requireCapture()) return;
+        const current = cartQuantityById.get(item.id) || 0;
+        if (current <= 0) return;
+        updateQuantity(item.id, current - 1);
+    };
+
     return (
         <div className="min-h-screen">
             {error && (
@@ -574,6 +609,13 @@ export function CustomerMenuShell({ restaurantIdOverride, tenantHomePath, restau
                 onAddToCart={(item) => {
                     return addMenuItemWithFeedback(item);
                 }}
+                onIncrementItem={(item) => {
+                    incrementMenuItem(item);
+                }}
+                onDecrementItem={(item) => {
+                    decrementMenuItem(item);
+                }}
+                getItemQuantity={(itemId) => cartQuantityById.get(itemId) || 0}
                 onOpenCart={() => {
                     if (!requireCapture()) return;
                     setIsCartOpen(true);
