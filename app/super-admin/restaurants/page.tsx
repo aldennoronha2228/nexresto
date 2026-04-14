@@ -5,7 +5,7 @@
  * Searchable, paginated table of all restaurants with action menus
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
     Search, MoreVertical, Building2, User, CreditCard,
@@ -97,6 +97,7 @@ export default function RestaurantManager() {
     const [showFilters, setShowFilters] = useState(false);
     const [loading, setLoading] = useState(true);
     const [activeMenu, setActiveMenu] = useState<string | null>(null);
+    const activeMenuContainerRef = useRef<HTMLDivElement | null>(null);
 
     // Modal states
     const [showTierModal, setShowTierModal] = useState<string | null>(null);
@@ -143,6 +144,25 @@ export default function RestaurantManager() {
         // Reset to page 1 when search or filters change
         setPage(1);
     }, [search, tierFilter, statusFilter]);
+
+    useEffect(() => {
+        if (!activeMenu) return;
+
+        const closeIfOutside = (event: MouseEvent | TouchEvent) => {
+            const target = event.target as Node | null;
+            if (!target) return;
+            if (activeMenuContainerRef.current?.contains(target)) return;
+            setActiveMenu(null);
+        };
+
+        document.addEventListener('mousedown', closeIfOutside);
+        document.addEventListener('touchstart', closeIfOutside, { passive: true });
+
+        return () => {
+            document.removeEventListener('mousedown', closeIfOutside);
+            document.removeEventListener('touchstart', closeIfOutside);
+        };
+    }, [activeMenu]);
 
     const totalPages = Math.ceil(total / ITEMS_PER_PAGE);
 
@@ -650,7 +670,10 @@ export default function RestaurantManager() {
                                             )}
                                         </td>
                                         <td className="px-6 py-4 text-right">
-                                            <div className={cn("relative inline-block", activeMenu === restaurant.id && "z-[70]")}>
+                                            <div
+                                                ref={activeMenu === restaurant.id ? activeMenuContainerRef : undefined}
+                                                className={cn("relative inline-block", activeMenu === restaurant.id && "z-[70]")}
+                                            >
                                                 <button
                                                     onClick={() => setActiveMenu(activeMenu === restaurant.id ? null : restaurant.id)}
                                                     className="p-2 hover:bg-white/12 rounded-lg transition-colors"
@@ -1416,14 +1439,6 @@ export default function RestaurantManager() {
                     </motion.div>
                 )}
             </AnimatePresence>
-
-            {/* Click outside to close menu */}
-            {activeMenu && (
-                <div
-                    className="fixed inset-0 z-20"
-                    onClick={() => setActiveMenu(null)}
-                />
-            )}
         </div>
     );
 }

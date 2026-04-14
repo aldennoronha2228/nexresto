@@ -7,6 +7,8 @@ type PlatformCard = {
   icon?: ComponentType<{ className?: string }>;
   iconSrc?: string;
   iconAlt?: string;
+  iconSizeClass?: string;
+  iconBoxSizeClass?: string;
   status: string;
   details: string;
   available: boolean;
@@ -45,15 +47,18 @@ const PLATFORMS: PlatformCard[] = [
   },
   {
     name: 'Windows',
-    iconSrc: '/download/windows.svg',
-    iconAlt: 'Windows logo',
-    status: 'Coming Soon',
-    details: 'Desktop installer for front desk and operations command workflows.',
-    available: false,
-    ctaLabel: 'Coming Soon',
-    buildInfo: 'Windows installer planned',
-    iconTone: 'text-sky-200 border-sky-300/20 bg-sky-500/10',
-    badgeTone: 'border border-amber-300/30 bg-amber-500/10 text-amber-300',
+    iconSrc: '/nexresto-mark.svg?v=20260412d',
+    iconAlt: 'NexResto hollow cube icon',
+    iconSizeClass: 'h-10 w-10',
+    iconBoxSizeClass: 'h-16 w-16',
+    status: 'Available',
+    details: 'Desktop app package for front desk and operations workflows. Extract ZIP and run the EXE.',
+    available: true,
+    href: '/download/nexresto-windows.zip',
+    ctaLabel: 'Download ZIP',
+    buildInfo: 'ZIP • win32-x64 • 97.7 MB',
+    iconTone: 'border-orange-300/35 bg-black/45',
+    badgeTone: 'border border-emerald-300/30 bg-emerald-500/10 text-emerald-300',
   },
 ];
 
@@ -120,12 +125,12 @@ export default function DownloadPage() {
                 <article key={platform.name} className="group relative overflow-hidden rounded-2xl border border-white/10 bg-[#20201f] p-7 transition hover:border-white/20 hover:bg-[#242423]">
                   <div className="pointer-events-none absolute -right-12 -top-12 h-32 w-32 rounded-full bg-white/5 blur-2xl" />
 
-                  <div className={`mb-5 inline-flex h-14 w-14 items-center justify-center rounded-2xl border ${platform.iconTone}`}>
+                  <div className={`mb-5 inline-flex items-center justify-center rounded-2xl border ${platform.iconBoxSizeClass || 'h-14 w-14'} ${platform.iconTone}`}>
                     {platform.iconSrc ? (
                       <img
                         src={platform.iconSrc}
                         alt={platform.iconAlt || `${platform.name} logo`}
-                        className="h-8 w-8 object-contain"
+                        className={`${platform.iconSizeClass || 'h-8 w-8'} object-contain`}
                       />
                     ) : Icon ? (
                       <Icon className="h-6 w-6" />
