@@ -3,13 +3,18 @@
 import React from 'react';
 import Image from 'next/image';
 import { motion, type Variants } from 'motion/react';
-import { Playfair_Display } from 'next/font/google';
+import { Cormorant_Garamond, Manrope } from 'next/font/google';
 import { BookOpen, ClipboardList, ShoppingBag } from 'lucide-react';
 import type { MenuItem as CartMenuItem } from '@/context/CartContext';
 
-const playfair = Playfair_Display({
+const cormorant = Cormorant_Garamond({
     subsets: ['latin'],
     weight: ['600', '700'],
+});
+
+const manrope = Manrope({
+    subsets: ['latin'],
+    weight: ['400', '500', '600', '700'],
 });
 
 type Branding = {
@@ -147,8 +152,8 @@ export function GourmetCatalogLayout({
     }, [items, activeCategory, foodTypeFilter, query]);
 
     const safeCategories = categories.length > 0 ? categories : ['All'];
-    const headerFont = "'Noto Serif', 'Times New Roman', serif";
-    const bodyFont = branding.fontFamily || "'Inter', sans-serif";
+    const headerFont = "'Cormorant Garamond', 'Times New Roman', serif";
+    const bodyFont = branding.fontFamily || manrope.style.fontFamily;
     const accentPrimary = '#dce6e1';
     const accentSecondary = '#8f9491';
     const heroTitle = (branding.heroHeadline || "Chef's Table").trim();
@@ -169,7 +174,7 @@ export function GourmetCatalogLayout({
                         priority
                         className="h-9 w-9 rounded-full ring-1 ring-white/10 sm:h-11 sm:w-11"
                     />
-                    <h1 className={`${playfair.className} max-w-[56vw] truncate text-xl font-semibold tracking-[0.08em] text-[#e4e5e4] sm:max-w-none sm:text-3xl`}>
+                    <h1 className={`${cormorant.className} max-w-[56vw] truncate text-xl font-semibold tracking-[0.08em] text-[#e4e5e4] sm:max-w-none sm:text-3xl`}>
                         {restaurantName}
                     </h1>
                 </div>
@@ -194,7 +199,7 @@ export function GourmetCatalogLayout({
                                     type="button"
                                     onClick={() => setActiveCategory(category)}
                                     className={active
-                                        ? `${playfair.className} shrink-0 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-sm font-semibold text-[#ececec]`
+                                        ? `${cormorant.className} shrink-0 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-sm font-semibold text-[#ececec]`
                                         : 'shrink-0 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#9a9d9b] transition hover:border-white/20 hover:text-[#d6d7d5] sm:text-xs'}
                                     title={category}
                                 >
@@ -222,7 +227,7 @@ export function GourmetCatalogLayout({
                             <span className="text-[10px] uppercase tracking-[0.2em] text-[#767575]">Table: {tableId || 'Guest'}</span>
                         </div>
                     </div>
-                    <h2 className={`${playfair.className} mt-2 text-4xl leading-none tracking-tight text-[#dde1de] sm:text-5xl md:text-7xl`}>
+                    <h2 className={`${cormorant.className} mt-2 text-4xl leading-none tracking-tight text-[#dde1de] sm:text-5xl md:text-7xl`}>
                         {heroTitle}
                     </h2>
                     <p className="mt-3 max-w-2xl text-sm leading-relaxed text-[#aaadab]">{heroSubtitle}</p>
@@ -297,7 +302,7 @@ export function GourmetCatalogLayout({
                                                 {item.category}
                                             </span>
                                         </div>
-                                        <h3 className={`${playfair.className} mb-3 text-3xl leading-tight tracking-tight text-[#e7e5e4]`}>
+                                        <h3 className={`${cormorant.className} mb-3 text-3xl leading-tight tracking-tight text-[#e7e5e4]`}>
                                             {item.name}
                                         </h3>
                                         <p className="mb-4 max-w-full text-sm leading-relaxed text-[#acabaa] sm:max-w-[240px]">

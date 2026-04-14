@@ -46,7 +46,7 @@ const DEFAULT_BRANDING: CustomerBranding = {
     primaryColor: '#3e54d3',
     secondaryColor: '#10b981',
     backgroundColor: '#131313',
-    fontFamily: 'Inter, sans-serif',
+    fontFamily: "'Manrope', 'Segoe UI', sans-serif",
     logoUrl: '',
     heroImageUrl: getOptimizedHeroImageSrc(''),
     heroOverlayOpacity: 60,
