@@ -1,3 +1,5 @@
+'use client';
+
 export default function RootLoading() {
     return (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#030712]">
