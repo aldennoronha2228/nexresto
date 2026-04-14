@@ -173,6 +173,49 @@ export default function DownloadPage() {
           </p>
         </section>
       </main>
+
+      <footer className="relative z-10 border-t border-white/5 bg-black/60">
+        <div className="mx-auto grid max-w-7xl gap-8 px-6 py-12 md:grid-cols-4 lg:px-8">
+          <div className="md:col-span-2">
+            <div className="flex items-center gap-2">
+              <img
+                alt="NexResto logo mark"
+                className="h-7 w-7 rounded-md border border-white/15 bg-black/30 p-1"
+                src="/nexresto-mark.svg?v=20260412d"
+              />
+              <p className="text-lg font-bold text-white">NexResto</p>
+            </div>
+            <p className="mt-3 max-w-sm text-sm text-stone-400">Crafting the digital future of premium dining operations.</p>
+          </div>
+          <div>
+            <p className="mb-3 text-sm font-medium text-white">Company</p>
+            <div className="space-y-2 text-sm text-stone-400">
+              <Link className="block hover:text-emerald-400" href="/#platform">Platform</Link>
+              <Link className="block hover:text-emerald-400" href="/#features">Features</Link>
+              <Link className="block hover:text-emerald-400" href="/pricing">Pricing</Link>
+              <Link className="block hover:text-emerald-400" href="/roi">ROI</Link>
+              <Link className="block hover:text-emerald-400" href="/#demo-request">Demo</Link>
+            </div>
+          </div>
+          <div>
+            <p className="mb-3 text-sm font-medium text-white">Legal</p>
+            <div className="space-y-2 text-sm text-stone-400">
+              <Link className="block hover:text-emerald-400" href="/privacy">Privacy</Link>
+              <Link className="block hover:text-emerald-400" href="/terms">Terms</Link>
+            </div>
+          </div>
+        </div>
+        <div className="mx-auto flex max-w-7xl px-6 pb-6 lg:px-8">
+          <Link
+            className="inline-flex items-center gap-2 rounded-lg border border-[#3e54d3]/60 bg-[#3e54d3]/20 px-5 py-2.5 text-sm font-semibold text-[#d8dbff] transition hover:bg-[#3e54d3]/30"
+            href="/download"
+          >
+            Download App
+            <span aria-hidden="true">-&gt;</span>
+          </Link>
+        </div>
+        <div className="mx-auto max-w-7xl px-6 pb-10 text-sm text-stone-500 lg:px-8">(c) 2026 NexResto. Premium Dining Experience.</div>
+      </footer>
     </div>
   );
 }

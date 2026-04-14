@@ -221,7 +221,8 @@ export default async function PricingPage() {
           <div>
             <p className="mb-3 text-sm font-medium text-white">Company</p>
             <div className="space-y-2 text-sm text-stone-400">
-              <Link className="block hover:text-emerald-400" href="/">Home</Link>
+              <Link className="block hover:text-emerald-400" href="/#platform">Platform</Link>
+              <Link className="block hover:text-emerald-400" href="/#features">Features</Link>
               <Link className="block hover:text-emerald-400" href="/pricing">Pricing</Link>
               <Link className="block hover:text-emerald-400" href="/roi">ROI</Link>
               <Link className="block hover:text-emerald-400" href="/#demo-request">Demo</Link>
@@ -234,6 +235,15 @@ export default async function PricingPage() {
               <Link className="block hover:text-emerald-400" href="/terms">Terms</Link>
             </div>
           </div>
+        </div>
+        <div className="mx-auto flex max-w-7xl px-6 pb-6 lg:px-8">
+          <Link
+            className="inline-flex items-center gap-2 rounded-lg border border-[#3e54d3]/60 bg-[#3e54d3]/20 px-5 py-2.5 text-sm font-semibold text-[#d8dbff] transition hover:bg-[#3e54d3]/30"
+            href="/download"
+          >
+            Download App
+            <span aria-hidden="true">-&gt;</span>
+          </Link>
         </div>
         <div className="mx-auto max-w-7xl px-6 pb-10 text-sm text-stone-500 lg:px-8">(c) 2026 NexResto. Premium Dining Experience.</div>
       </footer>
