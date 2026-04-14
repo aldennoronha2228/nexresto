@@ -740,14 +740,26 @@ export default function RestaurantManager() {
                                                             <button
                                                                 onClick={() => {
                                                                     setShowDangerModal({ id: restaurant.id, name: restaurant.name });
-                                                                    setDangerAction(null);
+                                                                    setDangerAction('archive');
+                                                                    setDangerConfirmText('');
+                                                                    setActiveMenu(null);
+                                                                }}
+                                                                className="w-full flex items-center gap-3 px-4 py-3 text-sm text-amber-300 hover:bg-amber-500/10 transition-colors"
+                                                            >
+                                                                <Archive className="w-4 h-4" />
+                                                                Archive Account
+                                                            </button>
+                                                            <button
+                                                                onClick={() => {
+                                                                    setShowDangerModal({ id: restaurant.id, name: restaurant.name });
+                                                                    setDangerAction('delete');
                                                                     setDangerConfirmText('');
                                                                     setActiveMenu(null);
                                                                 }}
                                                                 className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-400 hover:bg-red-500/10 transition-colors"
                                                             >
                                                                 <Trash2 className="w-4 h-4" />
-                                                                Delete / Archive
+                                                                Delete Account
                                                             </button>
                                                         </motion.div>
                                                     )}

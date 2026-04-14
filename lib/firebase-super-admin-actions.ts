@@ -1159,31 +1159,102 @@ export async function updateSubscriptionDates(
 
 // ─── Delete Restaurant ───────────────────────────────────────────────────────
 
+async function deleteAuthUsersForRestaurant(
+    restaurantId: string
+): Promise<{ deleted: number; skipped: number }> {
+    try {
+        const staffSnap = await adminFirestore
+            .collection(`restaurants/${restaurantId}/staff`)
+            .get();
+
+        const userIds = [...new Set(staffSnap.docs.map((doc) => String(doc.id || '').trim()).filter(Boolean))];
+
+        let deleted = 0;
+        let skipped = 0;
+
+        for (const userId of userIds) {
+            try {
+                const user = await adminAuth.getUser(userId);
+                const claims = user.customClaims || {};
+                const claimTenant = String(claims.restaurant_id || claims.tenant_id || '').trim();
+
+                if (claims.role === 'super_admin') {
+                    skipped += 1;
+                    continue;
+                }
+
+                if (claimTenant && claimTenant !== restaurantId) {
+                    skipped += 1;
+                    continue;
+                }
+
+                await adminAuth.deleteUser(userId);
+                deleted += 1;
+            } catch (error: any) {
+                const code = String(error?.code || '');
+                if (code.includes('user-not-found')) {
+                    continue;
+                }
+                skipped += 1;
+            }
+        }
+
+        return { deleted, skipped };
+    } catch {
+        return { deleted: 0, skipped: 0 };
+    }
+}
+
+async function deleteCollectionInChunks(collectionPath: string, chunkSize = 400): Promise<void> {
+    const colRef = adminFirestore.collection(collectionPath);
+
+    while (true) {
+        const snapshot = await colRef.limit(chunkSize).get();
+        if (snapshot.empty) break;
+
+        const batch = adminFirestore.batch();
+        snapshot.docs.forEach((docSnap) => batch.delete(docSnap.ref));
+        await batch.commit();
+
+        if (snapshot.size < chunkSize) break;
+    }
+}
+
 export async function deleteRestaurant(
     restaurantId: string
 ): Promise<{ success: boolean; error?: string }> {
     try {
         const restRef = adminFirestore.doc(`restaurants/${restaurantId}`);
         const restDoc = await restRef.get();
+        if (!restDoc.exists) {
+            return { success: false, error: 'Restaurant not found' };
+        }
         const restaurantData = restDoc.data();
 
-        // Delete all sub-collections
-        const subCollections = ['orders', 'menu_items', 'staff', 'categories', 'settings', 'analytics'];
-        for (const subCol of subCollections) {
-            const snapshot = await restRef.collection(subCol).get();
-            const batch = adminFirestore.batch();
-            snapshot.docs.forEach(doc => batch.delete(doc.ref));
-            if (snapshot.size > 0) await batch.commit();
-        }
+        const { deleted: deletedAuthUsers, skipped: skippedAuthUsers } = await deleteAuthUsersForRestaurant(restaurantId);
 
-        // Delete the restaurant document
-        await restRef.delete();
+        try {
+            // Delete restaurant doc + all nested subcollections recursively.
+            await adminFirestore.recursiveDelete(restRef);
+        } catch {
+            // Fallback for environments where recursiveDelete may not be available.
+            const subCollections = ['orders', 'menu_items', 'staff', 'categories', 'settings', 'analytics', 'customers', 'usage'];
+            for (const subCol of subCollections) {
+                await deleteCollectionInChunks(`restaurants/${restaurantId}/${subCol}`);
+            }
+            await restRef.delete();
+        }
 
         await logActivity(
             'RESTAURANT_DELETED',
             `Restaurant "${restaurantData?.name}" deleted`,
             'warning',
-            { restaurant_id: restaurantId, restaurant_name: restaurantData?.name }
+            {
+                restaurant_id: restaurantId,
+                restaurant_name: restaurantData?.name,
+                deleted_auth_users: deletedAuthUsers,
+                skipped_auth_users: skippedAuthUsers,
+            }
         );
 
         revalidatePath('/super-admin');
