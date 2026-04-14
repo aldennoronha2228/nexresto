@@ -42,6 +42,23 @@ type CustomerBranding = {
     featuredImages: string[];
 };
 
+type MenuCatalogItem = {
+    id: string;
+    name: string;
+    description: string;
+    price: number;
+    image: string;
+    category: string;
+    available: boolean;
+    type?: 'veg' | 'non-veg';
+};
+
+type MenuCachePayload = {
+    categories: string[];
+    items: MenuCatalogItem[];
+    updatedAt: number;
+};
+
 const DEFAULT_BRANDING: CustomerBranding = {
     primaryColor: '#3e54d3',
     secondaryColor: '#10b981',
@@ -56,6 +73,46 @@ const DEFAULT_BRANDING: CustomerBranding = {
     catalogHeadline: '',
     featuredImages: [],
 };
+
+const MENU_CACHE_PREFIX = 'nexresto:customer-menu:';
+
+function getMenuCacheKey(restaurantId: string): string {
+    return `${MENU_CACHE_PREFIX}${restaurantId}`;
+}
+
+function readMenuCache(restaurantId: string): MenuCachePayload | null {
+    try {
+        const raw = localStorage.getItem(getMenuCacheKey(restaurantId));
+        if (!raw) return null;
+        const parsed = JSON.parse(raw) as Partial<MenuCachePayload>;
+        if (!Array.isArray(parsed.categories) || !Array.isArray(parsed.items)) return null;
+        return {
+            categories: parsed.categories.filter((v): v is string => typeof v === 'string' && v.trim().length > 0),
+            items: parsed.items.filter((row): row is MenuCatalogItem => {
+                if (!row || typeof row !== 'object') return false;
+                const candidate = row as Partial<MenuCatalogItem>;
+                return typeof candidate.id === 'string' && typeof candidate.name === 'string' && typeof candidate.price === 'number';
+            }),
+            updatedAt: typeof parsed.updatedAt === 'number' ? parsed.updatedAt : Date.now(),
+        };
+    } catch {
+        return null;
+    }
+}
+
+function writeMenuCache(restaurantId: string, payload: Omit<MenuCachePayload, 'updatedAt'>): void {
+    try {
+        localStorage.setItem(
+            getMenuCacheKey(restaurantId),
+            JSON.stringify({
+                ...payload,
+                updatedAt: Date.now(),
+            })
+        );
+    } catch {
+        // Ignore cache write failures (private mode/quota).
+    }
+}
 
 type CustomerMenuShellProps = {
     restaurantIdOverride?: string;
@@ -128,7 +185,7 @@ function formatRestaurantDisplayName(value: string): string {
 
 export function CustomerMenuShell({ restaurantIdOverride, tenantHomePath, restaurantName }: CustomerMenuShellProps) {
     const [categories, setCategories] = React.useState<string[]>(['All']);
-    const [menuItems, setMenuItems] = React.useState<Array<{ id: string; name: string; description: string; price: number; image: string; category: string; available: boolean; type?: 'veg' | 'non-veg' }>>([]);
+    const [menuItems, setMenuItems] = React.useState<MenuCatalogItem[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [error, setError] = React.useState<string | null>(null);
     const [branding, setBranding] = React.useState<CustomerBranding>(DEFAULT_BRANDING);
@@ -241,7 +298,7 @@ export function CustomerMenuShell({ restaurantIdOverride, tenantHomePath, restau
         let cancelled = false;
 
         const loadMenu = async () => {
-            setLoading(true);
+            let hasHydratedFromCache = false;
             setError(null);
 
             if (!restaurantId) {
@@ -250,6 +307,17 @@ export function CustomerMenuShell({ restaurantIdOverride, tenantHomePath, restau
                 setError('Missing restaurant context in URL.');
                 setLoading(false);
                 return;
+            }
+
+            const cached = readMenuCache(restaurantId);
+            if (cached && cached.items.length > 0) {
+                hasHydratedFromCache = true;
+                const hydratedItems = applyAvailabilityOverrides(cached.items, restaurantId);
+                setCategories(cached.categories.length > 0 ? cached.categories : ['All']);
+                setMenuItems(hydratedItems);
+                setLoading(false);
+            } else {
+                setLoading(true);
             }
 
             try {
@@ -325,13 +393,20 @@ export function CustomerMenuShell({ restaurantIdOverride, tenantHomePath, restau
                 seedAvailabilityMap(mapped.map((m) => ({ id: m.id, available: m.available })), restaurantId);
                 const overridden = applyAvailabilityOverrides(mapped, restaurantId);
 
+                writeMenuCache(restaurantId, {
+                    categories: ['All', ...categoryNames],
+                    items: overridden,
+                });
+
                 setCategories(['All', ...categoryNames]);
                 setMenuItems(overridden);
             } catch {
                 if (cancelled) return;
-                setError('Could not load menu for this restaurant.');
-                setCategories(['All']);
-                setMenuItems([]);
+                if (!hasHydratedFromCache) {
+                    setError('Could not load menu for this restaurant.');
+                    setCategories(['All']);
+                    setMenuItems([]);
+                }
             } finally {
                 if (!cancelled) setLoading(false);
             }
