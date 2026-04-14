@@ -42,7 +42,7 @@ export default function MaintenancePage() {
                         <img
                             alt="NexResto logo mark"
                             className="h-9 w-9 rounded-xl border border-white/15 bg-black/30 p-1"
-                            src="/nexresto-mark.svg?v=20260412d"
+                            src="/nexresto-mark.svg?v=20260415a"
                         />
                         <span className="text-xl font-bold tracking-tight text-white">NexResto</span>
                     </div>

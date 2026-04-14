@@ -1,8 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="NexResto cube mark">
-  <g fill="none" stroke="#ff6500" stroke-width="11" stroke-linecap="round" stroke-linejoin="round" transform="translate(128 128) scale(1.16) translate(-128 -128)">
-    <path d="M128 30L56 72L128 114L200 72L128 30Z" />
-    <path d="M56 72V164L128 206V114" />
-    <path d="M200 72V164L128 206" />
-    <path d="M128 30V114" opacity="0.72" />
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="NexResto hollow cube mark">
+  <g fill="none" stroke="#ff6500" stroke-width="12" stroke-linecap="butt" stroke-linejoin="miter" transform="translate(128 128) scale(1.1) translate(-128 -128)">
+    <path d="M128 34L56 76L128 118L200 76Z" />
+    <path d="M56 76V166L128 208V118" />
+    <path d="M200 76V166L128 208" />
   </g>
 </svg>

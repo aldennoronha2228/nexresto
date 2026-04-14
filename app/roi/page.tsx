@@ -153,7 +153,7 @@ export default function RoiPage() {
             <img
               alt="NexResto logo mark"
               className="h-9 w-9 rounded-xl border border-white/15 bg-black/30 p-1"
-              src="/nexresto-mark.svg?v=20260412d"
+              src="/nexresto-mark.svg?v=20260415a"
             />
             <span className="text-xl font-bold tracking-tight text-white">NexResto</span>
           </div>
@@ -299,7 +299,7 @@ export default function RoiPage() {
               <img
                 alt="NexResto logo mark"
                 className="h-7 w-7 rounded-md border border-white/15 bg-black/30 p-1"
-                src="/nexresto-mark.svg?v=20260412d"
+                src="/nexresto-mark.svg?v=20260415a"
               />
               <p className="text-lg font-bold text-white">NexResto</p>
             </div>

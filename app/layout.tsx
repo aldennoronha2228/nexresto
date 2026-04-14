@@ -9,8 +9,8 @@ export const metadata: Metadata = {
     },
     description: 'NexResto helps restaurants and hotels publish digital menus and streamline online ordering.',
     icons: {
-        icon: '/nexresto-mark.svg?v=20260412d',
-        shortcut: '/nexresto-mark.svg?v=20260412d',
+        icon: '/nexresto-mark.svg?v=20260415a',
+        shortcut: '/nexresto-mark.svg?v=20260415a',
         apple: '/apple-icon.png',
     },
 };
