@@ -327,6 +327,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         (pathname === `/${urlStoreId}/dashboard` && item.href === `/${urlStoreId}/dashboard/orders`)
     );
     const isKdsRoute = pathname === `/${urlStoreId}/dashboard/kds` || pathname.startsWith(`/${urlStoreId}/dashboard/kds/`);
+    const isTablesRoute = pathname === `/${urlStoreId}/dashboard/tables` || pathname.startsWith(`/${urlStoreId}/dashboard/tables/`);
+    const isOrdersRoute = pathname === `/${urlStoreId}/dashboard/orders` || pathname.startsWith(`/${urlStoreId}/dashboard/orders/`);
+    const isWorkspaceRoute = isTablesRoute || isOrdersRoute;
     const desktopCollapsedWidth = isKdsRoute ? 72 : 80;
     const desktopExpandedWidth = isKdsRoute ? 200 : 240;
     const tabletRailWidthClass = isKdsRoute ? 'w-16' : 'w-20';
@@ -1029,9 +1032,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     <motion.div initial={false} animate={{ paddingLeft: collapsed ? desktopCollapsedWidth : desktopExpandedWidth }} className="hidden lg:block" />
 
                     {/* Top Navbar */}
-                    <header className="h-14 md:h-16 sticky top-0 z-20 bg-white/75 backdrop-blur-xl border-b border-white/40">
-                        <div className="h-full px-3 md:px-4 lg:px-6 flex items-center justify-between gap-3">
-                            <div className="md:hidden text-[17px] font-bold tracking-tight text-slate-800">Dashboard</div>
+                    <header className={cn('sticky top-0 z-20 bg-white/75 backdrop-blur-xl border-b border-white/40', isWorkspaceRoute ? 'h-12 md:h-14' : 'h-14 md:h-16')}>
+                        <div className={cn('h-full px-3 md:px-4 lg:px-6 flex items-center justify-between gap-3', isWorkspaceRoute && 'px-2')}>
+                            <div className={cn('md:hidden font-bold tracking-tight text-slate-800', isWorkspaceRoute ? 'text-base' : 'text-[17px]')}>Dashboard</div>
                             <div className={cn('hidden md:block flex-1 max-w-md', isKdsRoute && 'md:hidden')}>
                                 {!isKdsRoute ? <GlobalSearch /> : null}
                             </div>
@@ -1121,7 +1124,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     )}
 
                     {/* Page Content */}
-                    <div className="p-4 sm:p-5 lg:p-8 pb-[calc(6.25rem+env(safe-area-inset-bottom))] lg:pb-8" key={pathname}>
+                    <div
+                        className={cn(
+                            'p-4 sm:p-5 lg:p-8 pb-[calc(6.25rem+env(safe-area-inset-bottom))] lg:pb-8',
+                            isWorkspaceRoute && 'p-2 sm:p-3 lg:p-6 pb-[calc(5.25rem+env(safe-area-inset-bottom))] lg:pb-6'
+                        )}
+                        key={pathname}
+                    >
                         {isGrandHotel && isDemoMode && (
                             <div className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
                                 Demo Mode is ON for The Grand. Dashboard data and actions are simulated.
@@ -1159,7 +1168,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         )}
 
                         {/* Database Connection Status Footer */}
-                        <div className="mt-8 pt-4 border-t border-slate-200/60">
+                        <div className={cn('mt-8 pt-4 border-t border-slate-200/60', isWorkspaceRoute && 'hidden md:block')}>
                             <div className="flex items-center justify-center gap-2 text-xs text-slate-500">
                                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                                 <span>Database Connected: <span className="font-medium text-slate-700">{tenantName || 'Loading...'}</span></span>
@@ -1171,7 +1180,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 </div>
 
                 {/* Mobile Bottom Navigation - Shows top allowed features */}
-                <nav className="md:hidden fixed bottom-0 left-0 right-0 h-[72px] pb-[env(safe-area-inset-bottom)] bg-white/85 backdrop-blur-xl border-t border-slate-200/70 shadow-[0_-6px_18px_rgba(15,23,42,0.08)] z-30">
+                <nav className={cn('md:hidden fixed bottom-0 left-0 right-0 pb-[env(safe-area-inset-bottom)] bg-white/85 backdrop-blur-xl border-t border-slate-200/70 shadow-[0_-6px_18px_rgba(15,23,42,0.08)] z-30', isWorkspaceRoute ? 'h-[62px]' : 'h-[72px]')}>
                     <div className="h-full px-2 flex items-center justify-around gap-1">
                         {mobilePrimaryNavigation.map((item) => {
                             const isActive = pathname === item.href;
@@ -1184,12 +1193,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                     <motion.div
                                         whileTap={{ scale: 0.95 }}
                                         className={cn(
-                                            "mx-auto w-full max-w-[104px] rounded-xl flex flex-col items-center justify-center gap-1 py-2 transition-all",
+                                            'mx-auto w-full rounded-xl flex flex-col items-center justify-center transition-all',
+                                            isWorkspaceRoute ? 'max-w-[92px] gap-0.5 py-1.5' : 'max-w-[104px] gap-1 py-2',
                                             isActive ? "text-blue-600 bg-blue-50/90" : "text-slate-600"
                                         )}
                                     >
-                                        <item.icon className={cn("w-5 h-5", isActive && "drop-shadow-[0_0_6px_rgba(37,99,235,0.3)]")} />
-                                        <span className={cn("text-[11px] font-medium", isActive && "font-semibold")}>{item.shortName}</span>
+                                        <item.icon className={cn(isWorkspaceRoute ? 'w-[18px] h-[18px]' : 'w-5 h-5', isActive && "drop-shadow-[0_0_6px_rgba(37,99,235,0.3)]")} />
+                                        <span className={cn(isWorkspaceRoute ? 'text-[10px] font-medium' : 'text-[11px] font-medium', isActive && "font-semibold")}>{item.shortName}</span>
                                     </motion.div>
                                 </button>
                             );
@@ -1203,12 +1213,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                             <motion.div
                                 whileTap={{ scale: 0.95 }}
                                 className={cn(
-                                    "mx-auto w-full max-w-[104px] rounded-xl flex flex-col items-center justify-center gap-1 py-2 transition-all",
+                                    'mx-auto w-full rounded-xl flex flex-col items-center justify-center transition-all',
+                                    isWorkspaceRoute ? 'max-w-[92px] gap-0.5 py-1.5' : 'max-w-[104px] gap-1 py-2',
                                     mobileMenuOpen ? "text-blue-600 bg-blue-50/90" : "text-slate-600"
                                 )}
                             >
-                                <Menu className={cn("w-5 h-5", mobileMenuOpen && "drop-shadow-[0_0_6px_rgba(37,99,235,0.3)]")} />
-                                <span className={cn("text-[11px] font-medium", mobileMenuOpen && "font-semibold")}>More</span>
+                                <Menu className={cn(isWorkspaceRoute ? 'w-[18px] h-[18px]' : 'w-5 h-5', mobileMenuOpen && "drop-shadow-[0_0_6px_rgba(37,99,235,0.3)]")} />
+                                <span className={cn(isWorkspaceRoute ? 'text-[10px] font-medium' : 'text-[11px] font-medium', mobileMenuOpen && "font-semibold")}>More</span>
                             </motion.div>
                         </button>
                     </div>

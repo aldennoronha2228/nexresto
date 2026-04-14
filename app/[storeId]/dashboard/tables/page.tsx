@@ -1274,6 +1274,7 @@ export default function TablesQRCodesPage() {
     const [draggingDetectedId, setDraggingDetectedId] = useState<string | null>(null);
     const [selectedDetectedTableId, setSelectedDetectedTableId] = useState<string | null>(null);
     const [mobileNudgeStep, setMobileNudgeStep] = useState<2 | 5>(5);
+    const [showDetectedPanelMobile, setShowDetectedPanelMobile] = useState(false);
     const detectedDragOffsetRef = useRef<{ x: number; y: number } | null>(null);
     const [isMobileViewport, setIsMobileViewport] = useState(false);
     const [capturedImagePreview, setCapturedImagePreview] = useState<string | null>(null);
@@ -1973,6 +1974,9 @@ export default function TablesQRCodesPage() {
     const filteredTables = tables.filter(t => t.id.toLowerCase().includes(searchQuery.toLowerCase()) || t.name.toLowerCase().includes(searchQuery.toLowerCase()));
     const localhostMenuUrl = useMemo(() => getTableMenuUrl('http://localhost:3000', 'T-XX', tenantId), [tenantId]);
     const loopbackMenuUrl = useMemo(() => getTableMenuUrl('http://127.0.0.1:3000', 'T-XX', tenantId), [tenantId]);
+    const reviewCanvasHeightClass = isMobileViewport
+        ? 'h-[76vh] min-h-[460px] max-h-none'
+        : 'h-[68vh] min-h-[360px] max-h-[560px]';
 
     return (
         <div className="relative">
@@ -2136,7 +2140,7 @@ export default function TablesQRCodesPage() {
                                     initial={{ opacity: 0, y: 10 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     exit={{ opacity: 0, y: -10 }}
-                                    className="bg-white rounded-2xl p-4 lg:p-6 border border-slate-200/60 shadow-sm"
+                                    className="bg-white rounded-2xl p-3 lg:p-6 border border-slate-200/60 shadow-sm"
                                 >
                                     <div className="flex flex-col lg:flex-row gap-4">
                                         <div className="flex-1 min-w-0">
@@ -2205,7 +2209,7 @@ export default function TablesQRCodesPage() {
                                             <div className="relative">
                                                 <div className={cn('relative rounded-2xl border border-slate-200 bg-slate-50 overflow-hidden', !isSpatialPro && 'blur-[2px] pointer-events-none')}>
                                                     {reviewViewMode === '3d' ? (
-                                                        <div className="relative h-[68vh] min-h-[360px] max-h-[560px]">
+                                                        <div className={cn('relative', reviewCanvasHeightClass)}>
                                                             <SceneErrorBoundary
                                                                 fallback={
                                                                     <div className="h-full w-full flex items-center justify-center bg-slate-50 p-5">
@@ -2234,7 +2238,7 @@ export default function TablesQRCodesPage() {
                                                     ) : (
                                                         <div
                                                             ref={reviewGridRef}
-                                                            className="relative h-[68vh] min-h-[360px] max-h-[560px] bg-slate-50 touch-none"
+                                                            className={cn('relative bg-slate-50 touch-none', reviewCanvasHeightClass)}
                                                             onPointerDown={(e) => {
                                                                 if (!isMobileViewport || !selectedDetectedTableId) return;
                                                                 if (e.target !== e.currentTarget) return;
@@ -2299,7 +2303,7 @@ export default function TablesQRCodesPage() {
                                                     )}
 
                                                     {reviewViewMode === '2d' && isMobileViewport ? (
-                                                        <div className="mt-2 rounded-xl border border-slate-200 bg-white/90 p-2.5">
+                                                        <div className="absolute left-2 right-2 bottom-2 rounded-xl border border-slate-200 bg-white/95 p-2.5 shadow-sm">
                                                             <div className="flex items-center justify-between gap-2">
                                                                 <span className="text-xs font-medium text-slate-700">
                                                                     {selectedDetectedTable ? `Selected: ${selectedDetectedTable.id}` : 'Tap a table to select'}
@@ -2331,7 +2335,7 @@ export default function TablesQRCodesPage() {
                                                                     </button>
                                                                 </div>
                                                             </div>
-                                                            <div className="mt-1 text-[11px] text-slate-500">Tip: tap empty grid space to place selected table directly.</div>
+                                                            <div className="mt-1 text-[11px] text-slate-500">Tip: tap empty grid space to place selected table.</div>
                                                             <div className="mt-2 grid grid-cols-3 gap-2 w-[168px] mx-auto">
                                                                 <div />
                                                                 <button
@@ -2393,7 +2397,18 @@ export default function TablesQRCodesPage() {
                                             </div>
                                         </div>
 
-                                        <div className="w-full lg:w-80 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                                        {isMobileViewport ? (
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowDetectedPanelMobile((prev) => !prev)}
+                                                className="w-full h-10 rounded-xl border border-slate-200 bg-white text-slate-700 text-sm font-medium"
+                                            >
+                                                {showDetectedPanelMobile ? 'Hide Detected Tables' : `Show Detected Tables (${detectedTables.length})`}
+                                            </button>
+                                        ) : null}
+
+                                        {(!isMobileViewport || showDetectedPanelMobile) && (
+                                            <div className="w-full lg:w-80 rounded-xl border border-slate-200 bg-slate-50 p-3">
                                             <h4 className="text-sm font-semibold text-slate-800 mb-2">Detected Tables</h4>
                                             <div className="mb-3 grid grid-cols-2 gap-2">
                                                 <button
@@ -2509,6 +2524,7 @@ export default function TablesQRCodesPage() {
                                                 </button>
                                             </div>
                                         </div>
+                                        )}
                                     </div>
                                 </motion.div>
                             )}

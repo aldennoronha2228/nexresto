@@ -819,6 +819,9 @@ export default function LiveOrdersPage() {
                 oTable === `table ${numStr}`;
         });
     }, [activeOrders]);
+    const floorOverviewHeightClass = isMobileViewport
+        ? 'h-[66vh] min-h-[420px] max-h-none'
+        : 'h-[52vh] min-h-[320px] max-h-[460px]';
 
     if ((loading || waitingForTenant) && !orders.length) return (
         <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6 text-center p-6">
@@ -861,11 +864,11 @@ export default function LiveOrdersPage() {
     );
 
     return (
-        <div className="space-y-8">
-            <div className="flex items-start justify-between">
+        <div className={cn('space-y-8', isMobileViewport && 'space-y-4')}>
+            <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl lg:text-4xl font-bold text-slate-900 tracking-tight">Live Orders</h1>
-                    <p className="text-sm text-slate-500 mt-1">Monitor active orders and restaurant floor status</p>
+                    <h1 className={cn('font-bold text-slate-900 tracking-tight', isMobileViewport ? 'text-xl' : 'text-2xl lg:text-4xl')}>Live Orders</h1>
+                    <p className={cn('text-sm text-slate-500 mt-1', isMobileViewport && 'hidden')}>Monitor active orders and restaurant floor status</p>
                 </div>
                 <button onClick={() => loadOrders(false)} className="p-2.5 rounded-xl bg-white/70 border border-white/40 hover:bg-white transition-colors shadow-sm">
                     <RefreshCw className="w-4 h-4 text-rose-500" />
@@ -878,20 +881,20 @@ export default function LiveOrdersPage() {
                 </motion.div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-5">
+            <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-5">
                 {[
                     { label: 'Active Orders', value: activeOrders.length.toString(), icon: '📦' },
                     { label: 'Tables Occupied', value: `${busyTables}/${floorTables.length}`, icon: '🪑' },
                     { label: 'New Orders', value: orders.filter(o => o.status === 'new').length.toString(), icon: '⏱️' },
                     { label: 'Ready to Serve', value: orders.filter(o => o.status === 'done').length.toString(), icon: '✅' },
                 ].map((stat, i) => (
-                    <motion.div key={stat.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }} whileHover={{ y: -4 }} className="premium-glass p-5 lg:p-6">
+                    <motion.div key={stat.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }} whileHover={{ y: -4 }} className={cn('premium-glass p-5 lg:p-6', isMobileViewport && 'p-3')}>
                         <div className="flex items-start justify-between">
                             <div>
-                                <p className="text-xs lg:text-sm text-slate-500">{stat.label}</p>
-                                <p className="text-2xl lg:text-3xl font-extrabold text-slate-900 mt-1 tracking-tight">{stat.value}</p>
+                                <p className={cn('text-slate-500', isMobileViewport ? 'text-[11px]' : 'text-xs lg:text-sm')}>{stat.label}</p>
+                                <p className={cn('font-extrabold text-slate-900 mt-1 tracking-tight', isMobileViewport ? 'text-xl' : 'text-2xl lg:text-3xl')}>{stat.value}</p>
                             </div>
-                            <span className="text-xl lg:text-2xl p-2 rounded-xl bg-rose-50 border border-rose-100">{stat.icon}</span>
+                            <span className={cn('rounded-xl bg-rose-50 border border-rose-100', isMobileViewport ? 'text-base p-1.5' : 'text-xl lg:text-2xl p-2')}>{stat.icon}</span>
                         </div>
                     </motion.div>
                 ))}
@@ -900,7 +903,7 @@ export default function LiveOrdersPage() {
             <div className={cn("grid grid-cols-1 gap-4 lg:gap-6", isPro && "lg:grid-cols-2")}>
                 {/* Floor Overview - Pro Only */}
                 {isPro ? (
-                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="premium-glass p-5 lg:p-7">
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className={cn('premium-glass p-5 lg:p-7', isMobileViewport && 'p-3')}>
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-3">
                             <h2 className="text-base lg:text-lg font-semibold text-slate-900">Floor Overview</h2>
                             <div className="flex items-center gap-3 lg:gap-4 flex-wrap justify-end">
@@ -924,7 +927,7 @@ export default function LiveOrdersPage() {
                                         3D
                                     </button>
                                 </div>
-                                <div className="flex items-center gap-3 lg:gap-4 text-xs">
+                                <div className="hidden sm:flex items-center gap-3 lg:gap-4 text-xs">
                                     {Object.entries(tableStatusConfig).map(([key, cfg]) => (
                                         <div key={key} className="flex items-center gap-2">
                                             <div className={cn('w-3 h-3 rounded border', cfg.color, cfg.border)} />
@@ -938,7 +941,7 @@ export default function LiveOrdersPage() {
                         <div className="rounded-2xl border border-white/30 overflow-visible">
                             {floorViewMode === '2d' ? (
                                 <div
-                                    className="relative w-full h-[52vh] min-h-[320px] max-h-[460px] bg-gradient-to-br from-slate-900/[0.03] to-emerald-500/[0.04] p-3 lg:p-5"
+                                    className={cn('relative w-full bg-gradient-to-br from-slate-900/[0.03] to-emerald-500/[0.04] p-3 lg:p-5', floorOverviewHeightClass)}
                                     style={{
                                         backgroundImage: 'radial-gradient(circle, #94a3b8 1px, transparent 1px)',
                                         backgroundSize: '22px 22px'
@@ -1011,7 +1014,7 @@ export default function LiveOrdersPage() {
                                     })}
                                 </div>
                             ) : (
-                                <div className="relative w-full h-[52vh] min-h-[320px] max-h-[460px] bg-slate-100">
+                                <div className={cn('relative w-full bg-slate-100', floorOverviewHeightClass)}>
                                     <LiveOrdersFloor3D
                                         tables={floorTables}
                                         selectedTableId={selectedTableId}
