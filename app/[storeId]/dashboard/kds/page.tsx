@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { ChefHat, Clock3, Flame, Sparkles } from 'lucide-react';
@@ -446,6 +447,7 @@ export default function KdsPage() {
     const pendingOrders = useMemo(() => orders.filter((o) => o.status === 'new'), [orders]);
     const preparingOrders = useMemo(() => orders.filter((o) => o.status === 'preparing'), [orders]);
     const readyOrders = useMemo(() => orders.filter((o) => o.status === 'done'), [orders]);
+    const historyHref = storeId ? `/${storeId}/dashboard/history` : '#';
 
     const updateStatus = async (order: KdsOrder) => {
         if (!storeId || !db) return;
@@ -492,9 +494,23 @@ export default function KdsPage() {
                             </h1>
                             <p className="mt-1 text-sm text-slate-600">Live Kanban board for active kitchen orders.</p>
                         </div>
-                        <div className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs text-slate-700">
-                            <Sparkles className="h-3.5 w-3.5 text-emerald-600" />
-                            Optimized for landscape tablet and TV view
+                        <div className="flex items-center gap-2">
+                            <Link
+                                href={historyHref}
+                                aria-disabled={!storeId}
+                                className={[
+                                    'inline-flex items-center rounded-xl border px-3 py-1.5 text-xs font-semibold transition-colors',
+                                    storeId
+                                        ? 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100'
+                                        : 'pointer-events-none border-slate-200 bg-slate-100 text-slate-400',
+                                ].join(' ')}
+                            >
+                                Order History
+                            </Link>
+                            <div className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs text-slate-700">
+                                <Sparkles className="h-3.5 w-3.5 text-emerald-600" />
+                                Optimized for landscape tablet and TV view
+                            </div>
                         </div>
                     </div>
                     {listenerError ? (
