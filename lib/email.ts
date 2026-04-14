@@ -30,6 +30,30 @@ function resolveFromEmail(): string | null {
     return DEV_FALLBACK_FROM;
 }
 
+function resolvePublicSiteOrigin(): string {
+    const candidates = [
+        process.env.NEXT_PUBLIC_SITE_URL,
+        process.env.NEXT_PUBLIC_APP_URL,
+        process.env.NEXT_PUBLIC_MENU_BASE_URL,
+        'https://nexresto.in',
+    ];
+
+    for (const candidate of candidates) {
+        const raw = String(candidate || '').trim();
+        if (!raw) continue;
+
+        const normalized = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+        try {
+            const url = new URL(normalized);
+            return url.origin;
+        } catch {
+            // try next candidate
+        }
+    }
+
+    return 'https://nexresto.in';
+}
+
 export async function sendOtpEmail(to: string, otp: string, restaurantName: string): Promise<{ success: boolean; error?: string }> {
     if (!process.env.RESEND_API_KEY) {
         console.error('[EMAIL] RESEND_API_KEY not configured');
@@ -408,6 +432,8 @@ export async function sendDemoRequestLoginUrlEmail(params: {
     const contactName = escapeHtml(params.contactName || 'there');
     const restaurantName = escapeHtml(params.restaurantName || 'your restaurant');
     const loginUrl = escapeHtml(params.loginUrl);
+    const downloadUrl = `${resolvePublicSiteOrigin()}/download`;
+    const safeDownloadUrl = escapeHtml(downloadUrl);
 
     try {
         const { data, error } = await getResendClient().emails.send({
@@ -422,12 +448,28 @@ export async function sendDemoRequestLoginUrlEmail(params: {
                         Thanks for completing the demo for <strong>${restaurantName}</strong>. You can now access your NexResto account using the login page below.
                     </p>
 
+                    <div style="margin: 0 0 16px; padding: 12px; border-radius: 10px; background: #f8fafc; border: 1px solid #e2e8f0; color: #334155; font-size: 14px; line-height: 1.7;">
+                        <strong>Next steps:</strong><br />
+                        1. Create your account from the login page link.<br />
+                        2. After account setup is complete, download and install the APK app.
+                    </div>
+
                     <a href="${loginUrl}" style="display: inline-block; background: #ea580c; color: #ffffff; text-decoration: none; padding: 12px 18px; border-radius: 10px; font-weight: 600;">
-                        Open Login Page
+                        Step 1: Open Login Page
                     </a>
+
+                    <div style="margin-top: 12px;">
+                        <a href="${safeDownloadUrl}" style="display: inline-block; background: #2563eb; color: #ffffff; text-decoration: none; padding: 12px 18px; border-radius: 10px; font-weight: 600;">
+                            Step 2: Download APK App
+                        </a>
+                    </div>
 
                     <p style="margin: 16px 0 0; color: #475569; line-height: 1.6;">
                         Direct URL: <a href="${loginUrl}" style="color: #2563eb; word-break: break-all;">${loginUrl}</a>
+                    </p>
+
+                    <p style="margin: 10px 0 0; color: #475569; line-height: 1.6;">
+                        Download page: <a href="${safeDownloadUrl}" style="color: #2563eb; word-break: break-all;">${safeDownloadUrl}</a>
                     </p>
 
                     <p style="margin-top: 20px; color: #64748b; font-size: 12px;">
