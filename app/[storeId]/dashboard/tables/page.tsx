@@ -1318,8 +1318,35 @@ export default function TablesQRCodesPage() {
         return `T-${String(highest + 1).padStart(2, '0')}`;
     }, []);
 
+    const normalizeTables = useCallback((rawTables: Table[]) => {
+        const usedIds = new Set<string>();
+        const nextTables: Table[] = [];
+
+        rawTables.forEach((table, idx) => {
+            const desiredId = String(table?.id || '').trim().toUpperCase();
+            const fallbackId = getNextTableId(Array.from(usedIds));
+            const resolvedId = desiredId && !usedIds.has(desiredId) ? desiredId : fallbackId;
+            usedIds.add(resolvedId);
+
+            const numericId = Number((resolvedId.match(/(\d+)/)?.[1]) || idx + 1);
+            const status: Table['status'] = table?.status === 'busy' || table?.status === 'reserved' ? table.status : 'available';
+
+            nextTables.push({
+                id: resolvedId,
+                name: String(table?.name || '').trim() || `Table ${numericId}`,
+                seats: Math.max(1, Math.min(20, Number(table?.seats || 4))),
+                x: Number.isFinite(Number(table?.x)) ? Number(table.x) : 100,
+                y: Number.isFinite(Number(table?.y)) ? Number(table.y) : 100,
+                status,
+            });
+        });
+
+        return nextTables;
+    }, [getNextTableId]);
+
     const saveLayoutToServer = useCallback(async (nextTables: Table[], nextWalls: Wall[], nextDesks: Desk[], nextPlans: FloorPlan[]) => {
         if (!tenantId) return;
+        const stableTables = normalizeTables(nextTables);
         const token = await getActiveToken();
         const response = await fetch('/api/tables/layout', {
             method: 'POST',
@@ -1329,7 +1356,7 @@ export default function TablesQRCodesPage() {
             },
             body: JSON.stringify({
                 restaurantId: tenantId,
-                tables: nextTables,
+                tables: stableTables,
                 walls: nextWalls,
                 desks: nextDesks,
                 floorPlans: nextPlans,
@@ -1340,7 +1367,7 @@ export default function TablesQRCodesPage() {
             const payload = await response.json().catch(() => ({}));
             throw new Error(payload?.error || 'Failed to save table layout');
         }
-    }, [tenantId, getActiveToken]);
+    }, [tenantId, getActiveToken, normalizeTables]);
     const isPro = hasSubscriptionFeature(subscriptionTier, 'premium_dashboard');
     // 3D spatial mapping should be available to all Pro users.
     const isSpatialPro = isPro;
@@ -1550,11 +1577,12 @@ export default function TablesQRCodesPage() {
             } as Table;
         });
 
-        setTables(updatedTables);
+        const stableUpdatedTables = normalizeTables(updatedTables);
+        setTables(stableUpdatedTables);
         setHasChanges(true);
-        await saveLayoutToServer(updatedTables, walls, desks, floorPlans);
+        await saveLayoutToServer(stableUpdatedTables, walls, desks, floorPlans);
         toast.success('Floor plan saved for this hotel');
-    }, [tenantId, detectedTables, tables, mapNormalizedToAbsolute, saveLayoutToServer, walls, desks, floorPlans]);
+    }, [tenantId, detectedTables, tables, mapNormalizedToAbsolute, saveLayoutToServer, walls, desks, floorPlans, normalizeTables]);
 
     const addDetectedTable = useCallback(() => {
         setDetectedTables((prev) => {
@@ -1678,17 +1706,18 @@ export default function TablesQRCodesPage() {
             } as Table;
         });
 
-        setTables(updated);
+        const stableUpdated = normalizeTables(updated);
+        setTables(stableUpdated);
         setHasChanges(true);
 
-        await saveLayoutToServer(updated, walls, desks, floorPlans);
+        await saveLayoutToServer(stableUpdated, walls, desks, floorPlans);
 
         await addDoc(collection(db, 'restaurants', tenantId, 'floor_plans'), {
             source: 'ai_auto_layout_3d',
             createdAt: serverTimestamp(),
             capturedImagePreview,
             tablesNormalized: detectedTables,
-            tablesAbsolute: updated,
+            tablesAbsolute: stableUpdated,
             walls,
             desks,
         }).catch(() => {
@@ -1696,7 +1725,7 @@ export default function TablesQRCodesPage() {
         });
 
         setAutoLayoutStep('idle');
-    }, [tenantId, detectedTables, tables, mapNormalizedToAbsolute, saveLayoutToServer, walls, desks, floorPlans, capturedImagePreview]);
+    }, [tenantId, detectedTables, tables, mapNormalizedToAbsolute, saveLayoutToServer, walls, desks, floorPlans, capturedImagePreview, normalizeTables]);
 
     useEffect(() => {
         let active = true;
@@ -1729,7 +1758,8 @@ export default function TablesQRCodesPage() {
                 if (response.ok) {
                     const payload = await response.json();
                     if (payload?.found && payload?.layout) {
-                        const serverTables = Array.isArray(payload.layout.tables) ? payload.layout.tables as Table[] : [];
+                        const serverTablesRaw = Array.isArray(payload.layout.tables) ? payload.layout.tables as Table[] : [];
+                        const serverTables = normalizeTables(serverTablesRaw);
                         const serverWalls = Array.isArray(payload.layout.walls) ? payload.layout.walls as Wall[] : [];
                         const serverDesks = Array.isArray(payload.layout.desks) ? payload.layout.desks as Desk[] : [];
                         const serverPlans = Array.isArray(payload.layout.floorPlans) ? payload.layout.floorPlans as FloorPlan[] : [];
@@ -1789,7 +1819,8 @@ export default function TablesQRCodesPage() {
                 if (!snapshot.exists()) return;
                 const data = snapshot.data() as Record<string, unknown>;
 
-                const incomingTables = Array.isArray(data?.tables) ? (data.tables as Table[]) : [];
+                        const incomingTablesRaw = Array.isArray(data?.tables) ? (data.tables as Table[]) : [];
+                        const incomingTables = normalizeTables(incomingTablesRaw);
                 const incomingWalls = Array.isArray(data?.walls) ? (data.walls as Wall[]) : [];
                 const incomingDesks = Array.isArray(data?.desks) ? (data.desks as Desk[]) : [];
                 const incomingPlans = Array.isArray(data?.floorPlans) ? (data.floorPlans as FloorPlan[]) : [];
@@ -1812,7 +1843,7 @@ export default function TablesQRCodesPage() {
         );
 
         return () => unsubscribe();
-    }, [tenantId, isLoaded, isSameJson]);
+    }, [tenantId, isLoaded, isSameJson, normalizeTables]);
 
     useEffect(() => {
         const syncViewport = () => {
@@ -1909,7 +1940,13 @@ export default function TablesQRCodesPage() {
         };
     }, [tenantId, isLoaded, getActiveToken]);
 
-    const addTable = () => { const newT: Table = { id: `T-${String(tables.length + 1).padStart(2, '0')}`, name: `Table ${tables.length + 1}`, seats: 4, x: 100, y: 100, status: 'available' }; setTables([...tables, newT]); setHasChanges(true); };
+    const addTable = () => {
+        const nextId = getNextTableId(tables.map((t) => t.id));
+        const num = Number(nextId.match(/(\d+)/)?.[1] || tables.length + 1);
+        const newT: Table = { id: nextId, name: `Table ${num}`, seats: 4, x: 100, y: 100, status: 'available' };
+        setTables(normalizeTables([...tables, newT]));
+        setHasChanges(true);
+    };
     const removeTable = () => {
         if (tables.length > 0) {
             const newTables = tables.slice(0, -1);
@@ -1923,9 +1960,9 @@ export default function TablesQRCodesPage() {
 
     // Modal-based table management handlers
     const addTableWithDetails = (name: string, seats: number) => {
-        const newId = `T-${String(tables.length + 1).padStart(2, '0')}`;
+        const newId = getNextTableId(tables.map((t) => t.id));
         const newT: Table = { id: newId, name, seats, x: 100 + (tables.length % 5) * 120, y: 100 + Math.floor(tables.length / 5) * 120, status: 'available' };
-        const newTables = [...tables, newT];
+        const newTables = normalizeTables([...tables, newT]);
         setTables(newTables);
         setHasChanges(true);
         localStorage.setItem(scopedKey('hotelmenu_floorplan_tables'), JSON.stringify(newTables));

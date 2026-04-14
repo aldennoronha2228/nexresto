@@ -175,7 +175,7 @@ export function GourmetCatalogLayout({
                         priority
                         className="h-8 w-8 rounded-full ring-1 ring-white/20 sm:h-9 sm:w-9"
                     />
-                    <h1 className={`${cinzel.className} max-w-[56vw] truncate text-[1.78rem] font-semibold tracking-[0.03em] text-[#f4f4f3] drop-shadow-[0_1px_0_rgba(0,0,0,0.55)] sm:max-w-none sm:text-[2.05rem]`}>
+                    <h1 className={`${cinzel.className} max-w-[56vw] truncate text-[1.55rem] font-semibold tracking-[0.03em] text-[#f4f4f3] drop-shadow-[0_1px_0_rgba(0,0,0,0.55)] sm:max-w-none sm:text-[1.8rem]`}>
                         {restaurantName}
                     </h1>
                 </div>
