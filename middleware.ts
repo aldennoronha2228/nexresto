@@ -156,12 +156,10 @@ function isAppClient(request: NextRequest): boolean {
     const ua = (request.headers.get('user-agent') || '').toLowerCase();
     const appHint = (request.nextUrl.searchParams.get('app') || '').toLowerCase();
 
-    const xRequestedWith = (request.headers.get('x-requested-with') || '').toLowerCase();
     const isWindowsDesktopApp = ua.includes('nativefier') || ua.includes('electron');
-    const isAndroidAppWebView = ua.includes(' wv') && xRequestedWith.startsWith('com.');
     const hasExplicitAppHint = appHint === '1' || appHint === 'true';
 
-    return isWindowsDesktopApp || isAndroidAppWebView || hasExplicitAppHint;
+    return isWindowsDesktopApp || hasExplicitAppHint;
 }
 
 // ─── Main middleware ───────────────────────────────────────────────────────────
