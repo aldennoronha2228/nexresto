@@ -59,6 +59,7 @@ const appArgs = playwrightHelpers_1.IS_PLAYWRIGHT && playwrightHelpers_1.PLAYWRI
     ? JSON.parse(playwrightHelpers_1.PLAYWRIGHT_CONFIG)
     : JSON.parse(fs_1.default.readFileSync(mainWindow_1.APP_ARGS_FILE_PATH, 'utf8'));
 log.debug('appArgs', appArgs);
+electron_1.app.setName('NexResto');
 // Do this relatively early so that we can start storing appData with the app
 if (appArgs.portable) {
     log.debug('App was built as portable; setting appData and userData to the app folder: ', path.resolve(path.join(__dirname, '..', 'appData')));
@@ -77,7 +78,7 @@ if (!appArgs.userAgentHonest) {
 // https://www.electronjs.org/docs/latest/api/app#appsetappusermodelidid-windows
 // https://www.electronjs.org/docs/latest/tutorial/notifications#windows
 if ((0, helpers_1.isWindows)()) {
-    electron_1.app.setAppUserModelId(electron_1.app.getName());
+  electron_1.app.setAppUserModelId('in.nexresto.desktop');
 }
 const urlArgv = process.argv.filter((a) => a.startsWith('http'));
 // Take in a URL on the command line as an override
