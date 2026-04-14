@@ -3,9 +3,42 @@
 import React, { Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCart } from '@/context/CartContext';
+import type { CartItem } from '@/context/CartContext';
 import { submitOrderToFirestore } from '@/lib/firebase-submit-order';
-import { getTenantCustomerStorageKey, getTenantTableStorageKey } from '@/lib/client/storage/tenantKeys';
+import { getTenantCheckoutSnapshotKey, getTenantCustomerStorageKey, getTenantTableStorageKey } from '@/lib/client/storage/tenantKeys';
 import { isValidPhone, normalizePhone } from '@/lib/customer-tracking';
+
+type CheckoutSnapshot = {
+    items: CartItem[];
+    subtotal: number;
+    tableId?: string;
+    createdAt?: number;
+};
+
+function readCheckoutSnapshot(restaurantId: string): CheckoutSnapshot | null {
+    if (typeof window === 'undefined' || !restaurantId) return null;
+
+    try {
+        const raw = sessionStorage.getItem(getTenantCheckoutSnapshotKey(restaurantId));
+        if (!raw) return null;
+
+        const parsed = JSON.parse(raw) as Partial<CheckoutSnapshot>;
+        if (!Array.isArray(parsed.items) || parsed.items.length === 0) return null;
+
+        const createdAt = Number(parsed.createdAt || 0);
+        const ageMs = Date.now() - createdAt;
+        if (!Number.isFinite(createdAt) || ageMs > 45 * 60 * 1000) return null;
+
+        return {
+            items: parsed.items,
+            subtotal: Number(parsed.subtotal || 0),
+            tableId: typeof parsed.tableId === 'string' ? parsed.tableId : undefined,
+            createdAt,
+        };
+    } catch {
+        return null;
+    }
+}
 
 function formatINR(value: number): string {
     return new Intl.NumberFormat('en-IN', {
@@ -18,7 +51,7 @@ function formatINR(value: number): string {
 function OrderSummaryContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
-    const { cart, totalPrice, clearCart, totalItems, saveOrder } = useCart();
+    const { cart, totalPrice, clearCart, saveOrder } = useCart();
 
     const restaurantId = (searchParams.get('restaurant') || '').trim();
     const queryTable = (searchParams.get('table') || searchParams.get('tableId') || '').trim();
@@ -29,9 +62,9 @@ function OrderSummaryContent() {
     const [orderNumber, setOrderNumber] = React.useState<number>(0);
     const [tableReady, setTableReady] = React.useState(false);
     const [customerProfile, setCustomerProfile] = React.useState<{ name: string; phone: string } | null>(null);
+    const [submittedCart, setSubmittedCart] = React.useState<CartItem[]>(cart);
+    const [submittedSubtotal, setSubmittedSubtotal] = React.useState<number>(totalPrice);
 
-    const frozenCartRef = React.useRef(cart);
-    const frozenTotalRef = React.useRef(totalPrice);
     const submittedRef = React.useRef(false);
 
     React.useEffect(() => {
@@ -85,6 +118,11 @@ function OrderSummaryContent() {
         return `/customer${params.toString() ? `?${params.toString()}` : ''}`;
     }, [tableId, restaurantId]);
 
+    const checkoutSnapshotKey = React.useMemo(
+        () => (restaurantId ? getTenantCheckoutSnapshotKey(restaurantId) : ''),
+        [restaurantId]
+    );
+
     React.useEffect(() => {
         if (!tableReady) return;
         if (submittedRef.current) return;
@@ -101,17 +139,24 @@ function OrderSummaryContent() {
             return;
         }
 
-        if (frozenCartRef.current.length === 0) {
+        const snapshot = readCheckoutSnapshot(restaurantId);
+        const cartToSubmit = cart.length > 0 ? cart : (snapshot?.items || []);
+        const subtotalToSubmit = cart.length > 0 ? totalPrice : Number(snapshot?.subtotal || 0);
+
+        if (cartToSubmit.length === 0) {
             router.replace(backToMenuUrl);
             return;
         }
 
+        setSubmittedCart(cartToSubmit);
+        setSubmittedSubtotal(subtotalToSubmit);
+
         submittedRef.current = true;
 
         submitOrderToFirestore(
-            frozenCartRef.current,
+            cartToSubmit,
             tableId,
-            frozenTotalRef.current + 5,
+            subtotalToSubmit + 5,
             restaurantId,
             customerProfile || undefined
         )
@@ -120,20 +165,39 @@ function OrderSummaryContent() {
                 saveOrder({
                     id: orderId,
                     orderNumber: dailyOrderNumber,
-                    items: frozenCartRef.current,
-                    totalPrice: frozenTotalRef.current + 5,
+                    items: cartToSubmit,
+                    totalPrice: subtotalToSubmit + 5,
                     date: now.toLocaleDateString('en-IN'),
                     time: now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
                 });
                 setOrderNumber(dailyOrderNumber);
                 clearCart();
+                if (checkoutSnapshotKey) {
+                    sessionStorage.removeItem(checkoutSnapshotKey);
+                }
                 setStatus('success');
             })
             .catch((err: unknown) => {
                 setStatus('error');
                 setError(err instanceof Error ? err.message : 'Could not submit order');
             });
-    }, [router, backToMenuUrl, clearCart, restaurantId, saveOrder, tableId, customerProfile, tableReady]);
+    }, [
+        router,
+        backToMenuUrl,
+        clearCart,
+        restaurantId,
+        saveOrder,
+        tableId,
+        customerProfile,
+        tableReady,
+        cart,
+        totalPrice,
+        checkoutSnapshotKey,
+    ]);
+
+    const displayedCart = submittedCart.length > 0 ? submittedCart : cart;
+    const displayedSubtotal = submittedCart.length > 0 ? submittedSubtotal : totalPrice;
+    const displayedItemCount = displayedCart.reduce((sum, item) => sum + item.quantity, 0);
 
     return (
         <div className="min-h-screen bg-[#131313] px-4 py-10 text-stone-200">
@@ -160,8 +224,8 @@ function OrderSummaryContent() {
                         <p className="text-sm text-stone-300">Your order is now live in the dashboard queue.</p>
                         <div className="rounded border border-white/10 bg-black/25 p-4 text-sm">
                             <p>Order Number: #{orderNumber || '...'}</p>
-                            <p>Items: {frozenCartRef.current.length}</p>
-                            <p>Total: {formatINR(frozenTotalRef.current + 5)}</p>
+                            <p>Items: {displayedCart.length}</p>
+                            <p>Total: {formatINR(displayedSubtotal + 5)}</p>
                             <p>Table: {tableId || 'N/A'}</p>
                         </div>
                         <button type="button" onClick={() => router.push(backToMenuUrl)} className="rounded bg-emerald-600 px-4 py-2 text-sm font-semibold text-white">
@@ -170,11 +234,11 @@ function OrderSummaryContent() {
                     </div>
                 )}
 
-                {frozenCartRef.current.length > 0 && (
+                {displayedCart.length > 0 && (
                     <div className="mt-6 border-t border-white/10 pt-4">
                         <p className="mb-2 text-xs uppercase tracking-wider text-stone-400">Receipt</p>
                         <div className="space-y-2 text-sm">
-                            {frozenCartRef.current.map((item) => (
+                            {displayedCart.map((item) => (
                                 <div key={item.id} className="flex items-center justify-between">
                                     <span>{item.name} x {item.quantity}</span>
                                     <span>{formatINR(item.price * item.quantity)}</span>
@@ -182,8 +246,8 @@ function OrderSummaryContent() {
                             ))}
                         </div>
                         <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-3 text-sm">
-                            <span>Subtotal ({totalItems} items)</span>
-                            <span>{formatINR(frozenTotalRef.current)}</span>
+                            <span>Subtotal ({displayedItemCount} items)</span>
+                            <span>{formatINR(displayedSubtotal)}</span>
                         </div>
                     </div>
                 )}

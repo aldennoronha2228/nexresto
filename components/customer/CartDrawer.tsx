@@ -4,7 +4,7 @@ import React from 'react';
 import { useRouter } from 'next/navigation';
 import { useCart } from '@/context/CartContext';
 import { QuantitySelector } from '@/components/customer/QuantitySelector';
-import { getTenantTableStorageKey } from '@/lib/client/storage/tenantKeys';
+import { getTenantCheckoutSnapshotKey, getTenantTableStorageKey } from '@/lib/client/storage/tenantKeys';
 
 function formatINR(value: number): string {
     return new Intl.NumberFormat('en-IN', {
@@ -53,6 +53,22 @@ export function CartDrawer({ tableId = '', restaurantId }: CartDrawerProps) {
         setTableError(null);
         if (restaurantId && finalTable) {
             localStorage.setItem(getTenantTableStorageKey(restaurantId), finalTable);
+        }
+
+        if (restaurantId) {
+            try {
+                sessionStorage.setItem(
+                    getTenantCheckoutSnapshotKey(restaurantId),
+                    JSON.stringify({
+                        items: cart,
+                        subtotal: totalPrice,
+                        tableId: finalTable,
+                        createdAt: Date.now(),
+                    })
+                );
+            } catch {
+                // Ignore storage failures and continue checkout.
+            }
         }
 
         const params = new URLSearchParams();

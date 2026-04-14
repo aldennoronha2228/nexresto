@@ -10,6 +10,10 @@ export function getTenantCustomerStorageKey(restaurantId: string): string {
     return `nexresto:customer-profile:${restaurantId}`;
 }
 
+export function getTenantCheckoutSnapshotKey(restaurantId: string): string {
+    return `nexresto:checkout-snapshot:${restaurantId}`;
+}
+
 export function resolveRestaurantIdFromSearch(defaultValue = 'default'): string {
     if (typeof window === 'undefined') return defaultValue;
     const params = new URLSearchParams(window.location.search);
