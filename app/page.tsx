@@ -58,9 +58,7 @@ export default function RootPage() {
     loading ||
     tenantLoading ||
     adminLoading ||
-    mustChangePassword ||
-    Boolean(adminSession) ||
-    Boolean(session);
+    mustChangePassword;
 
   useEffect(() => {
     if (loading || tenantLoading || adminLoading) return;
