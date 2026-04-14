@@ -153,6 +153,7 @@ export function GourmetCatalogLayout({
     const accentSecondary = '#8f9491';
     const heroTitle = (branding.heroHeadline || "Chef's Table").trim();
     const heroSubtitle = (branding.heroTagline || 'A curated menu crafted for your table.').trim();
+    const headerLogoSrc = (branding.logoUrl || '').trim() || '/nexresto-logo.svg';
     const currentCategoryLabel = activeCategory === 'All' ? 'Signature Selection' : getCategoryLabel(activeCategory);
     const isImportedCategory = activeCategory.toLowerCase().startsWith('imported from sheet');
 
@@ -161,7 +162,7 @@ export function GourmetCatalogLayout({
             <header className="fixed top-0 z-40 flex h-20 w-full items-center justify-between border-b border-white/10 bg-[#0c0d0e]/72 px-4 text-[#d8d9d8] backdrop-blur-2xl sm:px-6">
                 <div className="flex min-w-0 items-center gap-3 sm:gap-4">
                     <Image
-                        src="/nexresto-logo-current.png?v=20260414"
+                        src={headerLogoSrc}
                         alt="NexResto logo"
                         width={56}
                         height={56}
