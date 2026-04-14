@@ -154,14 +154,14 @@ function hasPathTraversal(pathname: string): boolean {
 
 function isAppClient(request: NextRequest): boolean {
     const ua = (request.headers.get('user-agent') || '').toLowerCase();
-    const xRequestedWith = (request.headers.get('x-requested-with') || '').toLowerCase();
     const appHint = (request.nextUrl.searchParams.get('app') || '').toLowerCase();
 
+    const xRequestedWith = (request.headers.get('x-requested-with') || '').toLowerCase();
     const isWindowsDesktopApp = ua.includes('nativefier') || ua.includes('electron');
-    const isAndroidWebViewApp = xRequestedWith.length > 0 && xRequestedWith !== 'xmlhttprequest';
+    const isAndroidAppWebView = ua.includes(' wv') && xRequestedWith.startsWith('com.');
     const hasExplicitAppHint = appHint === '1' || appHint === 'true';
 
-    return isWindowsDesktopApp || isAndroidWebViewApp || hasExplicitAppHint;
+    return isWindowsDesktopApp || isAndroidAppWebView || hasExplicitAppHint;
 }
 
 // ─── Main middleware ───────────────────────────────────────────────────────────
