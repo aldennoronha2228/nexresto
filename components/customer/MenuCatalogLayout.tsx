@@ -358,28 +358,33 @@ export function GourmetCatalogLayout({
                 </section>
             </main>
 
-            <nav className="fixed bottom-0 left-0 z-40 flex h-14 w-full items-center justify-around border-t border-white/10 bg-[#0c0d0e]/72 px-3 pb-1 backdrop-blur-3xl">
-                <div className="flex flex-col items-center justify-center text-[#d7d9d7]">
-                    <BookOpen className="h-4 w-4" />
-                    <span className="mt-0 text-[10px] font-semibold uppercase tracking-[0.08em] leading-none">Menu</span>
+            <nav className="fixed bottom-0 left-0 z-40 w-full border-t border-white/10 bg-[#090c0d]/90 px-3 py-2 backdrop-blur-2xl">
+                <div className="mx-auto grid w-full max-w-xl grid-cols-3 gap-2">
+                    <div className="flex h-12 items-center justify-center gap-1.5 rounded-2xl border border-[#384045] bg-[#171d20] text-[#f1f3f2] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+                        <BookOpen className="h-4 w-4" />
+                        <span className="text-[11px] font-semibold uppercase tracking-[0.1em] leading-none">Menu</span>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={onOpenOrders}
+                        className="flex h-12 items-center justify-center gap-1.5 rounded-2xl border border-[#2b3236] bg-[#111619] text-[#9da7ab] transition-colors hover:border-[#3a4348] hover:text-[#e5e8e7]"
+                    >
+                        <ClipboardList className="h-4 w-4" />
+                        <span className="text-[11px] font-semibold uppercase tracking-[0.1em] leading-none">Orders</span>
+                    </button>
+                    <button
+                        type="button"
+                        onClick={onOpenCart}
+                        className="flex h-12 items-center justify-center gap-1.5 rounded-2xl border border-[#4a3219] bg-[#f97316] text-[#1f140a] transition-colors hover:bg-[#fb8a3e]"
+                    >
+                        <ShoppingBag className="h-4 w-4" />
+                        <span className="text-[11px] font-semibold uppercase tracking-[0.1em] leading-none">Cart</span>
+                        <span className="rounded-full bg-[#1f140a]/12 px-1.5 py-0.5 text-[10px] font-semibold leading-none">{totalItems}</span>
+                    </button>
                 </div>
-                <button
-                    type="button"
-                    onClick={onOpenOrders}
-                    className="flex flex-col items-center justify-center text-[#8f9391] transition-colors hover:text-white"
-                >
-                    <ClipboardList className="h-4 w-4" />
-                    <span className="mt-0 text-[10px] font-semibold uppercase tracking-[0.08em] leading-none">Orders</span>
-                </button>
-                <button
-                    type="button"
-                    onClick={onOpenCart}
-                    className="flex flex-col items-center justify-center text-[#e5e6e5]"
-                >
-                    <ShoppingBag className="h-4 w-4" />
-                    <span className="mt-0 text-[10px] font-semibold uppercase tracking-[0.08em] leading-none">Cart ({totalItems})</span>
-                    <span className="text-[10px] leading-none text-[#9b9f9c]">{formatINR(totalPrice)}</span>
-                </button>
+                <div className="mt-1 flex justify-center">
+                    <span className="text-[10px] font-medium text-[#9aa1a4]">{formatINR(totalPrice)}</span>
+                </div>
                 <p className="absolute -top-3 left-1/2 -translate-x-1/2 text-[9px] uppercase tracking-[0.12em] text-[#6f7572]">
                     Powered by NexResto
                 </p>

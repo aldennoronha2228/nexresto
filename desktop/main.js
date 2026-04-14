@@ -7,6 +7,11 @@ const TARGET_URL = process.env.NEXRESTO_DESKTOP_URL || 'https://nexresto.in/logi
 
 let mainWindow;
 
+app.setName('NexResto');
+if (process.platform === 'win32') {
+  app.setAppUserModelId('in.nexresto.desktop');
+}
+
 function resolveWindowIcon() {
   const devIconPath = path.join(__dirname, 'assets', 'icon.ico');
   if (!app.isPackaged) {
@@ -48,6 +53,14 @@ function createMainWindow() {
     if (!isInternal) {
       event.preventDefault();
       shell.openExternal(url);
+    }
+  });
+
+  mainWindow.on('page-title-updated', (event, title) => {
+    const normalizedTitle = typeof title === 'string' ? title.trim() : '';
+    if (!normalizedTitle || normalizedTitle.toLowerCase() === 'undefined') {
+      event.preventDefault();
+      mainWindow.setTitle('NexResto');
     }
   });
 

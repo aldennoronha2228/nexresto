@@ -80,6 +80,21 @@ if (!appArgs.userAgentHonest) {
 if ((0, helpers_1.isWindows)()) {
   electron_1.app.setAppUserModelId('in.nexresto.desktop');
 }
+function enforceWindowTitleIdentity(windowRef) {
+  if (!windowRef) {
+    return;
+  }
+  windowRef.on('page-title-updated', (event, title) => {
+    const normalizedTitle = typeof title === 'string' ? title.trim() : '';
+    if (!normalizedTitle || normalizedTitle.toLowerCase() === 'undefined') {
+      event.preventDefault();
+      windowRef.setTitle((appArgs === null || appArgs === void 0 ? void 0 : appArgs.name) || 'NexResto');
+    }
+  });
+}
+electron_1.app.on('browser-window-created', (_event, windowRef) => {
+  enforceWindowTitleIdentity(windowRef);
+});
 const urlArgv = process.argv.filter((a) => a.startsWith('http'));
 // Take in a URL on the command line as an override
 if (urlArgv.length > 0) {
