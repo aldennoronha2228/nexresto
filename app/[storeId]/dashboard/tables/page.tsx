@@ -1748,6 +1748,51 @@ export default function TablesQRCodesPage() {
             desks: defaultSeedDesks,
         }];
 
+        const emptySeedTables: Table[] = [];
+        const emptySeedWalls: Wall[] = [];
+        const emptySeedDesks: Desk[] = [];
+        const emptySeedPlans: FloorPlan[] = [{
+            id: '1',
+            name: 'Default Layout',
+            tables: emptySeedTables,
+            walls: emptySeedWalls,
+            desks: emptySeedDesks,
+        }];
+
+        const tryLoadScopedLocalState = (): {
+            tables: Table[];
+            walls: Wall[];
+            desks: Desk[];
+            plans: FloorPlan[];
+        } | null => {
+            if (typeof window === 'undefined') return null;
+            try {
+                const storedTables = localStorage.getItem(scopedKey('hotelmenu_floorplan_tables'));
+                const storedWalls = localStorage.getItem(scopedKey('hotelmenu_walls'));
+                const storedDesks = localStorage.getItem(scopedKey('hotelmenu_desks'));
+                const storedPlans = localStorage.getItem(scopedKey('hotelmenu_floorPlans'));
+
+                const parsedTables = storedTables ? normalizeTables(JSON.parse(storedTables) as Table[]) : [];
+                const parsedWalls = storedWalls ? (JSON.parse(storedWalls) as Wall[]) : [];
+                const parsedDesks = storedDesks ? (JSON.parse(storedDesks) as Desk[]) : [];
+                const parsedPlans = storedPlans ? (JSON.parse(storedPlans) as FloorPlan[]) : [];
+
+                const hasLocalData = parsedTables.length > 0 || parsedWalls.length > 0 || parsedDesks.length > 0 || parsedPlans.length > 0;
+                if (!hasLocalData) return null;
+
+                return {
+                    tables: parsedTables,
+                    walls: parsedWalls,
+                    desks: parsedDesks,
+                    plans: parsedPlans.length > 0
+                        ? parsedPlans
+                        : [{ id: '1', name: 'Default Layout', tables: parsedTables, walls: parsedWalls, desks: parsedDesks }],
+                };
+            } catch {
+                return null;
+            }
+        };
+
         if (tenantId) {
             try {
                 const token = await getActiveToken();
@@ -1775,21 +1820,49 @@ export default function TablesQRCodesPage() {
                     }
 
                     if (!payload?.found) {
+                        const localState = tryLoadScopedLocalState();
                         if (!active) return;
-                        setTables(defaultSeedTables);
-                        setWalls(defaultSeedWalls);
-                        setDesks(defaultSeedDesks);
-                        setFloorPlans(defaultSeedPlans);
-                        setSharedTables(defaultSeedTables, tenantId);
+                        if (localState) {
+                            setTables(localState.tables);
+                            setWalls(localState.walls);
+                            setDesks(localState.desks);
+                            setFloorPlans(localState.plans);
+                            setSharedTables(localState.tables, tenantId);
+                        } else {
+                            setTables(emptySeedTables);
+                            setWalls(emptySeedWalls);
+                            setDesks(emptySeedDesks);
+                            setFloorPlans(emptySeedPlans);
+                            setSharedTables(emptySeedTables, tenantId);
+                        }
 
-                        await saveLayoutToServer(defaultSeedTables, defaultSeedWalls, defaultSeedDesks, defaultSeedPlans);
                         setIsLoaded(true);
                         return;
                     }
                 }
             } catch {
-                // fall through to deterministic defaults when server layout is unavailable
+                // fall through to local cache/empty state when server layout is unavailable
             }
+
+            const localState = tryLoadScopedLocalState();
+            if (!active) return;
+
+            if (localState) {
+                setTables(localState.tables);
+                setWalls(localState.walls);
+                setDesks(localState.desks);
+                setFloorPlans(localState.plans);
+                setSharedTables(localState.tables, tenantId);
+            } else {
+                setTables(emptySeedTables);
+                setWalls(emptySeedWalls);
+                setDesks(emptySeedDesks);
+                setFloorPlans(emptySeedPlans);
+                setSharedTables(emptySeedTables, tenantId);
+            }
+
+            setIsLoaded(true);
+            return;
         }
 
         const resolvedTables: Table[] = getDefaultTables();
