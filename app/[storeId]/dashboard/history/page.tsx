@@ -7,7 +7,9 @@ import { cn } from '@/lib/utils';
 import type { DashboardOrder } from '@/lib/types';
 import { useRestaurant } from '@/hooks/useRestaurant';
 import { RoleGuard } from '@/components/dashboard/RoleGuard';
-import { adminAuth, tenantAuth } from '@/lib/firebase';
+import { useAuth } from '@/context/AuthContext';
+import { useSuperAdminAuth } from '@/context/SuperAdminAuthContext';
+import { getActiveToken as resolveActiveToken } from '@/lib/client/get-active-token';
 
 const statusConfig = {
     paid: { label: 'Paid', color: 'bg-emerald-500', ring: 'ring-emerald-500/20', text: 'text-emerald-700', bg: 'bg-emerald-50' },
@@ -29,6 +31,8 @@ export default function OrderHistoryPage() {
     const [selectedDate, setSelectedDate] = useState('today');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const { session } = useAuth();
+    const { session: superAdminSession } = useSuperAdminAuth();
     const { storeId: tenantId, db: contextDb, loading: tenantLoading } = useRestaurant();
 
     const loadHistory = async (isMounted = true) => {
@@ -38,12 +42,10 @@ export default function OrderHistoryPage() {
         }
         try {
             if (isMounted) { setError(null); setLoading(true); }
-            const activeUser = adminAuth.currentUser || tenantAuth.currentUser;
-            if (!activeUser) {
-                throw new Error('Missing active session');
-            }
-
-            const idToken = await activeUser.getIdToken(true);
+            const idToken = await resolveActiveToken({
+                tenantSessionToken: session?.access_token,
+                superAdminSessionToken: superAdminSession?.access_token,
+            });
             const response = await fetch(`/api/orders/history?restaurantId=${encodeURIComponent(tenantId)}&limit=200`, {
                 headers: { Authorization: `Bearer ${idToken}` },
             });
@@ -66,7 +68,7 @@ export default function OrderHistoryPage() {
         let isMounted = true;
         loadHistory(isMounted);
         return () => { isMounted = false; };
-    }, [tenantId, contextDb]);
+    }, [tenantId, contextDb, session?.access_token, superAdminSession?.access_token]);
 
     const filteredOrders = allOrders.filter(o => {
         if (selectedDate === 'today') return isToday(o.created_at);
