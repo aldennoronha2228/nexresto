@@ -23,6 +23,7 @@
   "build": {
     "appId": "in.nexresto.desktop",
     "productName": "NexResto",
+    "executableName": "NexResto",
     "artifactName": "NexResto-Setup-${version}.${ext}",
     "files": [
       "main.js",
@@ -34,7 +35,7 @@
       "output": "dist"
     },
     "win": {
-      "signAndEditExecutable": false,
+      "signAndEditExecutable": true,
       "target": [
         {
           "target": "nsis",
@@ -48,7 +49,9 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "perMachine": false
+      "perMachine": false,
+      "shortcutName": "NexResto",
+      "uninstallDisplayName": "NexResto"
     },
     "publish": [
       {

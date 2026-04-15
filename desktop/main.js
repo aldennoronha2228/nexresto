@@ -39,6 +39,10 @@ function createMainWindow() {
     },
   });
 
+  // Keep the shell identity stable regardless of page title changes.
+  mainWindow.setTitle('NexResto');
+  mainWindow.setRepresentedFilename('NexResto');
+
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
   });
@@ -56,12 +60,13 @@ function createMainWindow() {
     }
   });
 
-  mainWindow.on('page-title-updated', (event, title) => {
-    const normalizedTitle = typeof title === 'string' ? title.trim() : '';
-    if (!normalizedTitle || normalizedTitle.toLowerCase() === 'undefined') {
-      event.preventDefault();
-      mainWindow.setTitle('NexResto');
-    }
+  mainWindow.on('page-title-updated', (event) => {
+    event.preventDefault();
+    mainWindow.setTitle('NexResto');
+  });
+
+  mainWindow.webContents.on('did-finish-load', () => {
+    mainWindow.setTitle('NexResto');
   });
 
   mainWindow.loadURL(TARGET_URL);
