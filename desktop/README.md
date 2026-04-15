@@ -22,6 +22,12 @@ npm install
 npm run dist
 ```
 
+3. Verify installer signature (recommended before distribution):
+
+```bash
+npm run verify:signature
+```
+
 Installer output will be in `desktop/dist`.
 
 ## Release and auto-update channel

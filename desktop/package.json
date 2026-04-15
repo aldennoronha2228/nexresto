@@ -8,7 +8,8 @@
   "scripts": {
     "dev": "electron .",
     "dist": "electron-builder --win nsis --x64",
-    "publish": "electron-builder --win nsis --x64 --publish always"
+    "publish": "electron-builder --win nsis --x64 --publish always",
+    "verify:signature": "powershell -ExecutionPolicy Bypass -File ./scripts/verify-windows-signature.ps1 -Path ./dist"
   },
   "dependencies": {
     "electron-log": "^5.2.4",
