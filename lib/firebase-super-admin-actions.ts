@@ -316,9 +316,33 @@ export async function getAllRestaurants(
 
     const normalizeDate = (raw: any): Date | null => {
         if (!raw) return null;
+        const iso = toIsoString(raw);
+        if (iso) {
+            const parsedFromIso = new Date(iso);
+            if (!Number.isNaN(parsedFromIso.getTime())) {
+                return new Date(parsedFromIso.getFullYear(), parsedFromIso.getMonth(), parsedFromIso.getDate());
+            }
+        }
+
         const parsed = new Date(raw);
         if (Number.isNaN(parsed.getTime())) return null;
         return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+    };
+
+    const normalizeYmdDate = (raw: any): string | null => {
+        if (!raw) return null;
+
+        if (typeof raw === 'string') {
+            const trimmed = raw.trim();
+            if (!trimmed) return null;
+            if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+            const parsed = new Date(trimmed);
+            if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
+            return null;
+        }
+
+        const iso = toIsoString(raw);
+        return iso ? iso.slice(0, 10) : null;
     };
 
     const getEffectiveStatus = (
@@ -418,42 +442,47 @@ export async function getAllRestaurants(
     const offset = (page - 1) * limit;
     const pageDocs = filteredDocs.slice(offset, offset + limit);
 
-    const data: RestaurantWithOwner[] = await Promise.all(
+    const data = (await Promise.all(
         pageDocs.map(async (restDoc) => {
-            const d = restDoc.data();
+            try {
+                const d = restDoc.data();
 
-            // Get staff for this restaurant
-            const staffSnap = await restDoc.ref.collection('staff').get();
-            let ownerName: string | null = null;
-            const roleMap = new Map<string, number>();
+                // Get staff for this restaurant
+                const staffSnap = await restDoc.ref.collection('staff').get();
+                let ownerName: string | null = null;
+                const roleMap = new Map<string, number>();
 
-            staffSnap.docs.forEach(s => {
-                const sd = s.data();
-                if (sd.role === 'owner' && sd.full_name) ownerName = sd.full_name;
-                roleMap.set(sd.role, (roleMap.get(sd.role) || 0) + 1);
-            });
+                staffSnap.docs.forEach(s => {
+                    const sd = s.data();
+                    if (sd.role === 'owner' && sd.full_name) ownerName = String(sd.full_name);
+                    roleMap.set(sd.role, (roleMap.get(sd.role) || 0) + 1);
+                });
 
-            const teamRoles = Array.from(roleMap.entries()).map(([role, count]) => ({ role, count }));
-            const createdAt = d.created_at?.toDate?.()?.toISOString() || d.created_at || '';
+                const teamRoles = Array.from(roleMap.entries()).map(([role, count]) => ({ role, count }));
+                const createdAt = toIsoString(d.created_at) || '';
 
-            return {
-                id: restDoc.id,
-                name: d.name || '',
-                owner_name: ownerName,
-                subscription_tier: d.subscription_tier || 'starter',
-                subscription_status: getEffectiveStatus(d.subscription_status, d.subscription_end_date, d.subscription_start_date),
-                created_at: createdAt,
-                monthly_revenue: d.monthly_revenue || 0,
-                last_report_date: d.last_report_date || null,
-                subscription_start_date: d.subscription_start_date || null,
-                subscription_end_date: d.subscription_end_date || null,
-                account_temporarily_disabled: Boolean(d.account_temporarily_disabled),
-                subscription_reminder_emails_enabled: d.subscription_reminder_emails_enabled !== false,
-                team_count: staffSnap.size,
-                team_roles: teamRoles,
-            };
+                return {
+                    id: restDoc.id,
+                    name: String(d.name || ''),
+                    owner_name: ownerName,
+                    subscription_tier: d.subscription_tier || 'starter',
+                    subscription_status: getEffectiveStatus(d.subscription_status, d.subscription_end_date, d.subscription_start_date),
+                    created_at: createdAt,
+                    monthly_revenue: toNumber(d.monthly_revenue),
+                    last_report_date: normalizeYmdDate(d.last_report_date),
+                    subscription_start_date: normalizeYmdDate(d.subscription_start_date),
+                    subscription_end_date: normalizeYmdDate(d.subscription_end_date),
+                    account_temporarily_disabled: Boolean(d.account_temporarily_disabled),
+                    subscription_reminder_emails_enabled: d.subscription_reminder_emails_enabled !== false,
+                    team_count: staffSnap.size,
+                    team_roles: teamRoles,
+                };
+            } catch (error) {
+                console.error('Skipping malformed restaurant row:', restDoc.id, error);
+                return null;
+            }
         })
-    );
+    )).filter((row): row is RestaurantWithOwner => row !== null);
 
     return {
         data,
@@ -1390,7 +1419,7 @@ export async function getGlobalLogs(
                 metadata: data.metadata || {},
                 tenant_id: data.tenant_id || null,
                 user_id: data.user_id || null,
-                created_at: data.created_at?.toDate?.()?.toISOString() || data.created_at || '',
+                created_at: toIsoString(data.created_at) || '',
                 restaurants: data.restaurant_name ? { name: data.restaurant_name } : null,
             };
         });

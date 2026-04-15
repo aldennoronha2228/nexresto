@@ -96,6 +96,7 @@ export default function RestaurantManager() {
     const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'past_due' | 'cancelled' | 'trial' | 'expired'>('all');
     const [showFilters, setShowFilters] = useState(false);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState<string | null>(null);
     const [activeMenu, setActiveMenu] = useState<string | null>(null);
     const activeMenuContainerRef = useRef<HTMLDivElement | null>(null);
 
@@ -126,14 +127,23 @@ export default function RestaurantManager() {
 
     const loadRestaurants = useCallback(async () => {
         setLoading(true);
-        const { data, total, metrics: nextMetrics } = await getAllRestaurants(page, ITEMS_PER_PAGE, search, {
-            tier: tierFilter,
-            status: statusFilter,
-        });
-        setRestaurants(data);
-        setTotal(total);
-        setMetrics(nextMetrics);
-        setLoading(false);
+        setLoadError(null);
+        try {
+            const { data, total, metrics: nextMetrics } = await getAllRestaurants(page, ITEMS_PER_PAGE, search, {
+                tier: tierFilter,
+                status: statusFilter,
+            });
+            setRestaurants(data);
+            setTotal(total);
+            setMetrics(nextMetrics);
+        } catch (error: any) {
+            console.error('Error loading restaurants:', error);
+            setRestaurants([]);
+            setTotal(0);
+            setLoadError(error?.message || 'Failed to load restaurants');
+        } finally {
+            setLoading(false);
+        }
     }, [page, search, tierFilter, statusFilter]);
 
     useEffect(() => {
@@ -512,6 +522,12 @@ export default function RestaurantManager() {
                     </motion.div>
                 )}
             </AnimatePresence>
+
+            {loadError && (
+                <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+                    Failed to load restaurants: {loadError}
+                </div>
+            )}
 
             {/* Table */}
             <div className="rounded-3xl bg-white/[0.04] backdrop-blur-2xl border border-white/10 overflow-hidden">

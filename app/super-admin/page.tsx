@@ -76,6 +76,7 @@ export default function SuperAdminOverview() {
     const [recentLogs, setRecentLogs] = useState<GlobalLog[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const [loadError, setLoadError] = useState<string | null>(null);
     const [selectedTier, setSelectedTier] = useState<'starter' | 'growth' | 'pro_chain' | null>(null);
 
     const tierFeatures = {
@@ -135,15 +136,29 @@ export default function SuperAdminOverview() {
     };
 
     const loadData = async () => {
+        setLoadError(null);
         try {
-            const [statsData, logsData] = await Promise.all([
+            const [statsResult, logsResult] = await Promise.allSettled([
                 getPlatformStats(),
                 getGlobalLogs(10),
             ]);
-            setStats(statsData);
-            setRecentLogs(logsData);
+
+            if (statsResult.status === 'fulfilled') {
+                setStats(statsResult.value);
+            } else {
+                setStats(null);
+                setLoadError((prev) => prev || (statsResult.reason?.message || 'Failed to load platform stats'));
+            }
+
+            if (logsResult.status === 'fulfilled') {
+                setRecentLogs(logsResult.value);
+            } else {
+                setRecentLogs([]);
+                setLoadError((prev) => prev || (logsResult.reason?.message || 'Failed to load activity logs'));
+            }
         } catch (error) {
             console.error('Error loading super admin data:', error);
+            setLoadError((error as any)?.message || 'Failed to load super admin data');
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -235,6 +250,12 @@ export default function SuperAdminOverview() {
                     Refresh
                 </motion.button>
             </div>
+
+            {loadError && (
+                <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+                    Some dashboard data could not be loaded: {loadError}
+                </div>
+            )}
 
             {/* Stat Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-12 gap-4">
