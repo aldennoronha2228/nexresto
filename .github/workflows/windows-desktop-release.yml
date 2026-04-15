@@ -23,6 +23,14 @@ jobs:
   build-windows-desktop:
     runs-on: windows-latest
 
+    env:
+      CSC_LINK: ${{ secrets.CSC_LINK }}
+      CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+      CSC_NAME: ${{ secrets.CSC_NAME }}
+      WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+      WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+      WIN_CSC_NAME: ${{ secrets.WIN_CSC_NAME }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -53,6 +61,17 @@ jobs:
         run: npm run dist
         working-directory: desktop
 
+      - name: Require code signing for publish
+        if: startsWith(github.ref, 'refs/tags/desktop-v') || (github.event_name == 'workflow_dispatch' && github.event.inputs.publish == 'true')
+        shell: pwsh
+        run: |
+          $hasGeneric = -not [string]::IsNullOrWhiteSpace("${{ secrets.CSC_LINK }}") -and -not [string]::IsNullOrWhiteSpace("${{ secrets.CSC_KEY_PASSWORD }}")
+          $hasWindows = -not [string]::IsNullOrWhiteSpace("${{ secrets.WIN_CSC_LINK }}") -and -not [string]::IsNullOrWhiteSpace("${{ secrets.WIN_CSC_KEY_PASSWORD }}")
+          if (-not ($hasGeneric -or $hasWindows)) {
+            Write-Error "Code-signing is required for published installers. Set CSC_LINK + CSC_KEY_PASSWORD (or WIN_CSC_LINK + WIN_CSC_KEY_PASSWORD) in repository secrets."
+            exit 1
+          }
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
@@ -65,3 +84,9 @@ jobs:
         working-directory: desktop
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          CSC_NAME: ${{ secrets.CSC_NAME }}
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+          WIN_CSC_NAME: ${{ secrets.WIN_CSC_NAME }}
