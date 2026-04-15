@@ -49,6 +49,8 @@ To reduce blocking significantly:
 3. Publish only signed installers (workflow now enforces this for publish jobs).
 4. Keep product name, executable name, and icon stable across releases.
 
+If a browser blocks direct `.exe` downloads, use the CI build artifact `.zip` package and verify the included `.sha256` checksum before running the installer.
+
 Notes:
 
 - EV certificates generally gain SmartScreen reputation faster.
