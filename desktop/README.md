@@ -49,6 +49,8 @@ To reduce blocking significantly:
 3. Publish only signed installers (workflow now enforces this for publish jobs).
 4. Keep product name, executable name, and icon stable across releases.
 
+When signing secrets are not configured, the workflow still builds and uploads artifacts (`.exe`, `.zip`, `.sha256`) but skips GitHub Release publish.
+
 If a browser blocks direct `.exe` downloads, use the CI build artifact `.zip` package and verify the included `.sha256` checksum before running the installer.
 
 Notes:

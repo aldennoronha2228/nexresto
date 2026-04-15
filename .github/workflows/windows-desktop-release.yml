@@ -38,7 +38,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Install desktop dependencies
         run: npm ci
@@ -81,15 +81,30 @@ jobs:
           $checksumPath = Join-Path $exe.DirectoryName ($exe.Name + '.sha256')
           "{0} *{1}" -f $hash.Hash.ToLowerInvariant(), $exe.Name | Set-Content -LiteralPath $checksumPath -Encoding ASCII
 
-      - name: Require code signing for publish
-        if: startsWith(github.ref, 'refs/tags/desktop-v') || (github.event_name == 'workflow_dispatch' && github.event.inputs.publish == 'true')
+      - name: Determine publish mode
+        id: publish_mode
         shell: pwsh
         run: |
+          $requestedPublish = $false
+          if ("${{ github.event_name }}" -eq "push" -and "${{ github.ref }}" -like "refs/tags/desktop-v*") {
+            $requestedPublish = $true
+          }
+          if ("${{ github.event_name }}" -eq "workflow_dispatch" -and "${{ github.event.inputs.publish }}" -eq "true") {
+            $requestedPublish = $true
+          }
+
           $hasGeneric = -not [string]::IsNullOrWhiteSpace("${{ secrets.CSC_LINK }}") -and -not [string]::IsNullOrWhiteSpace("${{ secrets.CSC_KEY_PASSWORD }}")
           $hasWindows = -not [string]::IsNullOrWhiteSpace("${{ secrets.WIN_CSC_LINK }}") -and -not [string]::IsNullOrWhiteSpace("${{ secrets.WIN_CSC_KEY_PASSWORD }}")
-          if (-not ($hasGeneric -or $hasWindows)) {
-            Write-Error "Code-signing is required for published installers. Set CSC_LINK + CSC_KEY_PASSWORD (or WIN_CSC_LINK + WIN_CSC_KEY_PASSWORD) in repository secrets."
-            exit 1
+
+          $hasSigning = $hasGeneric -or $hasWindows
+          $canPublish = $requestedPublish -and $hasSigning
+
+          "requested_publish=$requestedPublish" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "has_signing=$hasSigning" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "can_publish=$canPublish" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+          if ($requestedPublish -and -not $hasSigning) {
+            Write-Warning "Publish requested but code-signing secrets are missing. The workflow will upload artifacts and skip release publish."
           }
 
       - name: Upload build artifact
@@ -102,7 +117,7 @@ jobs:
             desktop/dist/*.sha256
 
       - name: Verify installer signature
-        if: startsWith(github.ref, 'refs/tags/desktop-v') || (github.event_name == 'workflow_dispatch' && github.event.inputs.publish == 'true')
+        if: steps.publish_mode.outputs.can_publish == 'true'
         shell: pwsh
         working-directory: desktop
         run: |
@@ -113,7 +128,7 @@ jobs:
           ./scripts/verify-windows-signature.ps1 -Path ./dist -ExpectedPublisher $expected
 
       - name: Publish GitHub release
-        if: startsWith(github.ref, 'refs/tags/desktop-v') || (github.event_name == 'workflow_dispatch' && github.event.inputs.publish == 'true')
+        if: steps.publish_mode.outputs.can_publish == 'true'
         run: npm run publish
         working-directory: desktop
         env:
@@ -124,3 +139,10 @@ jobs:
           WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
           WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
           WIN_CSC_NAME: ${{ secrets.WIN_CSC_NAME }}
+
+      - name: Publish skipped notice
+        if: steps.publish_mode.outputs.requested_publish == 'true' && steps.publish_mode.outputs.can_publish != 'true'
+        shell: pwsh
+        run: |
+          Write-Host "Publish was skipped because signing secrets are not configured."
+          Write-Host "Artifacts (.exe/.zip/.sha256) are still available in this workflow run."
