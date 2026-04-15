@@ -442,8 +442,8 @@ export async function getAllRestaurants(
     const offset = (page - 1) * limit;
     const pageDocs = filteredDocs.slice(offset, offset + limit);
 
-    const data = (await Promise.all(
-        pageDocs.map(async (restDoc) => {
+    const rows: Array<RestaurantWithOwner | null> = await Promise.all(
+        pageDocs.map(async (restDoc): Promise<RestaurantWithOwner | null> => {
             try {
                 const d = restDoc.data();
 
@@ -482,7 +482,9 @@ export async function getAllRestaurants(
                 return null;
             }
         })
-    )).filter((row): row is RestaurantWithOwner => row !== null);
+    );
+
+    const data: RestaurantWithOwner[] = rows.filter((row): row is RestaurantWithOwner => row !== null);
 
     return {
         data,
