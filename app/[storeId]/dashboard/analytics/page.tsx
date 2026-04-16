@@ -5,7 +5,7 @@
  * Shows revenue trends, order analytics, customer insights, and Daily Reports
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
     BarChart3, TrendingUp, TrendingDown, DollarSign,
@@ -20,15 +20,13 @@ import { downloadReportPDF, generateWeeklySummaryPDF, type DailyReport } from '@
 import { auth } from '@/lib/firebase';
 import { hasSubscriptionFeature } from '@/lib/subscription-features';
 
-const revenueData: Array<{ day: string; revenue: number }> = [];
-const topItems: Array<{ name: string; orders: number; revenue: number; trend: number }> = [];
-
-const statCards = [
-    { title: 'Total Revenue', value: '₹0', change: '0%', isPositive: true, icon: DollarSign },
-    { title: 'Total Orders', value: '0', change: '0%', isPositive: true, icon: ShoppingBag },
-    { title: 'Avg Order Value', value: '₹0', change: '0%', isPositive: true, icon: TrendingUp },
-    { title: 'Repeat Customers', value: '0%', change: '0%', isPositive: true, icon: Users },
-];
+function formatCurrency(value: number): string {
+    return new Intl.NumberFormat('en-IN', {
+        style: 'currency',
+        currency: 'INR',
+        maximumFractionDigits: 0,
+    }).format(value || 0);
+}
 
 // Reports Section Component
 function ReportsSection() {
@@ -266,6 +264,103 @@ function ReportsSection() {
 }
 
 function AnalyticsContent() {
+    const { storeId: tenantId } = useRestaurant();
+    const [reports, setReports] = useState<DailyReport[]>([]);
+    const [repeatCustomerRate, setRepeatCustomerRate] = useState(0);
+    const [loadingOverview, setLoadingOverview] = useState(true);
+
+    const fetchOverview = useCallback(async () => {
+        if (!tenantId) {
+            setReports([]);
+            setRepeatCustomerRate(0);
+            setLoadingOverview(false);
+            return;
+        }
+
+        setLoadingOverview(true);
+        try {
+            const token = await auth.currentUser?.getIdToken();
+            const headers = { Authorization: `Bearer ${token}` };
+
+            const [reportsRes, customersRes] = await Promise.all([
+                fetch(`/api/reports?restaurantId=${tenantId}&limit=7`, { headers, cache: 'no-store' }),
+                fetch(`/api/customers/list?restaurantId=${tenantId}`, { headers, cache: 'no-store' }),
+            ]);
+
+            const [reportsData, customersData] = await Promise.all([
+                reportsRes.json().catch(() => ({})),
+                customersRes.json().catch(() => ({})),
+            ]);
+
+            if (reportsRes.ok && Array.isArray(reportsData?.reports)) {
+                setReports(reportsData.reports as DailyReport[]);
+            } else {
+                setReports([]);
+            }
+
+            if (customersRes.ok && Array.isArray(customersData?.customers)) {
+                const customers = customersData.customers as Array<{ visitCount?: number }>;
+                const total = customers.length;
+                const repeats = customers.filter((c) => Number(c.visitCount || 0) > 1).length;
+                setRepeatCustomerRate(total > 0 ? (repeats / total) * 100 : 0);
+            } else {
+                setRepeatCustomerRate(0);
+            }
+        } finally {
+            setLoadingOverview(false);
+        }
+    }, [tenantId]);
+
+    useEffect(() => {
+        fetchOverview();
+    }, [fetchOverview]);
+
+    const orderedReports = useMemo(
+        () => [...reports].sort((a, b) => new Date(a.report_date).getTime() - new Date(b.report_date).getTime()),
+        [reports]
+    );
+
+    const revenueData = useMemo(() => orderedReports.map((report) => ({
+        day: new Date(report.report_date).toLocaleDateString('en-IN', { weekday: 'short' }),
+        revenue: Number(report.total_revenue || 0),
+    })), [orderedReports]);
+
+    const topItems = useMemo(() => {
+        const map = new Map<string, { orders: number; revenue: number }>();
+        orderedReports.forEach((report) => {
+            (report.top_items || []).forEach((item) => {
+                const key = String(item.name || 'Item');
+                const existing = map.get(key) || { orders: 0, revenue: 0 };
+                map.set(key, {
+                    orders: existing.orders + Number(item.quantity || 0),
+                    revenue: existing.revenue + Number(item.revenue || 0),
+                });
+            });
+        });
+
+        return Array.from(map.entries())
+            .map(([name, data]) => ({ name, orders: data.orders, revenue: data.revenue, trend: 0 }))
+            .sort((a, b) => b.revenue - a.revenue)
+            .slice(0, 5);
+    }, [orderedReports]);
+
+    const totalRevenue = useMemo(
+        () => orderedReports.reduce((sum, report) => sum + Number(report.total_revenue || 0), 0),
+        [orderedReports]
+    );
+    const totalOrders = useMemo(
+        () => orderedReports.reduce((sum, report) => sum + Number(report.total_orders || 0), 0),
+        [orderedReports]
+    );
+    const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+
+    const statCards = useMemo(() => ([
+        { title: 'Total Revenue', value: formatCurrency(totalRevenue), change: 'Last 7 days', isPositive: true, icon: DollarSign },
+        { title: 'Total Orders', value: `${totalOrders}`, change: 'Last 7 days', isPositive: true, icon: ShoppingBag },
+        { title: 'Avg Order Value', value: formatCurrency(avgOrderValue), change: 'Last 7 days', isPositive: true, icon: TrendingUp },
+        { title: 'Repeat Customers', value: `${Math.round(repeatCustomerRate)}%`, change: 'Overall', isPositive: true, icon: Users },
+    ]), [totalRevenue, totalOrders, avgOrderValue, repeatCustomerRate]);
+
     const maxRevenue = Math.max(1, ...revenueData.map(d => d.revenue));
 
     return (
@@ -338,7 +433,11 @@ function AnalyticsContent() {
                 </div>
 
                 <div className="h-64 flex items-end gap-3">
-                    {revenueData.length === 0 ? (
+                    {loadingOverview ? (
+                        <div className="w-full h-full flex items-center justify-center text-slate-400 text-sm">
+                            Loading analytics...
+                        </div>
+                    ) : revenueData.length === 0 ? (
                         <div className="w-full h-full flex items-center justify-center text-slate-400 text-sm">
                             No analytics data yet
                         </div>
@@ -352,7 +451,7 @@ function AnalyticsContent() {
                                     className="w-full bg-gradient-to-t from-blue-500 to-blue-400 rounded-t-lg relative group cursor-pointer"
                                 >
                                     <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                                        ₹{data.revenue.toLocaleString()}
+                                        {formatCurrency(data.revenue)}
                                     </div>
                                 </motion.div>
                                 <span className="text-xs text-slate-500">{data.day}</span>
@@ -370,7 +469,9 @@ function AnalyticsContent() {
                 className="bg-white rounded-2xl border border-slate-200 p-6"
             >
                 <h2 className="text-lg font-semibold text-slate-900 mb-4">Top Selling Items</h2>
-                {topItems.length === 0 ? (
+                {loadingOverview ? (
+                    <div className="text-center py-10 text-slate-400 text-sm">Loading item analytics...</div>
+                ) : topItems.length === 0 ? (
                     <div className="text-center py-10 text-slate-400 text-sm">No item analytics yet</div>
                 ) : (
                     <div className="space-y-3">
