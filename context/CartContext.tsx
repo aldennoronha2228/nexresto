@@ -14,6 +14,11 @@ export interface MenuItem {
 
 export interface CartItem extends MenuItem {
     quantity: number;
+    contributors?: Array<{
+        name: string;
+        phone: string;
+        quantity: number;
+    }>;
 }
 
 export interface Order {

@@ -183,6 +183,20 @@ export function CartDrawer({
                                     />
                                     <p className="text-sm font-semibold">{formatINR(item.price * item.quantity)}</p>
                                 </div>
+                                {sharedTableContext && Array.isArray(item.contributors) && item.contributors.length > 0 ? (
+                                    <div className="mt-2 rounded border border-stone-700 bg-black/25 p-2">
+                                        <p className="text-[10px] uppercase tracking-[0.12em] text-stone-500">Added by</p>
+                                        <div className="mt-1 space-y-1">
+                                            {item.contributors.map((contributor, idx) => (
+                                                <p key={`${item.id}-contrib-${idx}`} className="text-xs text-stone-300">
+                                                    {contributor.name}
+                                                    {contributor.phone ? ` (${contributor.phone})` : ''}
+                                                    {`: ${contributor.quantity}`}
+                                                </p>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ) : null}
                             </div>
                         ))}
                     </div>

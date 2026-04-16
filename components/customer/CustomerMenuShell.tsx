@@ -268,6 +268,15 @@ export function CustomerMenuShell({ restaurantIdOverride, tenantHomePath, restau
                         image: String(item.image || ''),
                         category: String(item.category || 'Others') || 'Others',
                         quantity: Math.max(0, Math.floor(Number(item.quantity || 0))),
+                        contributors: Array.isArray(item.contributors)
+                            ? item.contributors
+                                .map((c) => ({
+                                    name: String(c?.name || '').trim(),
+                                    phone: String(c?.phone || '').trim(),
+                                    quantity: Math.max(0, Math.floor(Number(c?.quantity || 0))),
+                                }))
+                                .filter((c) => c.name && c.quantity > 0)
+                            : [],
                     };
                 })
                 .filter((item) => item.id && item.name && Number.isFinite(item.price) && item.quantity > 0);
@@ -304,6 +313,12 @@ export function CustomerMenuShell({ restaurantIdOverride, tenantHomePath, restau
                         price: item.price,
                     },
                     quantity,
+                    actor: capturedCustomer
+                        ? {
+                            name: capturedCustomer.name,
+                            phone: capturedCustomer.phone,
+                        }
+                        : undefined,
                 }),
             });
 
@@ -322,6 +337,15 @@ export function CustomerMenuShell({ restaurantIdOverride, tenantHomePath, restau
                         image: String(entry.image || ''),
                         category: String(entry.category || 'Others') || 'Others',
                         quantity: Math.max(0, Math.floor(Number(entry.quantity || 0))),
+                        contributors: Array.isArray(entry.contributors)
+                            ? entry.contributors
+                                .map((c) => ({
+                                    name: String(c?.name || '').trim(),
+                                    phone: String(c?.phone || '').trim(),
+                                    quantity: Math.max(0, Math.floor(Number(c?.quantity || 0))),
+                                }))
+                                .filter((c) => c.name && c.quantity > 0)
+                            : [],
                     };
                 })
                 .filter((entry) => entry.id && entry.name && Number.isFinite(entry.price) && entry.quantity > 0);
@@ -330,7 +354,7 @@ export function CustomerMenuShell({ restaurantIdOverride, tenantHomePath, restau
         } catch {
             // Ignore transient cart sync failures.
         }
-    }, [restaurantId, resolvedTableId, sharedModeActive]);
+    }, [restaurantId, resolvedTableId, sharedModeActive, capturedCustomer]);
 
     React.useEffect(() => {
         if (!sharedModeActive) {
