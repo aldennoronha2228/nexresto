@@ -18,6 +18,8 @@ export type TenantSeoData = {
     email: string;
     isPublic: boolean;
     hasMenu: boolean;
+    subscriptionStatus: string;
+    accountDisabledReason: string;
     lastModified: Date;
 };
 
@@ -166,6 +168,8 @@ async function loadTenantSeoData(storeId: string): Promise<TenantSeoData | null>
     const email = asString(restaurant.contact_email || restaurant.owner_email);
     const keywords = resolveKeywords(name, cuisines);
     const lastModified = toDate(restaurant.updated_at) || toDate(branding.updated_at) || toDate(restaurant.created_at) || new Date();
+    const subscriptionStatus = asString(restaurant.subscription_status || 'active').toLowerCase() || 'active';
+    const accountDisabledReason = asString(restaurant.account_disabled_reason).toLowerCase();
 
     return {
         storeId: safeStoreId,
@@ -180,6 +184,8 @@ async function loadTenantSeoData(storeId: string): Promise<TenantSeoData | null>
         email,
         isPublic: isPublicTenant(publicSetting, restaurant),
         hasMenu: !menuItemsSnap.empty,
+        subscriptionStatus,
+        accountDisabledReason,
         lastModified,
     };
 }

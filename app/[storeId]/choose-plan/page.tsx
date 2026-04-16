@@ -34,7 +34,7 @@ export default function ChoosePlanPage() {
 
           <Link
             className="rounded-full border border-white/20 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/10"
-            href={storeId ? `/${storeId}` : '/'}
+            href={storeId ? `/${storeId}/dashboard` : '/login'}
           >
             Back
           </Link>

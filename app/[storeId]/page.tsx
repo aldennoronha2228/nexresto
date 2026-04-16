@@ -2,7 +2,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import type { Metadata } from 'next';
 import { preload } from 'react-dom';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { JsonLd } from '@/components/seo/JsonLd';
 import { getOptimizedHeroImageSrc } from '@/lib/image-optimization';
 import {
@@ -44,6 +44,14 @@ export default async function TenantHomePage({
 
     if (!tenant || !tenant.isPublic) {
         notFound();
+    }
+
+    const paymentRequired =
+        tenant.subscriptionStatus === 'expired' ||
+        tenant.accountDisabledReason === 'subscription_expired';
+
+    if (paymentRequired) {
+        redirect(`/${tenant.storeId}/choose-plan`);
     }
 
     const homePath = `/${tenant.storeId}`;
