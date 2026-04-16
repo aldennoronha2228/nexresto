@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 import { PLAN_PRICES, type UpgradablePlan } from '@/lib/pricing';
 import { isWebView } from '@/lib/isWebView';
+import { openExternalBrowser } from '@/lib/openExternalBrowser';
 
 type RazorpayOrder = {
   id: string;
@@ -139,8 +140,7 @@ export default function PricingCheckoutButton({
       try {
         toast.info('Redirecting to secure payment...');
         const payUrl = getAbsolutePayUrl(plan);
-        // In APK WebView, use full URL so OS can route it to external browser.
-        window.location.replace(payUrl);
+        openExternalBrowser(payUrl);
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unable to redirect to secure payment page';
         toast.error(message);

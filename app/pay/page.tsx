@@ -6,6 +6,7 @@ import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 import { isWebView } from '@/lib/isWebView';
+import { openExternalBrowser } from '@/lib/openExternalBrowser';
 import type { UpgradablePlan } from '@/lib/pricing';
 
 type RazorpayOrder = {
@@ -104,7 +105,8 @@ export default function PayPage() {
           sessionStorage.setItem(WEBVIEW_REDIRECT_KEY, redirectFingerprint);
         }
         setStatusText('Redirecting to secure payment...');
-        window.location.replace(fullUrl);
+        openExternalBrowser(fullUrl);
+        setShowManualExternalOpen(true);
         return;
       }
 
@@ -285,7 +287,7 @@ export default function PayPage() {
               const base = getHttpsBaseUrl();
               if (!base) return;
               const fullUrl = `${base}/pay?plan=${encodeURIComponent(plan)}`;
-              window.location.replace(fullUrl);
+              openExternalBrowser(fullUrl);
             }}
             type="button"
           >
