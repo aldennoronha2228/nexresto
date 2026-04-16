@@ -19,6 +19,7 @@ import { cn } from '@/lib/utils';
 import { downloadReportPDF, generateWeeklySummaryPDF, type DailyReport } from '@/lib/reportPDF';
 import { auth } from '@/lib/firebase';
 import { hasSubscriptionFeature } from '@/lib/subscription-features';
+import { toast } from 'sonner';
 
 function formatCurrency(value: number): string {
     return new Intl.NumberFormat('en-IN', {
@@ -43,6 +44,7 @@ function ReportsSection() {
     const [showAllReports, setShowAllReports] = useState(false);
     const [loading, setLoading] = useState(true);
     const [generating, setGenerating] = useState(false);
+    const [downloadingWeekly, setDownloadingWeekly] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     const isPro = hasSubscriptionFeature(subscriptionTier, 'premium_dashboard');
@@ -97,16 +99,23 @@ function ReportsSection() {
             const data = await res.json();
             if (data.report) {
                 setReports(prev => [data.report, ...prev.filter(r => r.report_date !== data.report.report_date)]);
+                toast.success(`Report generated for ${data.report.report_date}`);
             }
         } catch (err) {
             console.error('Failed to generate report:', err);
+            toast.error('Failed to generate yesterday report');
         } finally {
             setGenerating(false);
         }
     };
 
     const handleDownload = (report: DailyReport) => {
-        downloadReportPDF(report, tenantName || 'Restaurant');
+        try {
+            downloadReportPDF(report, tenantName || 'Restaurant');
+            toast.success(`Downloaded report for ${report.report_date}`);
+        } catch {
+            toast.error('Report download failed. Please try again.');
+        }
     };
 
     const normalizedReports = useMemo(() => {
@@ -150,9 +159,11 @@ function ReportsSection() {
     const handleDownloadWeekly = () => {
         if (normalizedReports.length === 0) {
             setError('No reports available for weekly summary.');
+            toast.error('No reports available for weekly summary');
             return;
         }
 
+        setDownloadingWeekly(true);
         const sortedReports = [...normalizedReports].sort((a, b) =>
             new Date(a.report_date).getTime() - new Date(b.report_date).getTime()
         );
@@ -164,8 +175,12 @@ function ReportsSection() {
             const doc = generateWeeklySummaryPDF([...weeklyReports], tenantName || 'Restaurant', weekStart, weekEnd);
             doc.save(`${(tenantName || 'Restaurant').replace(/\s+/g, '_')}_Weekly_Report.pdf`);
             setError(null);
+            toast.success('Weekly summary downloaded');
         } catch (err) {
             setError('Weekly summary download failed. Please try again.');
+            toast.error('Weekly summary download failed. Please try again.');
+        } finally {
+            setDownloadingWeekly(false);
         }
     };
 
@@ -240,10 +255,11 @@ function ReportsSection() {
                             whileHover={{ scale: 1.02 }}
                             whileTap={{ scale: 0.98 }}
                             onClick={handleDownloadWeekly}
-                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition-colors"
+                            disabled={downloadingWeekly}
+                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                         >
-                            <Download className="w-4 h-4" />
-                            Weekly Summary
+                            {downloadingWeekly ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                            {downloadingWeekly ? 'Downloading...' : 'Weekly Summary'}
                         </motion.button>
                     )}
                 </div>

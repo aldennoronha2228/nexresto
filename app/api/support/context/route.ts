@@ -4,6 +4,13 @@ import { authorizeTenantAccess } from '@/lib/server/authz/tenant';
 
 type AiTier = 'free' | 'pro';
 type GenericRow = { id: string; [key: string]: unknown };
+type ReportRow = {
+    id: string;
+    report_date?: unknown;
+    total_revenue?: unknown;
+    total_orders?: unknown;
+    [key: string]: unknown;
+};
 
 function resolveAiTier(subscriptionTierRaw: unknown): AiTier {
     const tier = String(subscriptionTierRaw || '').trim().toLowerCase();
@@ -134,8 +141,8 @@ export async function GET(request: NextRequest) {
         const layoutTables = Array.isArray((layout as any).tables) ? (layout as any).tables : [];
         const branding = brandingSnap.exists ? (brandingSnap.data() || {}) : {};
 
-        const sortedReports = allReportsSnap.docs
-            .map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() as Record<string, unknown>) }))
+        const sortedReports: ReportRow[] = allReportsSnap.docs
+            .map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() as Record<string, unknown>) }) as ReportRow)
             .sort((a, b) => safeString(b.report_date).localeCompare(safeString(a.report_date)));
         const latestReport = sortedReports[0] || null;
         const last7Reports = sortedReports.slice(0, 7);
