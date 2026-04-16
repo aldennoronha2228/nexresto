@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef, Suspense, Component, type ErrorInfo, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Download, QrCode, Trash2, Minus, Check, FolderOpen, Save, X, ZoomIn, Share2, Lock, Sparkles, Edit3, Users, ScanLine, Upload } from 'lucide-react';
+import { Plus, Download, QrCode, Trash2, Minus, Check, FolderOpen, Save, X, ZoomIn, Share2, Lock, Edit3, Users, ScanLine, Upload } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 import { Canvas } from '@react-three/fiber';
 import { ContactShadows, OrbitControls, TransformControls } from '@react-three/drei';
@@ -537,24 +537,6 @@ function TableManagementModal({
                         </div>
                     )}
                 </div>
-
-                {/* Footer with Pro Feature Hint */}
-                {!isPro && (
-                    <div className="p-4 border-t border-slate-200 bg-gradient-to-br from-slate-50 to-purple-50 flex-shrink-0">
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-lg shadow-purple-500/30">
-                                <Sparkles className="w-5 h-5 text-white" />
-                            </div>
-                            <div className="flex-1">
-                                <p className="text-sm font-medium text-slate-700">Unlock Drag & Drop Layout</p>
-                                <p className="text-xs text-slate-500">Pro users can visually arrange their floor plan</p>
-                            </div>
-                            <div className="px-3 py-1.5 bg-purple-100 text-purple-700 rounded-full text-xs font-semibold">
-                                Pro Feature
-                            </div>
-                        </div>
-                    </div>
-                )}
             </motion.div>
         </motion.div>
     );
@@ -1374,7 +1356,20 @@ export default function TablesQRCodesPage() {
     // 3D spatial mapping should be available to all Pro users.
     const isSpatialPro = isPro;
     const userSubscription = useMemo(() => (isPro ? 'pro' : 'starter'), [isPro]);
+    const tableViewOptions = useMemo(
+        () => [
+            { key: 'qr' as const, label: 'QR Codes', icon: <QrCode className="w-4 h-4" />, proOnly: false },
+            ...(isPro ? [{ key: 'floor' as const, label: 'Floor Plan', icon: <span className="text-sm">📐</span>, proOnly: true }] : []),
+        ],
+        [isPro]
+    );
     const reviewGridRef = useRef<HTMLDivElement | null>(null);
+
+    useEffect(() => {
+        if (!isPro && viewMode === 'floor') {
+            setViewMode('qr');
+        }
+    }, [isPro, viewMode]);
 
     const generateLayoutFromImage = useCallback(async (imageFile: Blob): Promise<AiLayoutTable[]> => {
         if (!tenantId) throw new Error('Restaurant context is missing');
@@ -2105,7 +2100,7 @@ export default function TablesQRCodesPage() {
                         <p className="text-sm text-slate-500 mt-1">Generate and download QR codes for every table</p>
                     </div>
                     <div className="flex items-center gap-2 bg-white rounded-xl p-1 border border-slate-200/60 w-full sm:w-auto">
-                        {[{ key: 'qr', label: 'QR Codes', icon: <QrCode className="w-4 h-4" />, proOnly: false }, { key: 'floor', label: 'Floor Plan', icon: <span className="text-sm">📐</span>, proOnly: true }].map(({ key, label, icon, proOnly }) => (
+                        {tableViewOptions.map(({ key, label, icon, proOnly }) => (
                             <button
                                 key={key}
                                 onClick={() => !proOnly || isPro ? setViewMode(key as 'qr' | 'floor') : null}
@@ -2201,7 +2196,7 @@ export default function TablesQRCodesPage() {
                                         onClick={open3DReviewFromCurrentLayout}
                                         className="flex items-center gap-2 px-4 py-2 border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl text-sm font-medium"
                                     >
-                                        <Sparkles className="w-4 h-4" />
+                                        <ScanLine className="w-4 h-4" />
                                         Open 3D Review
                                     </motion.button>
                                 </div>
@@ -2266,24 +2261,6 @@ export default function TablesQRCodesPage() {
                                                         <>
                                                             <span className="text-xs text-slate-500">Select a table to move or rotate</span>
                                                             <div className="flex items-center rounded-lg border border-slate-200 bg-white p-1">
-                                                                <button
-                                                                    onClick={() => setTransformMode('translate')}
-                                                                    className={cn(
-                                                                        'px-2.5 py-1 text-xs rounded-md transition-colors',
-                                                                        transformMode === 'translate' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
-                                                                    )}
-                                                                >
-                                                                    Move
-                                                                </button>
-                                                                <button
-                                                                    onClick={() => setTransformMode('rotate')}
-                                                                    className={cn(
-                                                                        'px-2.5 py-1 text-xs rounded-md transition-colors',
-                                                                        transformMode === 'rotate' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
-                                                                    )}
-                                                                >
-                                                                    Rotate Y
-                                                                </button>
                                                             </div>
                                                             <button
                                                                 onClick={() => setSnapEnabled((prev) => !prev)}
@@ -2677,7 +2654,7 @@ export default function TablesQRCodesPage() {
                         >
                             <div className="flex items-start gap-3">
                                 <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-md shadow-purple-500/25">
-                                    <Sparkles className="w-5 h-5 text-white" />
+                                    <ScanLine className="w-5 h-5 text-white" />
                                 </div>
                                 <div className="flex-1">
                                     <h3 className="text-lg font-semibold text-slate-900">Upgrade to Pro</h3>

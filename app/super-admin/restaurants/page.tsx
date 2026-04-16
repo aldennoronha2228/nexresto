@@ -1013,6 +1013,18 @@ export default function RestaurantManager() {
                                             Menu Management
                                         </li>
                                         <li className="flex items-center gap-2">
+                                            <X className="w-3.5 h-3.5" />
+                                            No Interactive Floor Plan
+                                        </li>
+                                        <li className="flex items-center gap-2">
+                                            <X className="w-3.5 h-3.5" />
+                                            No Analytics Dashboard
+                                        </li>
+                                        <li className="flex items-center gap-2">
+                                            <X className="w-3.5 h-3.5" />
+                                            No Custom Branding
+                                        </li>
+                                        <li className="flex items-center gap-2">
                                             <User className="w-3.5 h-3.5" />
                                             Single Owner Only
                                         </li>
@@ -1050,6 +1062,10 @@ export default function RestaurantManager() {
                                         <li className="flex items-center gap-2">
                                             <Check className="w-3.5 h-3.5" />
                                             Analytics Dashboard
+                                        </li>
+                                        <li className="flex items-center gap-2">
+                                            <Check className="w-3.5 h-3.5" />
+                                            Interactive Floor Plan
                                         </li>
                                         <li className="flex items-center gap-2">
                                             <Check className="w-3.5 h-3.5" />

@@ -319,9 +319,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     // Filter navigation based on user role permissions
     const activeRole = userRole || superAdminRole;
 
-    const filteredNavigation = navigation.filter(item =>
-        hasPermission(activeRole, item.permission)
-    );
+    const filteredNavigation = navigation.filter(item => {
+        const hasRolePermission = hasPermission(activeRole, item.permission);
+        if (!hasRolePermission) return false;
+
+        // Starter should not see Pro-only modules in sidebar/mobile nav.
+        if (item.proOnly && !isPro) return false;
+
+        return true;
+    });
 
     const activeNavItem = navigation.find((item) =>
         pathname === item.href ||

@@ -6,7 +6,14 @@ import { adminFirestore, isFirebaseAdminAvailable } from "@/lib/firebase-admin";
 const SUBSCRIPTION_TIER_SETTINGS_DOC = 'platform_settings/subscription_tiers';
 
 type TierKey = 'starter' | 'growth' | 'pro_chain';
-type TierAvailability = Record<TierKey, boolean>;
+type ManagedTier = {
+  key: TierKey;
+  name: string;
+  description: string;
+  price_inr: number;
+  available: boolean;
+  features: string[];
+};
 
 const playfair = Playfair_Display({
   subsets: ["latin"],
@@ -32,13 +39,39 @@ function mapPlanNameToTierKey(planName: string): TierKey {
   return 'starter';
 }
 
-async function getTierAvailability(): Promise<TierAvailability> {
-  const defaults: TierAvailability = {
-    starter: true,
-    growth: true,
-    pro_chain: true,
-  };
+function parsePriceToNumber(priceText: string, fallback: number): number {
+  const digits = String(priceText || '').replace(/[^\d]/g, '');
+  const parsed = Number(digits);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
 
+function formatPriceInr(price: number): string {
+  return `Rs ${Math.max(0, Math.round(price)).toLocaleString('en-IN')}`;
+}
+
+function buildDefaultTierMap(): Record<TierKey, ManagedTier> {
+  const defaultsByKey = PRICING_PLANS.reduce((acc, plan) => {
+    const key = mapPlanNameToTierKey(plan.name);
+    acc[key] = {
+      key,
+      name: plan.name,
+      description: plan.subtitle,
+      price_inr: parsePriceToNumber(plan.priceInr, key === 'starter' ? 999 : key === 'growth' ? 2499 : 7999),
+      available: true,
+      features: [...plan.details],
+    };
+    return acc;
+  }, {} as Record<TierKey, ManagedTier>);
+
+  return {
+    starter: defaultsByKey.starter,
+    growth: defaultsByKey.growth,
+    pro_chain: defaultsByKey.pro_chain,
+  };
+}
+
+async function getManagedTiers(): Promise<Record<TierKey, ManagedTier>> {
+  const defaults = buildDefaultTierMap();
   if (!isFirebaseAdminAvailable()) {
     return defaults;
   }
@@ -48,12 +81,34 @@ async function getTierAvailability(): Promise<TierAvailability> {
     if (!snap.exists) return defaults;
 
     const data = snap.data() as { tiers?: Record<string, unknown> } | undefined;
-    const tiers = (data?.tiers || {}) as Record<string, { available?: unknown }>;
+    const tiers = (data?.tiers || {}) as Record<string, Partial<ManagedTier>>;
+
+    const normalizeTier = (key: TierKey): ManagedTier => {
+      const row = tiers[key] || {};
+      const fallback = defaults[key];
+      return {
+        key,
+        name: typeof row.name === 'string' && row.name.trim() ? row.name.trim() : fallback.name,
+        description:
+          typeof row.description === 'string' && row.description.trim()
+            ? row.description.trim()
+            : fallback.description,
+        price_inr:
+          typeof row.price_inr === 'number' && Number.isFinite(row.price_inr)
+            ? Math.max(0, Math.round(row.price_inr))
+            : fallback.price_inr,
+        available: typeof row.available === 'boolean' ? row.available : fallback.available,
+        features:
+          Array.isArray(row.features) && row.features.length > 0
+            ? row.features.map((v) => String(v || '').trim()).filter((v) => v.length > 0)
+            : fallback.features,
+      };
+    };
 
     return {
-      starter: typeof tiers?.starter?.available === 'boolean' ? Boolean(tiers.starter.available) : defaults.starter,
-      growth: typeof tiers?.growth?.available === 'boolean' ? Boolean(tiers.growth.available) : defaults.growth,
-      pro_chain: typeof tiers?.pro_chain?.available === 'boolean' ? Boolean(tiers.pro_chain.available) : defaults.pro_chain,
+      starter: normalizeTier('starter'),
+      growth: normalizeTier('growth'),
+      pro_chain: normalizeTier('pro_chain'),
     };
   } catch {
     return defaults;
@@ -61,7 +116,7 @@ async function getTierAvailability(): Promise<TierAvailability> {
 }
 
 export default async function PricingPage() {
-  const tierAvailability = await getTierAvailability();
+  const managedTiers = await getManagedTiers();
 
   return (
     <div className={`${manrope.className} min-h-screen bg-[#131313] text-[#e5e2e1]`}>
@@ -123,7 +178,8 @@ export default async function PricingPage() {
           <div className="mx-auto grid w-full max-w-6xl gap-5 md:grid-cols-2 xl:grid-cols-3">
             {PRICING_PLANS.map((plan) => {
               const tierKey = mapPlanNameToTierKey(plan.name);
-              const isAvailable = tierAvailability[tierKey];
+              const managed = managedTiers[tierKey];
+              const isAvailable = managed.available;
 
               return (
               <article
@@ -138,17 +194,17 @@ export default async function PricingPage() {
                   </div>
                 )}
 
-                <h2 className={`${playfair.className} text-[2.05rem] font-semibold leading-[1.02] tracking-[-0.01em] text-[#f5f4f2]`}>{plan.name}</h2>
-                <p className="mt-1.5 text-[15px] font-medium text-[#9ca7ba]">{plan.subtitle}</p>
+                <h2 className={`${playfair.className} text-[2.05rem] font-semibold leading-[1.02] tracking-[-0.01em] text-[#f5f4f2]`}>{managed.name}</h2>
+                <p className="mt-1.5 text-[15px] font-medium text-[#9ca7ba]">{managed.description}</p>
 
                 <p className="tabular-nums mt-6 text-[clamp(2rem,4vw,3rem)] font-semibold leading-none tracking-[-0.015em] text-white">
-                  {plan.priceInr}
+                  {formatPriceInr(managed.price_inr)}
                 </p>
                 {plan.priceUsd && <p className="mt-2 text-base font-medium text-[#9ca7ba]">{plan.priceUsd}</p>}
 
                 <p className="mt-7 text-sm font-semibold uppercase tracking-[0.08em] text-emerald-300">{plan.detailTitle}</p>
                 <ul className="mt-3.5 space-y-2.5 text-[0.97rem] leading-snug text-[#c5c5d6]">
-                  {plan.details.map((detail) => (
+                  {managed.features.map((detail) => (
                     <li className="flex items-start gap-3" key={detail}>
                       <span className="mt-0.5 text-base font-bold text-emerald-300">✓</span>
                       <span>{detail}</span>
