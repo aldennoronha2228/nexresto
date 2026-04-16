@@ -21,6 +21,12 @@ const ALLOWED_PREFIXES = [
     '/api/orders/',
     '/api/tables/',
     '/api/branding/',
+    '/api/customers/',
+    '/api/inventory/',
+    '/api/platform/',
+    '/api/search/',
+    '/api/public/',
+    '/api/concierge/',
     '/api/reports/',
     '/api/support/',
 ];

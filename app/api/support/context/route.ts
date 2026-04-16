@@ -82,6 +82,7 @@ export async function GET(request: NextRequest) {
         const menuCol = adminFirestore.collection(`restaurants/${restaurantId}/menu_items`);
         const categoriesCol = adminFirestore.collection(`restaurants/${restaurantId}/categories`);
         const inventoryCol = adminFirestore.collection(`restaurants/${restaurantId}/inventory_items`);
+        const customersCol = adminFirestore.collection(`restaurants/${restaurantId}/customers`);
         const staffCol = adminFirestore.collection(`restaurants/${restaurantId}/staff`);
         const reportsCol = adminFirestore.collection(`restaurants/${restaurantId}/analytics`);
         const layoutRef = adminFirestore.doc(`restaurants/${restaurantId}/settings/floor_layout`);
@@ -92,6 +93,7 @@ export async function GET(request: NextRequest) {
             menuSnap,
             categoriesSnap,
             inventorySnap,
+            customersSnap,
             staffSnap,
             layoutSnap,
             brandingSnap,
@@ -107,6 +109,7 @@ export async function GET(request: NextRequest) {
             menuCol.get(),
             categoriesCol.get(),
             inventoryCol.get(),
+            customersCol.get(),
             staffCol.get(),
             layoutRef.get(),
             brandingRef.get(),
@@ -126,10 +129,20 @@ export async function GET(request: NextRequest) {
         const menuItems: GenericRow[] = menuSnap.docs.map((d) => ({ id: d.id, ...(d.data() as Record<string, unknown>) }));
         const inventoryItems: GenericRow[] = inventorySnap.docs.map((d) => ({ id: d.id, ...(d.data() as Record<string, unknown>) }));
         const staffMembers: GenericRow[] = staffSnap.docs.map((d) => ({ id: d.id, ...(d.data() as Record<string, unknown>) }));
+        const customers: GenericRow[] = customersSnap.docs.map((d) => ({ id: d.id, ...(d.data() as Record<string, unknown>) }));
         const layout = layoutSnap.exists ? (layoutSnap.data() || {}) : {};
         const layoutTables = Array.isArray((layout as any).tables) ? (layout as any).tables : [];
         const branding = brandingSnap.exists ? (brandingSnap.data() || {}) : {};
-        const latestReport = allReportsSnap.docs[0]?.data() || null;
+
+        const sortedReports = allReportsSnap.docs
+            .map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() as Record<string, unknown>) }))
+            .sort((a, b) => safeString(b.report_date).localeCompare(safeString(a.report_date)));
+        const latestReport = sortedReports[0] || null;
+        const last7Reports = sortedReports.slice(0, 7);
+        const revenue7d = last7Reports.reduce((sum, report) => sum + toNumber(report.total_revenue, 0), 0);
+        const orders7d = last7Reports.reduce((sum, report) => sum + toNumber(report.total_orders, 0), 0);
+        const aov7d = orders7d > 0 ? revenue7d / orders7d : 0;
+        const repeatCustomers = customers.filter((c) => toNonNegativeInt(c.visitCount) > 1).length;
 
         const unavailableCount = menuItems.filter((m) => m['available'] === false).length;
         const activeOrderCount = newSnap.size + preparingSnap.size + doneSnap.size;
@@ -232,6 +245,16 @@ export async function GET(request: NextRequest) {
                     lowStockItems: lowInventoryCount,
                     criticalItems: criticalInventoryCount,
                 },
+                analytics: {
+                    reportsCount: allReportsSnap.size,
+                    revenue7d,
+                    orders7d,
+                    avgOrderValue7d: Number(aov7d.toFixed(2)),
+                },
+                customers: {
+                    total: customers.length,
+                    repeat: repeatCustomers,
+                },
                 staff: {
                     total: staffMembers.length,
                     byRole: staffByRole,
@@ -278,6 +301,31 @@ export async function GET(request: NextRequest) {
                             averageOrderValue: toNumber((latestReport as any).average_order_value || 0, 0),
                         }
                         : null,
+                },
+                analytics: {
+                    reportsCount: allReportsSnap.size,
+                    last7Days: {
+                        revenue: revenue7d,
+                        orders: orders7d,
+                        averageOrderValue: Number(aov7d.toFixed(2)),
+                    },
+                    recentReports: last7Reports.map((report) => ({
+                        id: safeString(report.id),
+                        reportDate: safeString(report.report_date),
+                        revenue: toNumber(report.total_revenue, 0),
+                        orders: toNonNegativeInt(report.total_orders),
+                    })),
+                },
+                customers: {
+                    total: customers.length,
+                    repeat: repeatCustomers,
+                    sample: customers.slice(0, 8).map((customer) => ({
+                        id: safeString(customer.id),
+                        name: safeString(customer['name'] || 'Guest'),
+                        phone: safeString(customer['phone'] || customer.id),
+                        visitCount: toNonNegativeInt(customer['visitCount']),
+                        totalSpend: toNumber(customer['totalSpend'], 0),
+                    })),
                 },
                 branding: {
                     primaryColor: safeString((branding as any).primaryColor || '#7c3aed'),

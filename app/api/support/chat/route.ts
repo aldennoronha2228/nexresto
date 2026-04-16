@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { FieldValue } from 'firebase-admin/firestore';
 import { adminFirestore } from '@/lib/firebase-admin';
 import { authorizeTenantAccess } from '@/lib/server/authz/tenant';
+import { generateDailyReport } from '@/lib/reports';
 
 type ChatMessage = {
     role: 'user' | 'assistant';
@@ -21,6 +22,8 @@ type DashboardContext = {
         menu?: Record<string, number>;
         tables?: Record<string, number>;
         inventory?: Record<string, number>;
+        analytics?: Record<string, number>;
+        customers?: Record<string, number>;
         staff?: Record<string, number | Record<string, number>>;
     };
     modules?: {
@@ -29,6 +32,8 @@ type DashboardContext = {
         orders?: Record<string, unknown>;
         inventory?: Record<string, unknown>;
         reports?: Record<string, unknown>;
+        analytics?: Record<string, unknown>;
+        customers?: Record<string, unknown>;
         branding?: Record<string, unknown>;
         staff?: Record<string, unknown>;
     };
@@ -110,6 +115,8 @@ type ParsedAction =
     | { type: 'rename_category'; from: string; to: string }
     | { type: 'arrange_tables_square' }
     | { type: 'keep_first_tables'; count: number }
+    | { type: 'generate_report'; date?: string }
+    | { type: 'analytics_summary'; days: number }
     | { type: 'unknown' };
 
 type ActionExecution = {
@@ -328,14 +335,35 @@ function parseActionFromText(text: string): ParsedAction {
         }
     }
 
+    const reportDateMatch = normalized.match(/(?:generate|create|run)\s+(?:daily\s+)?report(?:\s+for)?\s+(\d{4}-\d{2}-\d{2})/i);
+    if (reportDateMatch) {
+        return { type: 'generate_report', date: reportDateMatch[1] };
+    }
+
+    if (/\b(generate|create|run)\b.*\b(report|daily report|yesterday'?s report)\b/i.test(normalized)) {
+        return { type: 'generate_report' };
+    }
+
+    const analyticsSummaryMatch = normalized.match(/\b(?:analytics|revenue|summary|insights)\b.*\b(?:last|past)\s+(\d{1,2})\s+day/i);
+    if (analyticsSummaryMatch) {
+        const days = Number(analyticsSummaryMatch[1]);
+        if (Number.isFinite(days) && days > 0) {
+            return { type: 'analytics_summary', days: Math.min(30, Math.floor(days)) };
+        }
+    }
+
+    if (/\b(analytics|revenue trend|sales summary|performance summary|analytics summary)\b/i.test(normalized)) {
+        return { type: 'analytics_summary', days: 7 };
+    }
+
     return { type: 'unknown' };
 }
 
 function looksLikeControlIntent(text: string): boolean {
     const normalized = text.trim().toLowerCase();
     if (!normalized) return false;
-    return /(add|create|insert|update|edit|delete|remove|arrange|make|set|organize|place|keep|rename|change|disable|enable|hide|show|unavailable|available|price)\b/.test(normalized)
-        && /(table|tables|menu item|item|menu|floor plan|layout|square|category|categories|availability)\b/.test(normalized);
+    return /(add|create|insert|update|edit|delete|remove|arrange|make|set|organize|place|keep|rename|change|disable|enable|hide|show|unavailable|available|price|generate|download|export|summarize|analyze|fetch|refresh)\b/.test(normalized)
+        && /(table|tables|menu item|item|menu|floor plan|layout|square|category|categories|availability|orders|history|analytics|report|reports|revenue|inventory|stock|branding|staff|customer|customers|account|dashboard)\b/.test(normalized);
 }
 
 function buildNextTablePosition(tableCount: number): { x: number; y: number } {
@@ -808,6 +836,50 @@ async function executeAction(action: ParsedAction, auth: AuthorizedRestaurant): 
         };
     }
 
+    if (action.type === 'generate_report') {
+        const reportDate = String(action.date || new Date(Date.now() - 86400000).toISOString().slice(0, 10));
+        const { report } = await generateDailyReport(auth.restaurantId, reportDate);
+        return {
+            ok: true,
+            message: `Done. Generated report for ${report.report_date} with ${report.total_orders} orders and ${report.total_revenue.toLocaleString('en-IN')} revenue.`,
+            data: {
+                reportDate: report.report_date,
+                totalOrders: report.total_orders,
+                totalRevenue: report.total_revenue,
+            },
+        };
+    }
+
+    if (action.type === 'analytics_summary') {
+        const days = Math.max(1, Math.min(30, Number(action.days || 7)));
+        const start = new Date();
+        start.setHours(0, 0, 0, 0);
+        start.setDate(start.getDate() - (days - 1));
+
+        const ordersSnap = await adminFirestore
+            .collection(`restaurants/${auth.restaurantId}/orders`)
+            .where('created_at', '>=', start)
+            .get();
+
+        const rows = ordersSnap.docs.map((doc) => doc.data() as Record<string, unknown>);
+        const valid = rows.filter((row) => String(row.status || '') !== 'cancelled');
+        const cancelled = rows.length - valid.length;
+        const revenue = valid.reduce((sum, row) => sum + Number(row.total || 0), 0);
+        const avg = valid.length > 0 ? revenue / valid.length : 0;
+
+        return {
+            ok: true,
+            message: `Analytics summary for last ${days} days: ${valid.length} active orders, ${cancelled} cancelled, revenue ${revenue.toLocaleString('en-IN')}, average order value ${Math.round(avg).toLocaleString('en-IN')}.`,
+            data: {
+                days,
+                orders: valid.length,
+                cancelled,
+                revenue,
+                averageOrderValue: avg,
+            },
+        };
+    }
+
     return null;
 }
 
@@ -827,7 +899,7 @@ function buildContextPrompt(context: DashboardContext | null): string {
         JSON.stringify(safe),
         'Use this context to answer operational and usage questions accurately.',
         'If asked about numbers, prefer these values over generic estimates.',
-        'You are connected to all major modules in this context: menu, tables, orders, inventory, reports, branding, and staff.',
+        'You are connected to all major modules in this context: menu, tables, orders, inventory, reports, analytics, customers, branding, staff, and account settings workflows.',
     ].join('\n');
 }
 
@@ -1038,13 +1110,33 @@ function coerceParsedAction(raw: unknown): ParsedAction {
         };
     }
 
+    if (type === 'generate_report') {
+        const date = normalizeTextValue(input.date);
+        const validDate = /^\d{4}-\d{2}-\d{2}$/.test(date);
+        return {
+            type: 'generate_report',
+            date: validDate ? date : undefined,
+        };
+    }
+
+    if (type === 'analytics_summary') {
+        const days = Number(input.days);
+        if (!Number.isFinite(days) || days <= 0) {
+            return { type: 'analytics_summary', days: 7 };
+        }
+        return {
+            type: 'analytics_summary',
+            days: Math.min(30, Math.floor(days)),
+        };
+    }
+
     return { type: 'unknown' };
 }
 
 const ACTION_PLANNER_PROMPT = [
     'You convert free-form admin instructions into one executable dashboard action JSON.',
     'Output STRICT JSON only. No markdown.',
-    'Allowed action types: add_table, remove_table, add_menu_item, update_menu_item_price, toggle_menu_item_availability, delete_menu_item, add_category, rename_category, arrange_tables_square, keep_first_tables, unknown.',
+    'Allowed action types: add_table, remove_table, add_menu_item, update_menu_item_price, toggle_menu_item_availability, delete_menu_item, add_category, rename_category, arrange_tables_square, keep_first_tables, generate_report, analytics_summary, unknown.',
     'Required shape by type:',
     '- add_table: {"type":"add_table","seats":number,"name"?:string}',
     '- remove_table: {"type":"remove_table","tableRef":string}',
@@ -1056,6 +1148,8 @@ const ACTION_PLANNER_PROMPT = [
     '- rename_category: {"type":"rename_category","from":string,"to":string}',
     '- arrange_tables_square: {"type":"arrange_tables_square"}',
     '- keep_first_tables: {"type":"keep_first_tables","count":number}',
+    '- generate_report: {"type":"generate_report","date"?:"YYYY-MM-DD"}',
+    '- analytics_summary: {"type":"analytics_summary","days":number}',
     '- unknown: {"type":"unknown"}',
     'Rules:',
     '- Infer intent even from messy grammar/typos/Hinglish.',
@@ -1512,7 +1606,7 @@ export async function POST(request: NextRequest) {
         if (looksLikeControlIntent(latestUserMessage)) {
             return NextResponse.json({
                 reply:
-                    'I can execute that right away, including free-form instructions. Try: "make paneer tikka unavailable", "change margherita price to 349", "rename category mains to chef specials", "arrange all tables in square", or "keep only first 10 tables".',
+                    'I can execute that right away across dashboard workflows. Try: "make paneer tikka unavailable", "change margherita price to 349", "generate yesterday report", "give analytics summary for last 7 days", "arrange all tables in square", or "keep only first 10 tables".',
                 usage: currentUsage,
                 action: {
                     type: 'clarification',
