@@ -6,6 +6,7 @@ import { useCart, type CartItem } from '@/context/CartContext';
 import { QuantitySelector } from '@/components/customer/QuantitySelector';
 import { getTenantCheckoutSnapshotKey, getTenantTableStorageKey } from '@/lib/client/storage/tenantKeys';
 import { UpgradeCard } from '@/components/customer/UpgradeCard';
+import { buildSplitBill } from '@/lib/split-bill';
 
 function formatINR(value: number): string {
     return new Intl.NumberFormat('en-IN', {
@@ -47,6 +48,7 @@ export function CartDrawer({
 
     const effectiveCart = externalCartItems ?? cart;
     const effectiveTotalPrice = typeof externalTotalPrice === 'number' ? externalTotalPrice : totalPrice;
+    const splitBill = React.useMemo(() => buildSplitBill(effectiveCart), [effectiveCart]);
 
     const increaseItem = (itemId: string, nextQuantity: number) => {
         if (onExternalIncrease) {
@@ -204,6 +206,33 @@ export function CartDrawer({
 
                 {effectiveCart.length > 0 && (
                     <div className="mt-5 space-y-3 border-t border-stone-700 pt-4">
+                        {sharedTableContext && splitBill.hasContributorData ? (
+                            <div className="border border-stone-700 bg-black/25 p-3">
+                                <p className="text-[10px] uppercase tracking-[0.14em] text-stone-500">Grouped by person</p>
+                                <div className="mt-2 space-y-2">
+                                    {splitBill.people.map((person) => (
+                                        <div key={person.key} className="rounded border border-stone-700/80 bg-black/30 p-2">
+                                            <div className="flex items-center justify-between">
+                                                <p className="text-xs font-semibold text-stone-200">
+                                                    {person.name}
+                                                    {person.phone ? ` (${person.phone})` : ''}
+                                                </p>
+                                                <p className="text-xs font-semibold text-stone-100">{formatINR(person.subtotal)}</p>
+                                            </div>
+                                            <div className="mt-1 space-y-1">
+                                                {person.lines.map((line) => (
+                                                    <div key={`${person.key}-${line.itemId}`} className="flex items-center justify-between text-[11px] text-stone-400">
+                                                        <span>{line.itemName} x {line.quantity}</span>
+                                                        <span>{formatINR(line.lineTotal)}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ) : null}
+
                         {sharedTableContext && sharedOrderingLocked ? (
                             <UpgradeCard
                                 title="Shared QR Checkout Is Disabled"

@@ -7,6 +7,7 @@ import type { CartItem } from '@/context/CartContext';
 import { submitOrderToFirestore } from '@/lib/firebase-submit-order';
 import { getTenantCheckoutSnapshotKey, getTenantCustomerStorageKey, getTenantTableStorageKey } from '@/lib/client/storage/tenantKeys';
 import { isValidPhone, normalizePhone } from '@/lib/customer-tracking';
+import { buildSplitBill } from '@/lib/split-bill';
 
 type CheckoutSnapshot = {
     items: CartItem[];
@@ -207,6 +208,7 @@ function OrderSummaryContent() {
     const displayedCart = submittedCart.length > 0 ? submittedCart : cart;
     const displayedSubtotal = submittedCart.length > 0 ? submittedSubtotal : totalPrice;
     const displayedItemCount = displayedCart.reduce((sum, item) => sum + item.quantity, 0);
+    const splitBill = React.useMemo(() => buildSplitBill(displayedCart), [displayedCart]);
 
     return (
         <div className="min-h-screen bg-[#131313] px-4 py-10 text-stone-200">
@@ -263,6 +265,53 @@ function OrderSummaryContent() {
                             <span>Subtotal ({displayedItemCount} items)</span>
                             <span>{formatINR(displayedSubtotal)}</span>
                         </div>
+
+                        {splitBill.hasContributorData ? (
+                            <div className="mt-4 rounded border border-white/10 bg-black/25 p-3">
+                                <p className="mb-2 text-[11px] uppercase tracking-[0.14em] text-stone-400">Bill split by person</p>
+                                <div className="space-y-2">
+                                    {splitBill.people.map((person) => (
+                                        <div key={person.key} className="rounded border border-white/10 bg-black/30 p-2">
+                                            <div className="flex items-center justify-between">
+                                                <p className="text-xs font-semibold text-stone-200">
+                                                    {person.name}
+                                                    {person.phone ? ` (${person.phone})` : ''}
+                                                </p>
+                                                <p className="text-xs font-semibold text-white">{formatINR(person.subtotal)}</p>
+                                            </div>
+                                            <div className="mt-1 space-y-1 text-xs text-stone-400">
+                                                {person.lines.map((line) => (
+                                                    <div key={`${person.key}-${line.itemId}`} className="flex items-center justify-between">
+                                                        <span>{line.itemName} x {line.quantity}</span>
+                                                        <span>{formatINR(line.lineTotal)}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <div className="mt-3 space-y-1 border-t border-white/10 pt-3 text-sm">
+                                    <div className="flex items-center justify-between text-stone-300">
+                                        <span>Items total</span>
+                                        <span>{formatINR(splitBill.totalFromPeople)}</span>
+                                    </div>
+                                    <div className="flex items-center justify-between text-stone-300">
+                                        <span>Service charge</span>
+                                        <span>{formatINR(5)}</span>
+                                    </div>
+                                    <div className="flex items-center justify-between font-semibold text-white">
+                                        <span>Grand total</span>
+                                        <span>{formatINR(splitBill.totalFromPeople + 5)}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-3 text-sm font-semibold text-white">
+                                <span>Grand total</span>
+                                <span>{formatINR(displayedSubtotal + 5)}</span>
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
