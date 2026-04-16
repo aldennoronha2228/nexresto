@@ -28,6 +28,7 @@ const formatCurrency = (amount: number) => {
 
 const formatTime = (dateString: string) => {
     const date = new Date(dateString);
+    if (!Number.isFinite(date.getTime())) return 'Just now';
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
     const diffMins = Math.floor(diffMs / 60000);
@@ -346,7 +347,7 @@ export default function SuperAdminOverview() {
                             onClick={() => window.location.href = '/super-admin/logs'}
                             className="text-purple-400 text-sm hover:text-purple-300"
                         >
-                            View all ΓåÆ
+                            View all -&gt;
                         </button>
                     </div>
 
@@ -402,7 +403,7 @@ export default function SuperAdminOverview() {
                         >
                             <p className="text-slate-400 text-sm">{item.label}</p>
                             <p className="text-2xl font-semibold tracking-tight text-white mt-1">{item.tier}</p>
-                            <p className="text-xs text-slate-500 mt-2 group-hover:text-slate-400 transition-colors">Click to view features ΓåÆ</p>
+                            <p className="text-xs text-slate-500 mt-2 group-hover:text-slate-400 transition-colors">Click to view features -&gt;</p>
                             <div className={cn(
                                 "absolute top-0 right-0 w-16 h-16 rounded-bl-full bg-gradient-to-br opacity-20 group-hover:opacity-30 transition-opacity",
                                 item.color

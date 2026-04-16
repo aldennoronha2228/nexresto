@@ -152,6 +152,43 @@ export default function LoginPage() {
         }
     }, [inviteEmail, canCreateAccount]);
 
+    useEffect(() => {
+        if (loading || tenantLoading || adminLoading) return;
+        if (session || adminSession) return;
+        if (canCreateAccount) return;
+
+        const hasAuthIntent = Boolean(
+            searchParams.get('next') ||
+            searchParams.get('redirect') ||
+            searchParams.get('request') ||
+            searchParams.get('invite') ||
+            searchParams.get('email')
+        );
+        if (hasAuthIntent) return;
+
+        const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+        const isChrome = /chrome/i.test(ua) && !/edg|opr|opera|brave|vivaldi|duckduckgo/i.test(ua);
+        if (!isChrome) return;
+
+        const referrer = typeof document !== 'undefined' ? document.referrer : '';
+        const sameOriginReferrer =
+            typeof window !== 'undefined' && referrer.startsWith(window.location.origin);
+
+        // Redirect only when /login is opened directly/external in Chrome.
+        if (!sameOriginReferrer) {
+            router.replace('/');
+        }
+    }, [
+        loading,
+        tenantLoading,
+        adminLoading,
+        session,
+        adminSession,
+        canCreateAccount,
+        searchParams,
+        router,
+    ]);
+
     const resolveProfileWithRetry = async (user: User, attempts = 4): Promise<ResolvedProfile | null> => {
         for (let i = 0; i < attempts; i++) {
             if (i > 0) {
