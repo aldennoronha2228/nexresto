@@ -140,7 +140,7 @@ export default function PricingCheckoutButton({
         toast.info('Redirecting to secure payment...');
         const payUrl = getAbsolutePayUrl(plan);
         // In APK WebView, use full URL so OS can route it to external browser.
-        window.location.href = payUrl;
+        window.location.replace(payUrl);
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unable to redirect to secure payment page';
         toast.error(message);

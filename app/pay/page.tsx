@@ -39,6 +39,7 @@ type RazorpayInstance = {
 };
 
 const PAYMENT_CANCELLED_ERROR = 'PAYMENT_CANCELLED_BY_USER';
+const WEBVIEW_REDIRECT_KEY = 'nexresto_pay_external_redirect_attempted';
 
 function normalizePlan(raw: string | null): UpgradablePlan | null {
   const value = String(raw || '').trim().toLowerCase();
@@ -57,10 +58,13 @@ function getHttpsBaseUrl(): string {
   return '';
 }
 
-function successRedirectUrl(): string {
-  const base = getHttpsBaseUrl();
-  if (!base) return '/dashboard?payment=success';
-  return `${base}/dashboard?payment=success`;
+function dashboardRedirectUrl(restaurantId?: string): string {
+  const safeRestaurantId = String(restaurantId || '').trim();
+  if (safeRestaurantId) {
+    return `/${encodeURIComponent(safeRestaurantId)}/dashboard?payment=success`;
+  }
+
+  return '/login?payment=success';
 }
 
 export default function PayPage() {
@@ -70,6 +74,7 @@ export default function PayPage() {
 
   const [statusText, setStatusText] = useState('Preparing secure payment...');
   const [errorText, setErrorText] = useState<string | null>(null);
+  const [showManualExternalOpen, setShowManualExternalOpen] = useState(false);
 
   const plan = useMemo(() => normalizePlan(searchParams.get('plan')), [searchParams]);
 
@@ -87,9 +92,29 @@ export default function PayPage() {
       }
 
       const fullUrl = `${base}/pay?plan=${encodeURIComponent(plan)}`;
-      setStatusText('Redirecting to secure payment...');
-      window.location.href = fullUrl;
+
+      // Prevent redirect loops when a WebView cannot hand off to external browser.
+      const redirectFingerprint = `${plan}@${fullUrl}`;
+      const previousAttempt = typeof window !== 'undefined'
+        ? sessionStorage.getItem(WEBVIEW_REDIRECT_KEY)
+        : null;
+
+      if (previousAttempt !== redirectFingerprint) {
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem(WEBVIEW_REDIRECT_KEY, redirectFingerprint);
+        }
+        setStatusText('Redirecting to secure payment...');
+        window.location.replace(fullUrl);
+        return;
+      }
+
+      setStatusText('Unable to open external browser automatically. Tap the button below.');
+      setShowManualExternalOpen(true);
       return;
+    }
+
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem(WEBVIEW_REDIRECT_KEY);
     }
 
     let cancelled = false;
@@ -200,6 +225,7 @@ export default function PayPage() {
                 const verifyPayload = (await verifyRes.json()) as {
                   success?: boolean;
                   error?: string;
+                  restaurantId?: string;
                 };
 
                 if (!verifyRes.ok || !verifyPayload?.success) {
@@ -207,7 +233,7 @@ export default function PayPage() {
                 }
 
                 setStatusText('Payment successful. Redirecting...');
-                window.location.replace(successRedirectUrl());
+                router.replace(dashboardRedirectUrl(verifyPayload.restaurantId));
                 resolve();
               } catch (error) {
                 reject(error);
@@ -252,6 +278,20 @@ export default function PayPage() {
         </div>
         <h1 className="text-xl font-semibold text-white">Secure Payment</h1>
         <p className="mt-3 text-sm text-[#bcc2d3]">{statusText}</p>
+        {showManualExternalOpen && plan && (
+          <button
+            className="mt-4 inline-flex items-center justify-center rounded-xl border border-white/20 bg-white/5 px-4 py-2 text-sm font-semibold text-white hover:bg-white/10"
+            onClick={() => {
+              const base = getHttpsBaseUrl();
+              if (!base) return;
+              const fullUrl = `${base}/pay?plan=${encodeURIComponent(plan)}`;
+              window.location.replace(fullUrl);
+            }}
+            type="button"
+          >
+            Open Secure Payment
+          </button>
+        )}
         {errorText && <p className="mt-4 text-sm text-rose-300">{errorText}</p>}
       </div>
     </div>
