@@ -164,6 +164,20 @@ export async function GET(request: NextRequest) {
                 }
             }
 
+            // Extra fallback: some legacy rows may store mixed-case emails,
+            // which won't match exact Firestore where() equality on normalized email.
+            if (!matchedStaffData && normalizedUserEmail) {
+                const staffSnap = await restDoc.ref.collection('staff').limit(200).get();
+                const caseInsensitiveMatch = staffSnap.docs.find((staffDoc) => {
+                    const email = String(staffDoc.data()?.email || '').trim().toLowerCase();
+                    return email !== '' && email === normalizedUserEmail;
+                });
+
+                if (caseInsensitiveMatch) {
+                    matchedStaffData = caseInsensitiveMatch.data() as Record<string, any>;
+                }
+            }
+
             const restData = restDoc.data();
             const normalizedOwnerEmail = String(restData?.owner_email || '').trim().toLowerCase();
 
@@ -174,6 +188,7 @@ export async function GET(request: NextRequest) {
 
             if (matchedStaffData) {
                 const restData = restDoc.data();
+                const resolvedRole = String(matchedStaffData.role || 'staff').trim() || 'staff';
 
                 const endDate = normalizeYmd(restData?.subscription_end_date);
                 const todayYmd = getTodayYmdUtc();
@@ -199,7 +214,7 @@ export async function GET(request: NextRequest) {
 
                 // Set custom claims for faster future lookups
                 const nextClaims: Record<string, unknown> = {
-                    role: String(matchedStaffData.role || 'staff'),
+                    role: resolvedRole,
                     restaurant_id: restDoc.id,
                     tenant_id: restDoc.id,
                 };
@@ -214,7 +229,7 @@ export async function GET(request: NextRequest) {
                     profile: {
                         tenant_id: restDoc.id,
                         tenant_name: restData.name || restDoc.id,
-                        role: String(matchedStaffData.role || 'staff'),
+                        role: resolvedRole,
                         must_change_password: Boolean(claims.must_change_password),
                         full_name: matchedStaffData.full_name || userRecord.displayName || userRecord.email,
                         is_impersonating: Boolean(claims.impersonated_by_super_admin),
