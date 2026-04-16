@@ -187,40 +187,40 @@ function ReportsSection() {
     // Not Pro - show upgrade prompt
     if (!isPro) {
         return (
-            <motion.div
+                <div className="space-y-4 sm:space-y-6">
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-8 border border-slate-700"
-            >
+                            <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Analytics Dashboard</h1>
                 <div className="flex items-start gap-4">
                     <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-lg shadow-purple-500/30 flex-shrink-0">
-                        <Lock className="w-7 h-7 text-white" />
-                    </div>
+                        <div className="flex items-center gap-2 self-start sm:self-auto">
+                            <button className="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors">
                     <div className="flex-1">
                         <h3 className="text-xl font-bold text-white mb-2">Daily Reports</h3>
                         <p className="text-slate-300 mb-4">
-                            Automated Daily Reports are a Pro feature. Upgrade to get sales insights
+                            <button className="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors">
                             delivered to your inbox with professional PDF summaries.
                         </p>
                         <div className="flex flex-wrap items-center gap-3">
                             <div className="inline-flex items-center gap-2 px-4 py-2 bg-purple-500/20 border border-purple-500/30 rounded-xl text-purple-300 text-sm font-medium">
                                 <Sparkles className="w-4 h-4" />
                                 Pro Feature
-                            </div>
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                             <ul className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-400">
                                 <li>• Revenue summaries</li>
                                 <li>• Top selling items</li>
                                 <li>• Peak hour analysis</li>
                                 <li>• PDF downloads</li>
                             </ul>
-                        </div>
+                                className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 p-3 sm:p-5"
                     </div>
-                </div>
-            </motion.div>
-        );
+                                <div className="flex items-center justify-between mb-2 sm:mb-3">
+                                    <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-blue-50 flex items-center justify-center">
+                                        <stat.icon className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
     }
 
-    return (
+                                        "hidden sm:inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full",
         <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -229,36 +229,36 @@ function ReportsSection() {
         >
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
                 <div>
-                    <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
-                        <FileText className="w-5 h-5 text-blue-600" />
+                                <p className="text-xl sm:text-2xl font-bold text-slate-900 leading-tight">{stat.value}</p>
+                                <p className="text-xs sm:text-sm text-slate-500 mt-1">{stat.title}</p>
                         Daily Reports
                     </h2>
                     <p className="text-sm text-slate-500 mt-1">Download professional PDF summaries</p>
                 </div>
                 <div className="flex items-center gap-2">
-                    <motion.button
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                        onClick={generateTodayReport}
-                        disabled={generating}
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.4 }}
+                        className="relative overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-white via-slate-50/70 to-blue-50/40 p-4 sm:p-6 shadow-sm"
                         className="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-medium transition-colors disabled:opacity-50"
                     >
                         {generating ? (
                             <Loader2 className="w-4 h-4 animate-spin" />
                         ) : (
                             <BarChart3 className="w-4 h-4" />
-                        )}
-                        Generate Yesterday's Report
+                                <h2 className="text-base sm:text-lg font-semibold text-slate-900">Revenue Trend</h2>
+                                <p className="text-xs sm:text-sm text-slate-500">Daily revenue for the past week</p>
                     </motion.button>
-                    {normalizedReports.length > 1 && (
-                        <motion.button
+                            <div className="flex items-center gap-2 text-xs sm:text-sm">
+                                <span className="inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50/80 px-2.5 py-1 font-medium text-blue-700">
                             whileHover={{ scale: 1.02 }}
                             whileTap={{ scale: 0.98 }}
                             onClick={handleDownloadWeekly}
                             disabled={downloadingWeekly}
                             className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                         >
-                            {downloadingWeekly ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                        <div className="relative h-64 sm:h-72 rounded-2xl border border-slate-100 bg-white/70 p-3 sm:p-4 overflow-x-auto">
                             {downloadingWeekly ? 'Downloading...' : 'Weekly Summary'}
                         </motion.button>
                     )}
@@ -493,40 +493,41 @@ function AnalyticsContent() {
     const maxRevenue = Math.max(1, ...revenueData.map(d => d.revenue));
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6">
             {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold text-slate-900">Analytics Dashboard</h1>
+                    <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Analytics Dashboard</h1>
                     <p className="text-slate-500 text-sm mt-1">Track your restaurant's performance</p>
                 </div>
-                <div className="flex items-center gap-2">
-                    <button className="px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors">
+                <div className="flex flex-wrap items-center gap-2">
+                    <button className="px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg sm:rounded-xl hover:bg-slate-50 transition-colors">
                         <Calendar className="w-4 h-4 inline mr-2" />
                         Last 7 Days
                     </button>
-                    <button className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors">
+                    <button className="px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium text-white bg-blue-600 rounded-lg sm:rounded-xl hover:bg-blue-700 transition-colors">
                         Export Report
                     </button>
                 </div>
             </div>
 
             {/* Stat Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="-mx-1 overflow-x-auto px-1 pb-1 sm:mx-0 sm:px-0">
+                <div className="flex gap-3 sm:grid sm:grid-cols-2 lg:grid-cols-4 sm:gap-4">
                 {statCards.map((stat, i) => (
                     <motion.div
                         key={stat.title}
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: i * 0.1 }}
-                        className="bg-white rounded-2xl border border-slate-200 p-5"
+                        className="min-w-[158px] sm:min-w-0 bg-white rounded-xl sm:rounded-2xl border border-slate-200 p-3.5 sm:p-5"
                     >
-                        <div className="flex items-center justify-between mb-3">
-                            <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center">
-                                <stat.icon className="w-5 h-5 text-blue-600" />
+                        <div className="flex items-center justify-between mb-2.5 sm:mb-3">
+                            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-blue-50 flex items-center justify-center">
+                                <stat.icon className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
                             </div>
                             <span className={cn(
-                                "flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full",
+                                "flex items-center gap-1 text-[10px] sm:text-xs font-medium px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-full",
                                 stat.isPositive
                                     ? "bg-green-50 text-green-600"
                                     : "bg-red-50 text-red-600"
@@ -535,10 +536,11 @@ function AnalyticsContent() {
                                 {stat.change}
                             </span>
                         </div>
-                        <p className="text-2xl font-bold text-slate-900">{stat.value}</p>
-                        <p className="text-sm text-slate-500 mt-1">{stat.title}</p>
+                        <p className="text-xl sm:text-2xl font-bold text-slate-900 leading-tight">{stat.value}</p>
+                        <p className="text-xs sm:text-sm text-slate-500 mt-1">{stat.title}</p>
                     </motion.div>
                 ))}
+                </div>
             </div>
 
             {/* Revenue Chart */}
@@ -546,25 +548,26 @@ function AnalyticsContent() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.4 }}
-                className="relative overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-white via-slate-50/70 to-blue-50/40 p-6 shadow-sm"
+                className="relative overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-white via-slate-50/70 to-blue-50/40 p-4 sm:p-6 shadow-sm"
             >
                 <div className="pointer-events-none absolute -top-10 -right-10 h-32 w-32 rounded-full bg-blue-200/30 blur-2xl" />
                 <div className="pointer-events-none absolute -bottom-10 -left-10 h-32 w-32 rounded-full bg-indigo-200/20 blur-2xl" />
 
-                <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center justify-between mb-4 sm:mb-6">
                     <div>
-                        <h2 className="text-lg font-semibold text-slate-900">Revenue Trend</h2>
-                        <p className="text-sm text-slate-500">Daily revenue for the past week</p>
+                        <h2 className="text-base sm:text-lg font-semibold text-slate-900">Revenue Trend</h2>
+                        <p className="text-xs sm:text-sm text-slate-500">Daily revenue for the past week</p>
                     </div>
-                    <div className="flex items-center gap-4 text-sm">
-                        <span className="inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50/80 px-3 py-1 font-medium text-blue-700">
+                    <div className="flex items-center gap-4 text-xs sm:text-sm">
+                        <span className="inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50/80 px-2.5 py-1 sm:px-3 sm:py-1 font-medium text-blue-700">
                             <div className="h-2.5 w-2.5 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500"></div>
-                            Revenue (INR)
+                            <span className="hidden xs:inline">Revenue (INR)</span>
+                            <span className="xs:hidden">INR</span>
                         </span>
                     </div>
                 </div>
 
-                <div className="relative h-72 rounded-2xl border border-slate-100 bg-white/70 p-4">
+                <div className="relative h-64 sm:h-72 rounded-2xl border border-slate-100 bg-white/70 p-3 sm:p-4">
                     <div className="pointer-events-none absolute inset-0 px-4 py-4">
                         {[0, 25, 50, 75, 100].map((line) => (
                             <div
@@ -575,7 +578,7 @@ function AnalyticsContent() {
                         ))}
                     </div>
 
-                    <div className="relative z-10 h-full flex items-end gap-3">
+                    <div className="relative z-10 h-full min-w-[440px] flex items-end gap-2 sm:gap-3">
                     {loadingOverview ? (
                         <div className="w-full h-full flex items-center justify-center text-slate-400 text-sm">
                             Loading analytics...
@@ -599,7 +602,7 @@ function AnalyticsContent() {
                                         </div>
                                     </motion.div>
                                 </div>
-                                <span className="text-xs font-medium text-slate-500">{data.day}</span>
+                                <span className="text-[11px] sm:text-xs font-medium text-slate-500">{data.day}</span>
                             </div>
                         ))
                     )}
@@ -612,9 +615,9 @@ function AnalyticsContent() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.6 }}
-                className="bg-white rounded-2xl border border-slate-200 p-6"
+                className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-6"
             >
-                <h2 className="text-lg font-semibold text-slate-900 mb-4">Top Selling Items</h2>
+                <h2 className="text-base sm:text-lg font-semibold text-slate-900 mb-4">Top Selling Items</h2>
                 {loadingOverview ? (
                     <div className="text-center py-10 text-slate-400 text-sm">Loading item analytics...</div>
                 ) : topItems.length === 0 ? (
