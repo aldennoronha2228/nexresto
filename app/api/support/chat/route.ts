@@ -84,7 +84,7 @@ function resolveGlmChatCompletionsUrl(apiUrl: string): string {
 }
 
 function resolveGlmModelCandidates(): string[] {
-    const raw = process.env.GLM4_MODEL || 'glm-4.6v,GLM-4.6V';
+    const raw = process.env.GLM4_MODEL || 'zhipu/glm-5.1,glm-4.6v,GLM-4.6V';
     return Array.from(new Set(raw.split(',').map((m) => m.trim()).filter(Boolean)));
 }
 
