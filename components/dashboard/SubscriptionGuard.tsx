@@ -7,7 +7,7 @@
 
 import { motion } from 'motion/react';
 import { AlertTriangle } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { useSuperAdminAuth } from '@/context/SuperAdminAuthContext';
 
@@ -16,10 +16,13 @@ interface SubscriptionGuardProps {
 }
 
 export function SubscriptionGuard({ children }: SubscriptionGuardProps) {
-    const { subscriptionStatus, tenantName, loading, isImpersonating, signOut } = useAuth();
+    const { subscriptionStatus, tenantName, tenantId, userRole, loading, isImpersonating, signOut } = useAuth();
     const { userRole: superAdminRole } = useSuperAdminAuth();
+    const params = useParams<{ storeId: string }>();
     const router = useRouter();
     const isSuperAdmin = superAdminRole === 'super_admin';
+    const canRenewPlan = userRole === 'owner' || userRole === 'admin';
+    const targetStoreId = params?.storeId || tenantId || '';
 
     // Don't block while loading
     if (loading) {
@@ -68,10 +71,25 @@ export function SubscriptionGuard({ children }: SubscriptionGuardProps) {
                             Renew your plan to restore dashboard access and continue managing orders, menu, and settings.
                         </p>
 
-                        <div className="pt-2">
-                            <div className="w-full px-4 py-3 bg-slate-700/60 border border-slate-600 rounded-xl text-center">
-                                <p className="text-sm text-slate-200 font-medium">Please contact the owner to renew the plan.</p>
-                            </div>
+                        <div className="pt-2 space-y-3">
+                            {canRenewPlan ? (
+                                <button
+                                    onClick={() => {
+                                        if (!targetStoreId) {
+                                            router.replace('/login');
+                                            return;
+                                        }
+                                        router.push(`/${targetStoreId}/choose-plan`);
+                                    }}
+                                    className="w-full px-4 py-3 rounded-xl bg-[#3e54d3] hover:opacity-90 text-sm text-[#d8dbff] font-semibold transition"
+                                >
+                                    Choose Plan & Renew
+                                </button>
+                            ) : (
+                                <div className="w-full px-4 py-3 bg-slate-700/60 border border-slate-600 rounded-xl text-center">
+                                    <p className="text-sm text-slate-200 font-medium">Please contact the owner to renew the plan.</p>
+                                </div>
+                            )}
                         </div>
 
                         <button
