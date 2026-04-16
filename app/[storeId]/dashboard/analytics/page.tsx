@@ -510,17 +510,19 @@ function AnalyticsContent() {
                         </div>
                     ) : (
                         revenueData.map((data, i) => (
-                            <div key={data.dateKey} className="flex-1 flex flex-col items-center gap-2">
-                                <motion.div
-                                    initial={{ height: 0 }}
-                                    animate={{ height: `${Math.max((data.revenue / maxRevenue) * 100, data.revenue > 0 ? 8 : 0)}%` }}
-                                    transition={{ delay: 0.5 + i * 0.1, duration: 0.5 }}
-                                    className="w-full rounded-t-xl border border-blue-300/30 bg-gradient-to-t from-blue-600 via-blue-500 to-sky-400 shadow-[0_10px_24px_-12px_rgba(59,130,246,0.9)] relative group cursor-pointer"
-                                >
-                                    <div className="absolute -top-9 left-1/2 -translate-x-1/2 rounded-md bg-slate-900 px-2 py-1 text-xs text-white opacity-0 shadow-md transition-opacity whitespace-nowrap group-hover:opacity-100">
-                                        {formatCurrency(data.revenue)}
-                                    </div>
-                                </motion.div>
+                            <div key={data.dateKey} className="flex-1 h-full flex flex-col items-center gap-2">
+                                <div className="flex-1 w-full flex items-end">
+                                    <motion.div
+                                        initial={{ height: 0 }}
+                                        animate={{ height: `${Math.max((data.revenue / maxRevenue) * 220, data.revenue > 0 ? 10 : 0)}px` }}
+                                        transition={{ delay: 0.5 + i * 0.1, duration: 0.5 }}
+                                        className="w-full rounded-t-xl border border-blue-300/30 bg-gradient-to-t from-blue-600 via-blue-500 to-sky-400 shadow-[0_10px_24px_-12px_rgba(59,130,246,0.9)] relative group cursor-pointer"
+                                    >
+                                        <div className="absolute -top-9 left-1/2 -translate-x-1/2 rounded-md bg-slate-900 px-2 py-1 text-xs text-white opacity-0 shadow-md transition-opacity whitespace-nowrap group-hover:opacity-100">
+                                            {formatCurrency(data.revenue)}
+                                        </div>
+                                    </motion.div>
+                                </div>
                                 <span className="text-xs font-medium text-slate-500">{data.day}</span>
                             </div>
                         ))
