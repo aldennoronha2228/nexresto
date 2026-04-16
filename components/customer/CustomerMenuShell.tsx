@@ -215,10 +215,9 @@ export function CustomerMenuShell({ restaurantIdOverride, tenantHomePath, restau
     React.useEffect(() => {
         const normalized = queryTableId.trim();
         const sharedFromParam = sharedParam === '1' || sharedParam === 'true';
-        const explicitNonShared = sharedParam === '0' || sharedParam === 'false';
-        const inferSharedFromTable = normalized.length > 0 && !explicitNonShared;
 
-        setSharedTableContext(sharedFromParam || inferSharedFromTable);
+        // Shared ordering mode must be explicit to avoid blocking regular table QR links.
+        setSharedTableContext(sharedFromParam);
 
         if (normalized) {
             setResolvedTableId(normalized);
