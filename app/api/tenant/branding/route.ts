@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminFirestore } from '@/lib/firebase-admin';
 
+export const dynamic = 'force-dynamic';
+
 function normalizeHex(value: unknown, fallback: string): string {
     if (typeof value !== 'string') return fallback;
     const v = value.trim();
@@ -84,6 +86,9 @@ export async function GET(request: NextRequest) {
             ...brandingDoc,
         };
 
+        const brandingUpdatedAt =
+            String(brandingDoc.updated_at || brandingNested.updated_at || restaurant.updated_at || Date.now());
+
         return NextResponse.json({
             primaryColor: normalizeHex(mergedBranding.primaryColor, '#1B4332'),
             secondaryColor: normalizeHex(mergedBranding.secondaryColor, '#D4AF37'),
@@ -97,6 +102,11 @@ export async function GET(request: NextRequest) {
             showHeroSection: normalizeBool(mergedBranding.showHeroSection, true),
             catalogHeadline: normalizeText(mergedBranding.catalogHeadline, 80, ''),
             featuredImages: normalizeStringArray(mergedBranding.featuredImages, 8, 500),
+            brandingVersion: brandingUpdatedAt,
+        }, {
+            headers: {
+                'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+            },
         });
     } catch (error: any) {
         return NextResponse.json({ error: error?.message || 'Failed to load tenant branding' }, { status: 500 });

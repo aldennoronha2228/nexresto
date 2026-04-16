@@ -41,6 +41,7 @@ type CustomerBranding = {
     showHeroSection: boolean;
     catalogHeadline: string;
     featuredImages: string[];
+    brandingVersion: string;
 };
 
 type MenuCatalogItem = {
@@ -73,7 +74,22 @@ const DEFAULT_BRANDING: CustomerBranding = {
     showHeroSection: true,
     catalogHeadline: '',
     featuredImages: [],
+    brandingVersion: '',
 };
+
+function appendCacheBuster(url: string, version: string): string {
+    const raw = String(url || '').trim();
+    if (!raw || !version) return raw;
+
+    try {
+        const parsed = new URL(raw);
+        parsed.searchParams.set('v', version);
+        return parsed.toString();
+    } catch {
+        const joiner = raw.includes('?') ? '&' : '?';
+        return `${raw}${joiner}v=${encodeURIComponent(version)}`;
+    }
+}
 
 const MENU_CACHE_PREFIX = 'nexresto:customer-menu:';
 
@@ -131,8 +147,14 @@ function normalizeBranding(raw: unknown): CustomerBranding {
         secondaryColor: typeof source.secondaryColor === 'string' ? source.secondaryColor : DEFAULT_BRANDING.secondaryColor,
         backgroundColor: typeof source.backgroundColor === 'string' ? source.backgroundColor : DEFAULT_BRANDING.backgroundColor,
         fontFamily: typeof source.fontFamily === 'string' ? source.fontFamily : DEFAULT_BRANDING.fontFamily,
-        logoUrl: typeof source.logoUrl === 'string' ? source.logoUrl : DEFAULT_BRANDING.logoUrl,
-        heroImageUrl: getOptimizedHeroImageSrc(typeof source.heroImageUrl === 'string' ? source.heroImageUrl : ''),
+        logoUrl: appendCacheBuster(
+            typeof source.logoUrl === 'string' ? source.logoUrl : DEFAULT_BRANDING.logoUrl,
+            typeof source.brandingVersion === 'string' ? source.brandingVersion : ''
+        ),
+        heroImageUrl: appendCacheBuster(
+            getOptimizedHeroImageSrc(typeof source.heroImageUrl === 'string' ? source.heroImageUrl : ''),
+            typeof source.brandingVersion === 'string' ? source.brandingVersion : ''
+        ),
         heroOverlayOpacity: typeof source.heroOverlayOpacity === 'number' ? source.heroOverlayOpacity : DEFAULT_BRANDING.heroOverlayOpacity,
         heroHeadline: typeof source.heroHeadline === 'string' && source.heroHeadline ? source.heroHeadline : DEFAULT_BRANDING.heroHeadline,
         heroTagline: typeof source.heroTagline === 'string' && source.heroTagline ? source.heroTagline : DEFAULT_BRANDING.heroTagline,
@@ -141,6 +163,7 @@ function normalizeBranding(raw: unknown): CustomerBranding {
         featuredImages: Array.isArray(source.featuredImages)
             ? source.featuredImages.filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
             : [],
+        brandingVersion: typeof source.brandingVersion === 'string' ? source.brandingVersion : '',
     };
 }
 
@@ -215,9 +238,11 @@ export function CustomerMenuShell({ restaurantIdOverride, tenantHomePath, restau
     React.useEffect(() => {
         const normalized = queryTableId.trim();
         const sharedFromParam = sharedParam === '1' || sharedParam === 'true';
+        const explicitNonShared = sharedParam === '0' || sharedParam === 'false';
+        const inferredFromEligibleTableSession = normalized.length > 0 && !explicitNonShared && sharedOrderingAllowed;
 
-        // Shared ordering mode must be explicit to avoid blocking regular table QR links.
-        setSharedTableContext(sharedFromParam);
+        // Keep compatibility with older QR links by inferring shared mode for eligible paid plans.
+        setSharedTableContext(sharedFromParam || inferredFromEligibleTableSession);
 
         if (normalized) {
             setResolvedTableId(normalized);
@@ -233,7 +258,7 @@ export function CustomerMenuShell({ restaurantIdOverride, tenantHomePath, restau
         }
 
         setResolvedTableId((localStorage.getItem(getTenantTableStorageKey(restaurantId)) || '').trim());
-    }, [queryTableId, restaurantId, sharedParam]);
+    }, [queryTableId, restaurantId, sharedParam, sharedOrderingAllowed]);
 
     React.useEffect(() => {
         let active = true;
@@ -332,7 +357,9 @@ export function CustomerMenuShell({ restaurantIdOverride, tenantHomePath, restau
             }
 
             try {
-                const res = await fetch(`/api/tenant/branding?restaurantId=${encodeURIComponent(restaurantId)}`);
+                const res = await fetch(`/api/tenant/branding?restaurantId=${encodeURIComponent(restaurantId)}`, {
+                    cache: 'no-store',
+                });
                 const payload = await res.json().catch(() => ({}));
                 if (!res.ok) throw new Error(String(payload?.error || 'Failed branding load'));
                 if (active) setBranding(normalizeBranding(payload));
