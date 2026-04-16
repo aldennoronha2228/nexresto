@@ -85,7 +85,77 @@ export async function POST(request: NextRequest) {
         const customerName = String(body.customer?.name || '').trim().slice(0, 80);
         const customerPhone = normalizePhone(body.customer?.phone);
 
-        const orderRef = await adminFirestore.collection(`restaurants/${payload.restaurantId}/orders`).add({
+        const ordersCollection = adminFirestore.collection(`restaurants/${payload.restaurantId}/orders`);
+
+        // In shared-table mode, append to the latest active table order so guests can order collaboratively.
+        if (isSharedTableContext) {
+            const activeSnap = await ordersCollection
+                .where('table_number', '==', payload.tableId)
+                .where('status', 'in', ['new', 'preparing'])
+                .orderBy('created_at', 'desc')
+                .limit(1)
+                .get();
+
+            if (!activeSnap.empty) {
+                const activeDoc = activeSnap.docs[0];
+                const activeData = activeDoc.data() as Record<string, unknown>;
+                const existingItems = Array.isArray(activeData.items)
+                    ? (activeData.items as Array<Record<string, unknown>>)
+                    : [];
+
+                const mergedByKey = new Map<string, { menu_item_id: string | null; item_name: string; item_price: number; quantity: number }>();
+
+                for (const row of existingItems) {
+                    const name = String(row.item_name || '').slice(0, 200);
+                    const price = Number(row.item_price || 0);
+                    const qty = Math.max(0, Number(row.quantity || 0));
+                    if (!name || !Number.isFinite(price) || qty <= 0) continue;
+                    const key = `${name}::${price}`;
+                    mergedByKey.set(key, {
+                        menu_item_id: typeof row.menu_item_id === 'string' ? row.menu_item_id : null,
+                        item_name: name,
+                        item_price: price,
+                        quantity: qty,
+                    });
+                }
+
+                for (const row of orderItems) {
+                    const key = `${row.item_name}::${row.item_price}`;
+                    const existing = mergedByKey.get(key);
+                    if (existing) {
+                        existing.quantity += row.quantity;
+                    } else {
+                        mergedByKey.set(key, { ...row });
+                    }
+                }
+
+                const mergedItems = Array.from(mergedByKey.values());
+                const mergedTotal = mergedItems.reduce((sum, row) => sum + row.item_price * row.quantity, 0);
+
+                await activeDoc.ref.set(
+                    {
+                        items: mergedItems,
+                        total: mergedTotal,
+                        customer_name: customerName || activeData.customer_name || null,
+                        customer_phone: /^\d{10}$/.test(customerPhone)
+                            ? customerPhone
+                            : (typeof activeData.customer_phone === 'string' ? activeData.customer_phone : null),
+                        updated_at: FieldValue.serverTimestamp(),
+                    },
+                    { merge: true }
+                );
+
+                const existingDailyOrderNumber = Number(activeData.daily_order_number || dailyOrderNumber) || dailyOrderNumber;
+
+                return NextResponse.json({
+                    orderId: activeDoc.id,
+                    dailyOrderNumber: existingDailyOrderNumber,
+                    merged: true,
+                });
+            }
+        }
+
+        const orderRef = await ordersCollection.add({
             table_number: payload.tableId,
             total: payload.total,
             status: 'new',
