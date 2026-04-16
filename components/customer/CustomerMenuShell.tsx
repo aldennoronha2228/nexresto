@@ -11,6 +11,7 @@ import { getOptimizedHeroImageSrc, getOptimizedMenuItemImageSrc } from '@/lib/im
 import { getTenantCustomerStorageKey, getTenantTableStorageKey } from '@/lib/client/storage/tenantKeys';
 import { isValidPhone, normalizePhone } from '@/lib/customer-tracking';
 import { toast } from 'sonner';
+import type { CartItem } from '@/context/CartContext';
 import { UpgradeCard } from './UpgradeCard';
 import MenuCatalogLayout from './MenuCatalogLayout';
 import { CartDrawer } from './CartDrawer';
@@ -232,8 +233,126 @@ export function CustomerMenuShell({ restaurantIdOverride, tenantHomePath, restau
     const [sharedTableContext, setSharedTableContext] = React.useState(false);
     const [sharedOrderingAllowed, setSharedOrderingAllowed] = React.useState(true);
     const [featuresReady, setFeaturesReady] = React.useState(false);
+    const [sharedCartItems, setSharedCartItems] = React.useState<CartItem[]>([]);
 
     const sharedOrderingLocked = sharedTableContext && featuresReady && !sharedOrderingAllowed;
+    const sharedModeActive = sharedTableContext && !sharedOrderingLocked && restaurantId.length > 0 && resolvedTableId.length > 0;
+
+    const buildSharedCartUrl = React.useCallback(() => {
+        const params = new URLSearchParams();
+        params.set('restaurantId', restaurantId);
+        params.set('tableId', resolvedTableId);
+        return `/api/cart/shared?${params.toString()}`;
+    }, [restaurantId, resolvedTableId]);
+
+    const refreshSharedCart = React.useCallback(async () => {
+        if (!sharedModeActive) {
+            setSharedCartItems([]);
+            return;
+        }
+
+        try {
+            const res = await fetch(buildSharedCartUrl(), { cache: 'no-store' });
+            const payload = await res.json().catch(() => ({}));
+            if (!res.ok) return;
+
+            const items: unknown[] = Array.isArray(payload?.items) ? payload.items : [];
+            const normalized: CartItem[] = items
+                .map((row: unknown) => {
+                    const item = row as Partial<CartItem>;
+                    return {
+                        id: String(item.id || '').trim(),
+                        name: String(item.name || '').trim(),
+                        description: String(item.description || ''),
+                        price: Number(item.price || 0),
+                        image: String(item.image || ''),
+                        category: String(item.category || 'Others') || 'Others',
+                        quantity: Math.max(0, Math.floor(Number(item.quantity || 0))),
+                    };
+                })
+                .filter((item) => item.id && item.name && Number.isFinite(item.price) && item.quantity > 0);
+
+            setSharedCartItems(normalized);
+        } catch {
+            // Ignore transient cart sync failures.
+        }
+    }, [buildSharedCartUrl, sharedModeActive]);
+
+    const mutateSharedCartItem = React.useCallback(async (item: {
+        id: string;
+        name: string;
+        description?: string;
+        category?: string;
+        image?: string;
+        price: number;
+    }, quantity: number) => {
+        if (!sharedModeActive) return;
+
+        try {
+            const res = await fetch('/api/cart/shared', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    restaurantId,
+                    tableId: resolvedTableId,
+                    item: {
+                        id: item.id,
+                        name: item.name,
+                        description: item.description || '',
+                        category: item.category || 'Others',
+                        image: item.image || '',
+                        price: item.price,
+                    },
+                    quantity,
+                }),
+            });
+
+            const payload = await res.json().catch(() => ({}));
+            if (!res.ok) return;
+
+            const items: unknown[] = Array.isArray(payload?.items) ? payload.items : [];
+            const normalized: CartItem[] = items
+                .map((row: unknown) => {
+                    const entry = row as Partial<CartItem>;
+                    return {
+                        id: String(entry.id || '').trim(),
+                        name: String(entry.name || '').trim(),
+                        description: String(entry.description || ''),
+                        price: Number(entry.price || 0),
+                        image: String(entry.image || ''),
+                        category: String(entry.category || 'Others') || 'Others',
+                        quantity: Math.max(0, Math.floor(Number(entry.quantity || 0))),
+                    };
+                })
+                .filter((entry) => entry.id && entry.name && Number.isFinite(entry.price) && entry.quantity > 0);
+
+            setSharedCartItems(normalized);
+        } catch {
+            // Ignore transient cart sync failures.
+        }
+    }, [restaurantId, resolvedTableId, sharedModeActive]);
+
+    React.useEffect(() => {
+        if (!sharedModeActive) {
+            setSharedCartItems([]);
+            return;
+        }
+
+        let active = true;
+
+        const tick = async () => {
+            if (!active) return;
+            await refreshSharedCart();
+        };
+
+        tick();
+        const timer = window.setInterval(tick, 2000);
+
+        return () => {
+            active = false;
+            window.clearInterval(timer);
+        };
+    }, [sharedModeActive, refreshSharedCart]);
 
     React.useEffect(() => {
         const normalized = queryTableId.trim();
@@ -624,6 +743,13 @@ export function CustomerMenuShell({ restaurantIdOverride, tenantHomePath, restau
         if (!requireCapture()) return false;
         if (item.available === false) return false;
 
+        if (sharedModeActive) {
+            const next = (cartQuantityById.get(item.id) || 0) + 1;
+            void mutateSharedCartItem(item, next);
+            toast.success(`${item.name} added to cart`);
+            return true;
+        }
+
         addToCart({
             id: item.id,
             name: item.name,
@@ -637,11 +763,21 @@ export function CustomerMenuShell({ restaurantIdOverride, tenantHomePath, restau
         return true;
     };
 
+    const effectiveCart = sharedModeActive ? sharedCartItems : cart;
+    const effectiveTotalItems = React.useMemo(
+        () => effectiveCart.reduce((sum, item) => sum + item.quantity, 0),
+        [effectiveCart]
+    );
+    const effectiveTotalPrice = React.useMemo(
+        () => effectiveCart.reduce((sum, item) => sum + item.price * item.quantity, 0),
+        [effectiveCart]
+    );
+
     const cartQuantityById = React.useMemo(() => {
         const map = new Map<string, number>();
-        cart.forEach((entry) => map.set(entry.id, entry.quantity));
+        effectiveCart.forEach((entry) => map.set(entry.id, entry.quantity));
         return map;
-    }, [cart]);
+    }, [effectiveCart]);
 
     const incrementMenuItem = (item: {
         id: string;
@@ -659,6 +795,12 @@ export function CustomerMenuShell({ restaurantIdOverride, tenantHomePath, restau
 
         if (!requireCapture()) return;
         if (item.available === false) return;
+
+        if (sharedModeActive) {
+            const next = (cartQuantityById.get(item.id) || 0) + 1;
+            void mutateSharedCartItem(item, next);
+            return;
+        }
 
         addToCart({
             id: item.id,
@@ -679,7 +821,41 @@ export function CustomerMenuShell({ restaurantIdOverride, tenantHomePath, restau
         if (!requireCapture()) return;
         const current = cartQuantityById.get(item.id) || 0;
         if (current <= 0) return;
+        if (sharedModeActive) {
+            const existing = effectiveCart.find((entry) => entry.id === item.id);
+            if (!existing) return;
+            void mutateSharedCartItem(
+                {
+                    id: existing.id,
+                    name: existing.name,
+                    description: existing.description,
+                    category: existing.category,
+                    image: existing.image,
+                    price: existing.price,
+                },
+                current - 1
+            );
+            return;
+        }
         updateQuantity(item.id, current - 1);
+    };
+
+    const handleSharedDrawerIncrease = (itemId: string, nextQuantity: number) => {
+        const item = effectiveCart.find((entry) => entry.id === itemId);
+        if (!item) return;
+        void mutateSharedCartItem(item, nextQuantity);
+    };
+
+    const handleSharedDrawerDecrease = (itemId: string, nextQuantity: number) => {
+        const item = effectiveCart.find((entry) => entry.id === itemId);
+        if (!item) return;
+        void mutateSharedCartItem(item, Math.max(0, nextQuantity));
+    };
+
+    const handleSharedDrawerRemove = (itemId: string) => {
+        const item = effectiveCart.find((entry) => entry.id === itemId);
+        if (!item) return;
+        void mutateSharedCartItem(item, 0);
     };
 
     return (
@@ -706,8 +882,8 @@ export function CustomerMenuShell({ restaurantIdOverride, tenantHomePath, restau
                 items={menuItems}
                 tableId={resolvedTableId}
                 restaurantName={displayRestaurantName}
-                totalItems={totalItems}
-                totalPrice={totalPrice}
+                totalItems={effectiveTotalItems}
+                totalPrice={effectiveTotalPrice}
                 loading={loading}
                 onSelectCategory={() => {
                     // Filtering is handled in the layout component.
@@ -747,6 +923,11 @@ export function CustomerMenuShell({ restaurantIdOverride, tenantHomePath, restau
                 sharedTableContext={sharedTableContext}
                 sharedOrderingLocked={sharedOrderingLocked}
                 onUpgrade={() => router.push(tenantHomePath || '/pricing')}
+                externalCartItems={sharedModeActive ? effectiveCart : undefined}
+                externalTotalPrice={sharedModeActive ? effectiveTotalPrice : undefined}
+                onExternalIncrease={sharedModeActive ? handleSharedDrawerIncrease : undefined}
+                onExternalDecrease={sharedModeActive ? handleSharedDrawerDecrease : undefined}
+                onExternalRemove={sharedModeActive ? handleSharedDrawerRemove : undefined}
             />
 
             <AnimatePresence>

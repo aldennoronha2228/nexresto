@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { useRouter } from 'next/navigation';
-import { useCart } from '@/context/CartContext';
+import { useCart, type CartItem } from '@/context/CartContext';
 import { QuantitySelector } from '@/components/customer/QuantitySelector';
 import { getTenantCheckoutSnapshotKey, getTenantTableStorageKey } from '@/lib/client/storage/tenantKeys';
 import { UpgradeCard } from '@/components/customer/UpgradeCard';
@@ -21,6 +21,11 @@ type CartDrawerProps = {
     sharedTableContext?: boolean;
     sharedOrderingLocked?: boolean;
     onUpgrade?: () => void;
+    externalCartItems?: CartItem[];
+    externalTotalPrice?: number;
+    onExternalIncrease?: (itemId: string, quantity: number) => void;
+    onExternalDecrease?: (itemId: string, quantity: number) => void;
+    onExternalRemove?: (itemId: string) => void;
 };
 
 export function CartDrawer({
@@ -29,11 +34,43 @@ export function CartDrawer({
     sharedTableContext = false,
     sharedOrderingLocked = false,
     onUpgrade,
+    externalCartItems,
+    externalTotalPrice,
+    onExternalIncrease,
+    onExternalDecrease,
+    onExternalRemove,
 }: CartDrawerProps) {
     const { cart, isCartOpen, setIsCartOpen, totalPrice, updateQuantity, removeFromCart } = useCart();
     const router = useRouter();
     const [manualTable, setManualTable] = React.useState('');
     const [tableError, setTableError] = React.useState<string | null>(null);
+
+    const effectiveCart = externalCartItems ?? cart;
+    const effectiveTotalPrice = typeof externalTotalPrice === 'number' ? externalTotalPrice : totalPrice;
+
+    const increaseItem = (itemId: string, nextQuantity: number) => {
+        if (onExternalIncrease) {
+            onExternalIncrease(itemId, nextQuantity);
+            return;
+        }
+        updateQuantity(itemId, nextQuantity);
+    };
+
+    const decreaseItem = (itemId: string, nextQuantity: number) => {
+        if (onExternalDecrease) {
+            onExternalDecrease(itemId, nextQuantity);
+            return;
+        }
+        updateQuantity(itemId, nextQuantity);
+    };
+
+    const removeItem = (itemId: string) => {
+        if (onExternalRemove) {
+            onExternalRemove(itemId);
+            return;
+        }
+        removeFromCart(itemId);
+    };
 
     React.useEffect(() => {
         const normalized = (tableId || '').trim();
@@ -75,8 +112,8 @@ export function CartDrawer({
                 sessionStorage.setItem(
                     getTenantCheckoutSnapshotKey(restaurantId),
                     JSON.stringify({
-                        items: cart,
-                        subtotal: totalPrice,
+                        items: effectiveCart,
+                        subtotal: effectiveTotalPrice,
                         tableId: finalTable,
                         createdAt: Date.now(),
                     })
@@ -108,7 +145,7 @@ export function CartDrawer({
                 <div className="mb-4 border-b border-stone-700 pb-3">
                     <div className="mb-2 flex items-center justify-between">
                         <h2 className="text-xl font-semibold tracking-wide">Your Cart</h2>
-                        <p className="text-xs uppercase tracking-[0.14em] text-stone-400">{cart.length} items</p>
+                        <p className="text-xs uppercase tracking-[0.14em] text-stone-400">{effectiveCart.length} items</p>
                     </div>
                     <button
                         type="button"
@@ -119,11 +156,11 @@ export function CartDrawer({
                     </button>
                 </div>
 
-                {cart.length === 0 ? (
+                {effectiveCart.length === 0 ? (
                     <p className="rounded border border-stone-700 bg-black/30 p-4 text-sm text-stone-300">No items yet.</p>
                 ) : (
                     <div className="space-y-3">
-                        {cart.map((item) => (
+                        {effectiveCart.map((item) => (
                             <div key={item.id} className="border border-stone-700 bg-black/30 p-3">
                                 <div className="flex items-start justify-between gap-2">
                                     <div>
@@ -132,7 +169,7 @@ export function CartDrawer({
                                     </div>
                                     <button
                                         type="button"
-                                        onClick={() => removeFromCart(item.id)}
+                                        onClick={() => removeItem(item.id)}
                                         className="border border-rose-400/50 px-2 py-1 text-[11px] uppercase tracking-[0.1em] text-rose-300 hover:bg-rose-900/20"
                                     >
                                         Remove
@@ -141,8 +178,8 @@ export function CartDrawer({
                                 <div className="mt-3 flex items-center justify-between">
                                     <QuantitySelector
                                         quantity={item.quantity}
-                                        onIncrease={() => updateQuantity(item.id, item.quantity + 1)}
-                                        onDecrease={() => updateQuantity(item.id, item.quantity - 1)}
+                                        onIncrease={() => increaseItem(item.id, item.quantity + 1)}
+                                        onDecrease={() => decreaseItem(item.id, item.quantity - 1)}
                                     />
                                     <p className="text-sm font-semibold">{formatINR(item.price * item.quantity)}</p>
                                 </div>
@@ -151,7 +188,7 @@ export function CartDrawer({
                     </div>
                 )}
 
-                {cart.length > 0 && (
+                {effectiveCart.length > 0 && (
                     <div className="mt-5 space-y-3 border-t border-stone-700 pt-4">
                         {sharedTableContext && sharedOrderingLocked ? (
                             <UpgradeCard
@@ -182,7 +219,7 @@ export function CartDrawer({
 
                         <div className="flex items-center justify-between">
                             <span className="text-sm text-stone-300">Total</span>
-                            <span className="text-lg font-bold">{formatINR(totalPrice)}</span>
+                            <span className="text-lg font-bold">{formatINR(effectiveTotalPrice)}</span>
                         </div>
 
                         <button
