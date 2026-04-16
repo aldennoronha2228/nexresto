@@ -120,7 +120,7 @@ function isRecentSignIn(user: User, windowMs: number = 2 * 60 * 1000): boolean {
 }
 
 type SubscriptionTier = 'starter' | 'pro' | '1k' | '2k' | '2.5k';
-type SubscriptionStatus = 'active' | 'past_due' | 'cancelled' | 'trial';
+type SubscriptionStatus = 'active' | 'past_due' | 'cancelled' | 'trial' | 'expired';
 
 function normalizeYmd(value: unknown): string | null {
     const raw = String(value || '').trim();

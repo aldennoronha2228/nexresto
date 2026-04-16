@@ -112,7 +112,7 @@ function getDashboardPathForRole(role?: string | null): string {
 
 
 export default function LoginPage() {
-    const { session, loading, userRole, tenantLoading, tenantId, mustChangePassword } = useAuth();
+    const { session, loading, userRole, tenantLoading, tenantId, mustChangePassword, subscriptionStatus } = useAuth();
     const { session: adminSession, loading: adminLoading, userRole: adminUserRole } = useSuperAdminAuth();
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -200,6 +200,10 @@ export default function LoginPage() {
             }
 
             if (userRole && tenantId && !cancelled) {
+                if (subscriptionStatus === 'expired') {
+                    router.replace(`/${tenantId}/choose-plan`);
+                    return;
+                }
                 router.replace(`/${tenantId}${getDashboardPathForRole(userRole)}`);
             }
         };
@@ -209,7 +213,7 @@ export default function LoginPage() {
         return () => {
             cancelled = true;
         };
-    }, [session, loading, tenantLoading, adminLoading, adminSession, userRole, tenantId, mustChangePassword, router]);
+    }, [session, loading, tenantLoading, adminLoading, adminSession, userRole, tenantId, mustChangePassword, subscriptionStatus, router]);
 
     const handleEmailAuth = async (e: React.FormEvent) => {
         e.preventDefault();

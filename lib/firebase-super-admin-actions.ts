@@ -140,7 +140,13 @@ export interface RestaurantWithOwner {
     subscription_start_date: string | null;
     subscription_end_date: string | null;
     account_temporarily_disabled?: boolean;
+    account_disabled_reason?: string | null;
     subscription_reminder_emails_enabled?: boolean;
+    last_payment_provider?: string | null;
+    last_payment_id?: string | null;
+    last_payment_plan?: string | null;
+    last_payment_amount_inr?: number | null;
+    last_payment_at?: string | null;
     team_count: number;
     team_roles?: { role: string; count: number }[];
 }
@@ -402,9 +408,26 @@ export async function getAllRestaurants(
             else if (createdAtRaw >= startOfPreviousMonth && createdAtRaw < startOfCurrentMonth) previousMonthSignups += 1;
         }
 
+        const updatePayload: Record<string, unknown> = {};
         if (effectiveStatus !== data.subscription_status) {
             // Keep stored status aligned with date-driven effective state.
-            await doc.ref.update({ subscription_status: effectiveStatus });
+            updatePayload.subscription_status = effectiveStatus;
+        }
+
+        const isLockedBySubscription = Boolean(data.account_temporarily_disabled) && String(data.account_disabled_reason || '') === 'subscription_expired';
+        if (effectiveStatus === 'expired' && !isLockedBySubscription) {
+            updatePayload.account_temporarily_disabled = true;
+            updatePayload.account_disabled_reason = 'subscription_expired';
+            updatePayload.account_temporarily_disabled_at = new Date().toISOString();
+        }
+        if (effectiveStatus !== 'expired' && isLockedBySubscription) {
+            updatePayload.account_temporarily_disabled = false;
+            updatePayload.account_disabled_reason = FieldValue.delete();
+            updatePayload.account_temporarily_reenabled_at = FieldValue.serverTimestamp();
+        }
+
+        if (Object.keys(updatePayload).length > 0) {
+            await doc.ref.update(updatePayload);
         }
     }
 
@@ -460,6 +483,9 @@ export async function getAllRestaurants(
 
                 const teamRoles = Array.from(roleMap.entries()).map(([role, count]) => ({ role, count }));
                 const createdAt = toIsoString(d.created_at) || '';
+                const lastPayment = (d.last_payment && typeof d.last_payment === 'object')
+                    ? (d.last_payment as Record<string, unknown>)
+                    : null;
 
                 return {
                     id: restDoc.id,
@@ -473,7 +499,13 @@ export async function getAllRestaurants(
                     subscription_start_date: normalizeYmdDate(d.subscription_start_date),
                     subscription_end_date: normalizeYmdDate(d.subscription_end_date),
                     account_temporarily_disabled: Boolean(d.account_temporarily_disabled),
+                    account_disabled_reason: d.account_disabled_reason ? String(d.account_disabled_reason) : null,
                     subscription_reminder_emails_enabled: d.subscription_reminder_emails_enabled !== false,
+                    last_payment_provider: lastPayment?.provider ? String(lastPayment.provider) : null,
+                    last_payment_id: lastPayment?.payment_id ? String(lastPayment.payment_id) : null,
+                    last_payment_plan: lastPayment?.plan ? String(lastPayment.plan) : null,
+                    last_payment_amount_inr: typeof lastPayment?.amount_inr === 'number' ? Number(lastPayment.amount_inr) : null,
+                    last_payment_at: toIsoString(lastPayment?.paid_at || lastPayment?.verified_at) || null,
                     team_count: staffSnap.size,
                     team_roles: teamRoles,
                 };
@@ -1118,9 +1150,21 @@ export async function updateRestaurantStatus(
     status: 'active' | 'past_due' | 'cancelled' | 'trial'
 ): Promise<{ success: boolean; error?: string }> {
     try {
-        await adminFirestore.doc(`restaurants/${restaurantId}`).update({
+        const updatePayload: Record<string, unknown> = {
             subscription_status: status,
-        });
+        };
+
+        if (status === 'cancelled') {
+            updatePayload.account_temporarily_disabled = true;
+            updatePayload.account_disabled_reason = 'subscription_expired';
+            updatePayload.account_temporarily_disabled_at = new Date().toISOString();
+        } else {
+            updatePayload.account_temporarily_disabled = false;
+            updatePayload.account_disabled_reason = FieldValue.delete();
+            updatePayload.account_temporarily_reenabled_at = FieldValue.serverTimestamp();
+        }
+
+        await adminFirestore.doc(`restaurants/${restaurantId}`).update(updatePayload);
 
         await logActivity(
             'STATUS_CHANGE',
@@ -1163,11 +1207,20 @@ export async function updateSubscriptionDates(
 
     if (end && end < todayOnly) {
         updateData.subscription_status = 'expired';
+        updateData.account_temporarily_disabled = true;
+        updateData.account_disabled_reason = 'subscription_expired';
+        updateData.account_temporarily_disabled_at = new Date().toISOString();
     } else if (start && start > todayOnly) {
         updateData.subscription_status = 'trial';
+        updateData.account_temporarily_disabled = false;
+        updateData.account_disabled_reason = FieldValue.delete();
+        updateData.account_temporarily_reenabled_at = FieldValue.serverTimestamp();
     } else {
         // If the end date is today/future (or unset), treat as active regardless of start date presence.
         updateData.subscription_status = 'active';
+        updateData.account_temporarily_disabled = false;
+        updateData.account_disabled_reason = FieldValue.delete();
+        updateData.account_temporarily_reenabled_at = FieldValue.serverTimestamp();
     }
 
     try {

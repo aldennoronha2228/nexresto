@@ -104,10 +104,13 @@ export async function GET(request: NextRequest) {
             const todayYmd = getTodayYmdUtc();
 
             let effectiveStatus = (restData?.subscription_status || 'active') as string;
-            if (endDate && endDate < todayYmd && effectiveStatus !== 'cancelled') {
-                effectiveStatus = 'cancelled';
+            if (endDate && endDate < todayYmd) {
+                effectiveStatus = 'expired';
                 await adminFirestore.doc(`restaurants/${tenantId}`).update({
-                    subscription_status: 'cancelled',
+                    subscription_status: 'expired',
+                    account_temporarily_disabled: true,
+                    account_disabled_reason: 'subscription_expired',
+                    account_temporarily_disabled_at: new Date().toISOString(),
                 }).catch(() => { });
             }
 
@@ -176,10 +179,13 @@ export async function GET(request: NextRequest) {
                 const todayYmd = getTodayYmdUtc();
 
                 let effectiveStatus = (restData?.subscription_status || 'active') as string;
-                if (endDate && endDate < todayYmd && effectiveStatus !== 'cancelled') {
-                    effectiveStatus = 'cancelled';
+                if (endDate && endDate < todayYmd) {
+                    effectiveStatus = 'expired';
                     await adminFirestore.doc(`restaurants/${restDoc.id}`).update({
-                        subscription_status: 'cancelled',
+                        subscription_status: 'expired',
+                        account_temporarily_disabled: true,
+                        account_disabled_reason: 'subscription_expired',
+                        account_temporarily_disabled_at: new Date().toISOString(),
                     }).catch(() => { });
                 }
 

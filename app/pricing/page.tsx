@@ -213,9 +213,9 @@ export default async function PricingPage() {
                 </ul>
 
                 <button
-                  disabled={!isAvailable}
+                  disabled={!isAvailable || tierKey === 'pro_chain'}
                   className={`mt-8 w-full rounded-full border px-5 py-2.5 text-base font-semibold tracking-[0.02em] transition ${
-                    !isAvailable
+                    !isAvailable || tierKey === 'pro_chain'
                       ? "cursor-not-allowed border-amber-400/25 bg-amber-500/10 text-amber-300"
                       : plan.featured
                       ? "border-[#3e54d3] bg-[#3e54d3] text-[#d8dbff] hover:opacity-90"
@@ -223,7 +223,7 @@ export default async function PricingPage() {
                   }`}
                   type="button"
                 >
-                  {isAvailable ? plan.cta : 'Temporarily unavailable'}
+                  {tierKey === 'pro_chain' ? 'Coming Soon' : isAvailable ? plan.cta : 'Temporarily unavailable'}
                 </button>
               </article>
             )})}

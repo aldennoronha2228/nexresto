@@ -23,6 +23,14 @@ export type HomePricingPlan = {
   highlighted?: boolean;
 };
 
+export const PLAN_PRICES = {
+  starter: 999,
+  growth: 2499,
+  pro: 7999,
+} as const;
+
+export type UpgradablePlan = 'starter' | 'growth';
+
 export const PRICING_PLANS: PricingPlan[] = [
   {
     name: 'Starter',

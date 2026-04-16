@@ -155,6 +155,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const [showConflict, setShowConflict] = useState(false);
     const [displayTenantName, setDisplayTenantName] = useState<string>('NexResto');
     const [isRestaurantTemporarilyDisabled, setIsRestaurantTemporarilyDisabled] = useState(false);
+    const [restaurantDisabledReason, setRestaurantDisabledReason] = useState<string>('');
     const [isDemoMode, setIsDemoMode] = useState(false);
 
     // Get Super Admin state (God Mode check)
@@ -245,6 +246,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
     // Check if the active tenant tier includes premium dashboard features.
     const isPro = isGodMode || isSuperAdmin || hasSubscriptionFeature(subscriptionTier, 'premium_dashboard');
+    const isTrialSubscription = !isGodMode && subscriptionStatus === 'trial';
+    const trialDaysLeft = typeof subscriptionDaysRemaining === 'number' ? Math.max(0, subscriptionDaysRemaining) : null;
     const showEndingSoonReminder =
         !isGodMode &&
         !!subscriptionEndDate &&
@@ -294,6 +297,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 }
                 if (!cancelled) {
                     setIsRestaurantTemporarilyDisabled(Boolean(data?.accountTemporarilyDisabled));
+                    setRestaurantDisabledReason(String(data?.accountDisabledReason || '').trim().toLowerCase());
                 }
             } catch {
                 // Keep fallback name if request fails.
@@ -304,6 +308,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             cancelled = true;
         };
     }, [tenantName, urlStoreId, isGodMode, session?.access_token, superAdminSession?.access_token]);
+
+    useEffect(() => {
+        if (!urlStoreId || isGodMode) return;
+        if (!isRestaurantTemporarilyDisabled) return;
+        if (restaurantDisabledReason !== 'subscription_expired') return;
+        if (pathname.startsWith(`/${urlStoreId}/choose-plan`)) return;
+
+        router.replace(`/${urlStoreId}/choose-plan`);
+    }, [
+        urlStoreId,
+        isGodMode,
+        isRestaurantTemporarilyDisabled,
+        restaurantDisabledReason,
+        pathname,
+        router,
+    ]);
 
     // ── Navigation scoped to URL slug ───────────────────────────────────
     // Always build hrefs from `urlStoreId` (the slug in the address bar),
@@ -556,7 +576,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         return null; // Will redirect via useEffect
     }
 
-    if (isRestaurantTemporarilyDisabled) {
+    if (isRestaurantTemporarilyDisabled && restaurantDisabledReason !== 'subscription_expired') {
         return (
             <div className="min-h-screen flex items-center justify-center bg-slate-950 px-4">
                 <div className="max-w-md w-full rounded-3xl border border-slate-700 bg-slate-900 p-8 text-center">
@@ -1113,6 +1133,34 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                             </div>
                         </div>
                     </header>
+
+                    {isTrialSubscription && (
+                        <div className="px-4 lg:px-6 pt-4">
+                            <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="flex items-start gap-3">
+                                    <AlertTriangle className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                                    <div>
+                                        <p className="text-sm font-semibold text-blue-900">
+                                            You are on a free trial.
+                                            {trialDaysLeft !== null
+                                                ? ` ${trialDaysLeft} day${trialDaysLeft === 1 ? '' : 's'} left.`
+                                                : ''}
+                                        </p>
+                                        <p className="text-xs text-blue-700 mt-0.5">
+                                            Wanna choose a plan? Pick a tier now and complete payment to continue seamlessly after trial.
+                                        </p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => router.push(`/${urlStoreId}/choose-plan`)}
+                                    className="self-start sm:self-auto rounded-full bg-[#3e54d3] px-4 py-2 text-xs font-semibold text-[#d8dbff] transition hover:opacity-90"
+                                    type="button"
+                                >
+                                    Choose Plan
+                                </button>
+                            </div>
+                        </div>
+                    )}
 
                     {showEndingSoonReminder && (
                         <div className="px-4 lg:px-6 pt-4">

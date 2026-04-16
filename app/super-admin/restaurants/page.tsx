@@ -551,6 +551,7 @@ export default function RestaurantManager() {
                                     <th className="text-left px-6 py-4 text-[11px] font-medium tracking-[0.18em] uppercase text-slate-500">Tier</th>
                                     <th className="text-left px-6 py-4 text-[11px] font-medium tracking-[0.18em] uppercase text-slate-500">Status</th>
                                     <th className="text-left px-6 py-4 text-[11px] font-medium tracking-[0.18em] uppercase text-slate-500">Ends On</th>
+                                    <th className="text-left px-6 py-4 text-[11px] font-medium tracking-[0.18em] uppercase text-slate-500">Last Payment</th>
                                     <th className="text-left px-6 py-4 text-[11px] font-medium tracking-[0.18em] uppercase text-slate-500">Last Report</th>
                                     <th className="text-right px-6 py-4 text-[11px] font-medium tracking-[0.18em] uppercase text-slate-500">Actions</th>
                                 </tr>
@@ -669,6 +670,27 @@ export default function RestaurantManager() {
                                                     Set
                                                 </button>
                                             </div>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            {restaurant.last_payment_at ? (
+                                                <div className="flex flex-col gap-0.5">
+                                                    <span className="text-slate-200 text-xs font-medium">
+                                                        {restaurant.last_payment_amount_inr
+                                                            ? `Rs ${restaurant.last_payment_amount_inr.toLocaleString('en-IN')}`
+                                                            : 'Payment recorded'}
+                                                    </span>
+                                                    <span className="text-slate-400 text-[11px]">
+                                                        {new Date(restaurant.last_payment_at).toLocaleDateString('en-IN', {
+                                                            month: 'short',
+                                                            day: 'numeric',
+                                                            year: 'numeric',
+                                                        })}
+                                                        {restaurant.last_payment_provider ? ` · ${restaurant.last_payment_provider}` : ''}
+                                                    </span>
+                                                </div>
+                                            ) : (
+                                                <span className="text-slate-500 text-xs italic">No payment yet</span>
+                                            )}
                                         </td>
                                         <td className="px-6 py-4">
                                             {restaurant.last_report_date ? (

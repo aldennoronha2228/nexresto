@@ -80,14 +80,25 @@ export async function POST(request: Request) {
         const userId = userRecord.uid;
         const baseSlug = slugify(pending.restaurant_name) || 'restaurant';
         const tenantId = `${baseSlug}-${Date.now().toString(36)}`;
+        const now = new Date();
+        const trialEnd = new Date(now);
+        trialEnd.setDate(trialEnd.getDate() + 7);
+        const trialStartYmd = now.toISOString().slice(0, 10);
+        const trialEndYmd = trialEnd.toISOString().slice(0, 10);
+        const trialExpiresAt = trialEnd.toISOString();
 
         try {
             await adminFirestore.doc(`restaurants/${tenantId}`).set({
                 name: pending.restaurant_name,
                 master_pin: pending.master_pin,
                 owner_email: pending.email,
-                subscription_tier: 'starter',
-                subscription_status: 'active',
+                plan: 'growth',
+                planStatus: 'trial',
+                planExpiresAt: trialExpiresAt,
+                subscription_tier: 'pro',
+                subscription_status: 'trial',
+                subscription_start_date: trialStartYmd,
+                subscription_end_date: trialEndYmd,
                 created_at: FieldValue.serverTimestamp(),
             });
 

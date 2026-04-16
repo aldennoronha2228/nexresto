@@ -25,6 +25,13 @@ export async function POST(request: Request) {
         const body = await request.json();
         const { userId, email, fullName, restaurantName, masterPin } = body;
 
+        const now = new Date();
+        const trialEnd = new Date(now);
+        trialEnd.setDate(trialEnd.getDate() + 7);
+        const trialStartYmd = now.toISOString().slice(0, 10);
+        const trialEndYmd = trialEnd.toISOString().slice(0, 10);
+        const trialExpiresAt = trialEnd.toISOString();
+
         if (!userId || !email || !restaurantName || !masterPin) {
             return NextResponse.json({ error: 'Missing required fields (including master PIN)' }, { status: 400 });
         }
@@ -42,8 +49,13 @@ export async function POST(request: Request) {
             name: restaurantName,
             master_pin: masterPin,
             owner_email: email.toLowerCase().trim(),
+            plan: 'starter',
+            planStatus: 'trial',
+            planExpiresAt: trialExpiresAt,
             subscription_tier: 'starter',
-            subscription_status: 'active',
+            subscription_status: 'trial',
+            subscription_start_date: trialStartYmd,
+            subscription_end_date: trialEndYmd,
             created_at: FieldValue.serverTimestamp(),
         });
 
