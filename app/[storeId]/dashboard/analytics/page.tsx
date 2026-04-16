@@ -28,6 +28,14 @@ function formatCurrency(value: number): string {
     }).format(value || 0);
 }
 
+type AnalyticsOrder = {
+    id: string;
+    status: string;
+    total: number;
+    created_at: string;
+    items: Array<{ name?: string; quantity?: number; price?: number }>;
+};
+
 // Reports Section Component
 function ReportsSection() {
     const { storeId: tenantId, tenantName, subscriptionTier } = useRestaurant();
@@ -265,13 +273,13 @@ function ReportsSection() {
 
 function AnalyticsContent() {
     const { storeId: tenantId } = useRestaurant();
-    const [reports, setReports] = useState<DailyReport[]>([]);
+    const [overviewOrders, setOverviewOrders] = useState<AnalyticsOrder[]>([]);
     const [repeatCustomerRate, setRepeatCustomerRate] = useState(0);
     const [loadingOverview, setLoadingOverview] = useState(true);
 
     const fetchOverview = useCallback(async () => {
         if (!tenantId) {
-            setReports([]);
+            setOverviewOrders([]);
             setRepeatCustomerRate(0);
             setLoadingOverview(false);
             return;
@@ -280,23 +288,47 @@ function AnalyticsContent() {
         setLoadingOverview(true);
         try {
             const token = await auth.currentUser?.getIdToken();
+            if (!token) {
+                setOverviewOrders([]);
+                setRepeatCustomerRate(0);
+                return;
+            }
             const headers = { Authorization: `Bearer ${token}` };
 
-            const [reportsRes, customersRes] = await Promise.all([
-                fetch(`/api/reports?restaurantId=${tenantId}&limit=7`, { headers, cache: 'no-store' }),
+            const [liveRes, historyRes, customersRes] = await Promise.all([
+                fetch(`/api/orders/live?restaurantId=${tenantId}`, { headers, cache: 'no-store' }),
+                fetch(`/api/orders/history?restaurantId=${tenantId}&limit=500`, { headers, cache: 'no-store' }),
                 fetch(`/api/customers/list?restaurantId=${tenantId}`, { headers, cache: 'no-store' }),
             ]);
 
-            const [reportsData, customersData] = await Promise.all([
-                reportsRes.json().catch(() => ({})),
+            const [liveData, historyData, customersData] = await Promise.all([
+                liveRes.json().catch(() => ({})),
+                historyRes.json().catch(() => ({})),
                 customersRes.json().catch(() => ({})),
             ]);
 
-            if (reportsRes.ok && Array.isArray(reportsData?.reports)) {
-                setReports(reportsData.reports as DailyReport[]);
-            } else {
-                setReports([]);
-            }
+            const liveOrders = (liveRes.ok && Array.isArray(liveData?.orders)) ? liveData.orders : [];
+            const historyOrders = (historyRes.ok && Array.isArray(historyData?.orders)) ? historyData.orders : [];
+            const merged = new Map<string, AnalyticsOrder>();
+
+            [...liveOrders, ...historyOrders].forEach((order: any) => {
+                if (!order?.id) return;
+                merged.set(String(order.id), {
+                    id: String(order.id),
+                    status: String(order.status || 'new'),
+                    total: Number(order.total || 0),
+                    created_at: String(order.created_at || ''),
+                    items: Array.isArray(order.items)
+                        ? order.items.map((item: any) => ({
+                            name: String(item?.name || item?.item_name || ''),
+                            quantity: Number(item?.quantity || 0),
+                            price: Number(item?.price || item?.item_price || 0),
+                        }))
+                        : [],
+                });
+            });
+
+            setOverviewOrders(Array.from(merged.values()));
 
             if (customersRes.ok && Array.isArray(customersData?.customers)) {
                 const customers = customersData.customers as Array<{ visitCount?: number }>;
@@ -315,25 +347,45 @@ function AnalyticsContent() {
         fetchOverview();
     }, [fetchOverview]);
 
-    const orderedReports = useMemo(
-        () => [...reports].sort((a, b) => new Date(a.report_date).getTime() - new Date(b.report_date).getTime()),
-        [reports]
-    );
+    const revenueData = useMemo(() => {
+        const bins = Array.from({ length: 7 }).map((_, idx) => {
+            const date = new Date();
+            date.setHours(0, 0, 0, 0);
+            date.setDate(date.getDate() - (6 - idx));
+            const dateKey = date.toISOString().slice(0, 10);
+            return {
+                dateKey,
+                day: date.toLocaleDateString('en-IN', { weekday: 'short' }),
+                revenue: 0,
+            };
+        });
 
-    const revenueData = useMemo(() => orderedReports.map((report) => ({
-        day: new Date(report.report_date).toLocaleDateString('en-IN', { weekday: 'short' }),
-        revenue: Number(report.total_revenue || 0),
-    })), [orderedReports]);
+        const indexByDate = new Map<string, number>();
+        bins.forEach((entry, idx) => indexByDate.set(entry.dateKey, idx));
+
+        overviewOrders
+            .filter((order) => order.status !== 'cancelled')
+            .forEach((order) => {
+                const dateKey = new Date(order.created_at).toISOString().slice(0, 10);
+                const idx = indexByDate.get(dateKey);
+                if (idx === undefined) return;
+                bins[idx].revenue += Number(order.total || 0);
+            });
+
+        return bins;
+    }, [overviewOrders]);
 
     const topItems = useMemo(() => {
         const map = new Map<string, { orders: number; revenue: number }>();
-        orderedReports.forEach((report) => {
-            (report.top_items || []).forEach((item) => {
+        overviewOrders
+            .filter((order) => order.status !== 'cancelled')
+            .forEach((order) => {
+                order.items.forEach((item) => {
                 const key = String(item.name || 'Item');
                 const existing = map.get(key) || { orders: 0, revenue: 0 };
                 map.set(key, {
                     orders: existing.orders + Number(item.quantity || 0),
-                    revenue: existing.revenue + Number(item.revenue || 0),
+                    revenue: existing.revenue + (Number(item.price || 0) * Number(item.quantity || 0)),
                 });
             });
         });
@@ -342,17 +394,18 @@ function AnalyticsContent() {
             .map(([name, data]) => ({ name, orders: data.orders, revenue: data.revenue, trend: 0 }))
             .sort((a, b) => b.revenue - a.revenue)
             .slice(0, 5);
-    }, [orderedReports]);
+    }, [overviewOrders]);
 
-    const totalRevenue = useMemo(
-        () => orderedReports.reduce((sum, report) => sum + Number(report.total_revenue || 0), 0),
-        [orderedReports]
-    );
-    const totalOrders = useMemo(
-        () => orderedReports.reduce((sum, report) => sum + Number(report.total_orders || 0), 0),
-        [orderedReports]
-    );
+    const totalRevenue = useMemo(() => {
+        return overviewOrders
+            .filter((order) => order.status !== 'cancelled')
+            .reduce((sum, order) => sum + Number(order.total || 0), 0);
+    }, [overviewOrders]);
+    const totalOrders = useMemo(() => {
+        return overviewOrders.filter((order) => order.status !== 'cancelled').length;
+    }, [overviewOrders]);
     const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+    const hasRevenueData = useMemo(() => revenueData.some((entry) => entry.revenue > 0), [revenueData]);
 
     const statCards = useMemo(() => ([
         { title: 'Total Revenue', value: formatCurrency(totalRevenue), change: 'Last 7 days', isPositive: true, icon: DollarSign },
@@ -437,13 +490,13 @@ function AnalyticsContent() {
                         <div className="w-full h-full flex items-center justify-center text-slate-400 text-sm">
                             Loading analytics...
                         </div>
-                    ) : revenueData.length === 0 ? (
+                    ) : !hasRevenueData ? (
                         <div className="w-full h-full flex items-center justify-center text-slate-400 text-sm">
                             No analytics data yet
                         </div>
                     ) : (
                         revenueData.map((data, i) => (
-                            <div key={data.day} className="flex-1 flex flex-col items-center gap-2">
+                            <div key={data.dateKey} className="flex-1 flex flex-col items-center gap-2">
                                 <motion.div
                                     initial={{ height: 0 }}
                                     animate={{ height: `${(data.revenue / maxRevenue) * 200}px` }}
