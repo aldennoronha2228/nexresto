@@ -187,81 +187,56 @@ function ReportsSection() {
     // Not Pro - show upgrade prompt
     if (!isPro) {
         return (
-                <div className="space-y-4 sm:space-y-6">
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-8 border border-slate-700"
-                            <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Analytics Dashboard</h1>
-                <div className="flex items-start gap-4">
-                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-lg shadow-purple-500/30 flex-shrink-0">
-                        <div className="flex items-center gap-2 self-start sm:self-auto">
-                            <button className="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors">
-                    <div className="flex-1">
-                        <h3 className="text-xl font-bold text-white mb-2">Daily Reports</h3>
-                        <p className="text-slate-300 mb-4">
-                            <button className="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors">
-                            delivered to your inbox with professional PDF summaries.
-                        </p>
-                        <div className="flex flex-wrap items-center gap-3">
-                            <div className="inline-flex items-center gap-2 px-4 py-2 bg-purple-500/20 border border-purple-500/30 rounded-xl text-purple-300 text-sm font-medium">
-                                <Sparkles className="w-4 h-4" />
-                                Pro Feature
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-                            <ul className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-400">
-                                <li>• Revenue summaries</li>
-                                <li>• Top selling items</li>
-                                <li>• Peak hour analysis</li>
-                                <li>• PDF downloads</li>
-                            </ul>
-                                className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 p-3 sm:p-5"
-                    </div>
-                                <div className="flex items-center justify-between mb-2 sm:mb-3">
-                                    <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-blue-50 flex items-center justify-center">
-                                        <stat.icon className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
+            <div className="rounded-2xl border border-purple-300/30 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6 text-slate-100">
+                <div className="inline-flex items-center gap-2 rounded-full border border-purple-400/40 bg-purple-500/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-purple-200">
+                    <Sparkles className="h-3.5 w-3.5" />
+                    Pro Feature
+                </div>
+                <h3 className="mt-4 text-xl font-semibold">Daily Reports</h3>
+                <p className="mt-2 text-sm text-slate-300">
+                    Upgrade to Pro or Growth to unlock automated daily summaries, revenue insights, and downloadable PDF reports.
+                </p>
+                <ul className="mt-4 grid gap-2 text-sm text-slate-300 sm:grid-cols-2">
+                    <li>Revenue summaries</li>
+                    <li>Top-selling items</li>
+                    <li>Peak-hour analysis</li>
+                    <li>Professional PDF exports</li>
+                </ul>
+            </div>
+        );
     }
 
-                                        "hidden sm:inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full",
+    return (
         <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.7 }}
             className="bg-white rounded-2xl border border-slate-200 p-6"
         >
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+            <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                                <p className="text-xl sm:text-2xl font-bold text-slate-900 leading-tight">{stat.value}</p>
-                                <p className="text-xs sm:text-sm text-slate-500 mt-1">{stat.title}</p>
-                        Daily Reports
-                    </h2>
-                    <p className="text-sm text-slate-500 mt-1">Download professional PDF summaries</p>
+                    <h2 className="text-lg font-semibold text-slate-900">Daily Reports</h2>
+                    <p className="mt-1 text-sm text-slate-500">Download professional PDF summaries</p>
                 </div>
-                <div className="flex items-center gap-2">
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.4 }}
-                        className="relative overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-white via-slate-50/70 to-blue-50/40 p-4 sm:p-6 shadow-sm"
-                        className="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-medium transition-colors disabled:opacity-50"
+                <div className="flex flex-wrap items-center gap-2">
+                    <button
+                        type="button"
+                        onClick={generateTodayReport}
+                        disabled={generating}
+                        className="flex items-center gap-2 rounded-xl bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-200 disabled:opacity-50"
                     >
-                        {generating ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                            <BarChart3 className="w-4 h-4" />
-                                <h2 className="text-base sm:text-lg font-semibold text-slate-900">Revenue Trend</h2>
-                                <p className="text-xs sm:text-sm text-slate-500">Daily revenue for the past week</p>
-                    </motion.button>
-                            <div className="flex items-center gap-2 text-xs sm:text-sm">
-                                <span className="inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50/80 px-2.5 py-1 font-medium text-blue-700">
-                            whileHover={{ scale: 1.02 }}
-                            whileTap={{ scale: 0.98 }}
-                            onClick={handleDownloadWeekly}
-                            disabled={downloadingWeekly}
-                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-                        >
-                        <div className="relative h-64 sm:h-72 rounded-2xl border border-slate-100 bg-white/70 p-3 sm:p-4 overflow-x-auto">
-                            {downloadingWeekly ? 'Downloading...' : 'Weekly Summary'}
-                        </motion.button>
-                    )}
+                        {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <BarChart3 className="h-4 w-4" />}
+                        Generate Yesterday
+                    </button>
+                    <button
+                        type="button"
+                        onClick={handleDownloadWeekly}
+                        disabled={downloadingWeekly}
+                        className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                        {downloadingWeekly ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                        {downloadingWeekly ? 'Downloading...' : 'Weekly Summary'}
+                    </button>
                 </div>
             </div>
 

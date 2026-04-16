@@ -11,6 +11,7 @@ import { getOptimizedHeroImageSrc, getOptimizedMenuItemImageSrc } from '@/lib/im
 import { getTenantCustomerStorageKey, getTenantTableStorageKey } from '@/lib/client/storage/tenantKeys';
 import { isValidPhone, normalizePhone } from '@/lib/customer-tracking';
 import { toast } from 'sonner';
+import { UpgradeCard } from './UpgradeCard';
 import MenuCatalogLayout from './MenuCatalogLayout';
 import { CartDrawer } from './CartDrawer';
 import { MenuConcierge } from './MenuConcierge';
@@ -201,12 +202,24 @@ export function CustomerMenuShell({ restaurantIdOverride, tenantHomePath, restau
     const searchParams = useSearchParams();
 
     const queryTableId = searchParams.get('table') ?? searchParams.get('tableId') ?? searchParams.get('table_id') ?? searchParams.get('t') ?? '';
+    const sharedParam = String(searchParams.get('shared') || '').trim().toLowerCase();
     const restaurantFromQuery = searchParams.get('restaurant') ?? '';
     const restaurantId = (restaurantIdOverride || restaurantFromQuery || '').trim();
     const [resolvedTableId, setResolvedTableId] = React.useState('');
+    const [sharedTableContext, setSharedTableContext] = React.useState(false);
+    const [sharedOrderingAllowed, setSharedOrderingAllowed] = React.useState(true);
+    const [featuresReady, setFeaturesReady] = React.useState(false);
+
+    const sharedOrderingLocked = sharedTableContext && featuresReady && !sharedOrderingAllowed;
 
     React.useEffect(() => {
         const normalized = queryTableId.trim();
+        const sharedFromParam = sharedParam === '1' || sharedParam === 'true';
+        const explicitNonShared = sharedParam === '0' || sharedParam === 'false';
+        const inferSharedFromTable = normalized.length > 0 && !explicitNonShared;
+
+        setSharedTableContext(sharedFromParam || inferSharedFromTable);
+
         if (normalized) {
             setResolvedTableId(normalized);
             if (restaurantId) {
@@ -221,7 +234,48 @@ export function CustomerMenuShell({ restaurantIdOverride, tenantHomePath, restau
         }
 
         setResolvedTableId((localStorage.getItem(getTenantTableStorageKey(restaurantId)) || '').trim());
-    }, [queryTableId, restaurantId]);
+    }, [queryTableId, restaurantId, sharedParam]);
+
+    React.useEffect(() => {
+        let active = true;
+
+        const loadFeatures = async () => {
+            if (!restaurantId) {
+                if (active) {
+                    setSharedOrderingAllowed(true);
+                    setFeaturesReady(true);
+                }
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/tenant/features?restaurantId=${encodeURIComponent(restaurantId)}`, {
+                    cache: 'no-store',
+                });
+                const payload = await response.json().catch(() => ({}));
+
+                if (!response.ok) {
+                    throw new Error(String(payload?.error || 'Failed to load tenant features'));
+                }
+
+                if (!active) return;
+
+                setSharedOrderingAllowed(Boolean(payload?.features?.shared_table_ordering));
+                setFeaturesReady(true);
+            } catch {
+                if (!active) return;
+                setSharedOrderingAllowed(true);
+                setFeaturesReady(true);
+            }
+        };
+
+        setFeaturesReady(false);
+        loadFeatures();
+
+        return () => {
+            active = false;
+        };
+    }, [restaurantId]);
 
     React.useEffect(() => {
         if (!restaurantId) {
@@ -536,6 +590,11 @@ export function CustomerMenuShell({ restaurantIdOverride, tenantHomePath, restau
         price: number;
         available?: boolean;
     }): boolean => {
+        if (sharedOrderingLocked) {
+            toast.error('Shared table ordering is locked for this restaurant plan.');
+            return false;
+        }
+
         if (!requireCapture()) return false;
         if (item.available === false) return false;
 
@@ -567,6 +626,11 @@ export function CustomerMenuShell({ restaurantIdOverride, tenantHomePath, restau
         price: number;
         available?: boolean;
     }) => {
+        if (sharedOrderingLocked) {
+            toast.error('Shared table ordering is locked for this restaurant plan.');
+            return;
+        }
+
         if (!requireCapture()) return;
         if (item.available === false) return;
 
@@ -581,6 +645,11 @@ export function CustomerMenuShell({ restaurantIdOverride, tenantHomePath, restau
     };
 
     const decrementMenuItem = (item: { id: string }) => {
+        if (sharedOrderingLocked) {
+            toast.error('Shared table ordering is locked for this restaurant plan.');
+            return;
+        }
+
         if (!requireCapture()) return;
         const current = cartQuantityById.get(item.id) || 0;
         if (current <= 0) return;
@@ -589,6 +658,17 @@ export function CustomerMenuShell({ restaurantIdOverride, tenantHomePath, restau
 
     return (
         <div className="min-h-screen">
+            {sharedOrderingLocked ? (
+                <div className="mx-auto max-w-6xl px-4 pt-4">
+                    <UpgradeCard
+                        title="Shared Table Session Not Available"
+                        description="This QR session uses shared table ordering, which is available only on Pro and Growth plans."
+                        ctaLabel="See Plans"
+                        onUpgrade={() => router.push(tenantHomePath || '/pricing')}
+                    />
+                </div>
+            ) : null}
+
             {error && (
                 <div className="mx-auto max-w-6xl px-4 pt-4">
                     <div className="rounded border border-rose-400/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{error}</div>
@@ -617,6 +697,10 @@ export function CustomerMenuShell({ restaurantIdOverride, tenantHomePath, restau
                 }}
                 getItemQuantity={(itemId) => cartQuantityById.get(itemId) || 0}
                 onOpenCart={() => {
+                    if (sharedOrderingLocked) {
+                        toast.error('Shared table ordering is locked for this restaurant plan.');
+                        return;
+                    }
                     if (!requireCapture()) return;
                     setIsCartOpen(true);
                 }}
@@ -631,7 +715,13 @@ export function CustomerMenuShell({ restaurantIdOverride, tenantHomePath, restau
                     }}
                 />
             ) : null}
-            <CartDrawer tableId={resolvedTableId} restaurantId={restaurantId || undefined} />
+            <CartDrawer
+                tableId={resolvedTableId}
+                restaurantId={restaurantId || undefined}
+                sharedTableContext={sharedTableContext}
+                sharedOrderingLocked={sharedOrderingLocked}
+                onUpgrade={() => router.push(tenantHomePath || '/pricing')}
+            />
 
             <AnimatePresence>
                 {showCaptureModal && (

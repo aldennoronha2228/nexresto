@@ -3,7 +3,8 @@ const path = require('path');
 const log = require('electron-log');
 const { autoUpdater } = require('electron-updater');
 
-const TARGET_URL = process.env.NEXRESTO_DESKTOP_URL || 'https://nexresto.in/login';
+const TARGET_URL = process.env.NEXRESTO_DESKTOP_URL || 'https://nexresto.in';
+const TARGET_ORIGIN = new URL(TARGET_URL).origin;
 
 let mainWindow;
 
@@ -53,7 +54,13 @@ function createMainWindow() {
   });
 
   mainWindow.webContents.on('will-navigate', (event, url) => {
-    const isInternal = url.startsWith(TARGET_URL);
+    const isInternal = (() => {
+      try {
+        return new URL(url).origin === TARGET_ORIGIN;
+      } catch {
+        return false;
+      }
+    })();
     if (!isInternal) {
       event.preventDefault();
       shell.openExternal(url);

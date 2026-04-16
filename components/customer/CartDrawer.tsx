@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useCart } from '@/context/CartContext';
 import { QuantitySelector } from '@/components/customer/QuantitySelector';
 import { getTenantCheckoutSnapshotKey, getTenantTableStorageKey } from '@/lib/client/storage/tenantKeys';
+import { UpgradeCard } from '@/components/customer/UpgradeCard';
 
 function formatINR(value: number): string {
     return new Intl.NumberFormat('en-IN', {
@@ -17,9 +18,18 @@ function formatINR(value: number): string {
 type CartDrawerProps = {
     tableId?: string;
     restaurantId?: string;
+    sharedTableContext?: boolean;
+    sharedOrderingLocked?: boolean;
+    onUpgrade?: () => void;
 };
 
-export function CartDrawer({ tableId = '', restaurantId }: CartDrawerProps) {
+export function CartDrawer({
+    tableId = '',
+    restaurantId,
+    sharedTableContext = false,
+    sharedOrderingLocked = false,
+    onUpgrade,
+}: CartDrawerProps) {
     const { cart, isCartOpen, setIsCartOpen, totalPrice, updateQuantity, removeFromCart } = useCart();
     const router = useRouter();
     const [manualTable, setManualTable] = React.useState('');
@@ -44,6 +54,11 @@ export function CartDrawer({ tableId = '', restaurantId }: CartDrawerProps) {
     }, [tableId, restaurantId]);
 
     const goCheckout = () => {
+        if (sharedTableContext && sharedOrderingLocked) {
+            setTableError('Shared table ordering is locked on your current plan.');
+            return;
+        }
+
         const finalTable = manualTable.trim();
         if (!finalTable) {
             setTableError('Please enter your table number before checkout.');
@@ -74,6 +89,7 @@ export function CartDrawer({ tableId = '', restaurantId }: CartDrawerProps) {
         const params = new URLSearchParams();
         if (finalTable) params.set('table', finalTable);
         if (restaurantId) params.set('restaurant', restaurantId);
+        if (sharedTableContext) params.set('shared', '1');
         setIsCartOpen(false);
         router.push(`/customer/order-summary${params.toString() ? `?${params.toString()}` : ''}`);
     };
@@ -137,6 +153,15 @@ export function CartDrawer({ tableId = '', restaurantId }: CartDrawerProps) {
 
                 {cart.length > 0 && (
                     <div className="mt-5 space-y-3 border-t border-stone-700 pt-4">
+                        {sharedTableContext && sharedOrderingLocked ? (
+                            <UpgradeCard
+                                title="Shared QR Checkout Is Disabled"
+                                description="This restaurant is on Starter. Upgrade to Pro or Growth to accept shared QR table orders."
+                                ctaLabel="Upgrade Plan"
+                                onUpgrade={onUpgrade}
+                            />
+                        ) : null}
+
                         <div className="border border-stone-700 bg-black/30 p-3">
                             <label htmlFor="tableInput" className="mb-1 block text-xs uppercase tracking-wider text-stone-400">
                                 Table Number
@@ -163,7 +188,7 @@ export function CartDrawer({ tableId = '', restaurantId }: CartDrawerProps) {
                         <button
                             type="button"
                             onClick={goCheckout}
-                            disabled={!manualTable.trim()}
+                            disabled={!manualTable.trim() || (sharedTableContext && sharedOrderingLocked)}
                             className="w-full bg-emerald-600 px-4 py-3 text-sm font-semibold uppercase tracking-[0.14em] text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-55"
                         >
                             Proceed to Checkout

@@ -55,6 +55,8 @@ function OrderSummaryContent() {
 
     const restaurantId = (searchParams.get('restaurant') || '').trim();
     const queryTable = (searchParams.get('table') || searchParams.get('tableId') || '').trim();
+    const sharedParam = String(searchParams.get('shared') || '').trim().toLowerCase();
+    const sharedTableContext = sharedParam === '1' || sharedParam === 'true';
 
     const [tableId, setTableId] = React.useState('');
     const [status, setStatus] = React.useState<'submitting' | 'success' | 'error'>('submitting');
@@ -158,7 +160,8 @@ function OrderSummaryContent() {
             tableId,
             subtotalToSubmit + 5,
             restaurantId,
-            customerProfile || undefined
+            customerProfile || undefined,
+            { sharedTableContext }
         )
             .then(({ orderId, dailyOrderNumber }) => {
                 const now = new Date();
@@ -179,7 +182,12 @@ function OrderSummaryContent() {
             })
             .catch((err: unknown) => {
                 setStatus('error');
-                setError(err instanceof Error ? err.message : 'Could not submit order');
+                const raw = err instanceof Error ? err.message : 'Could not submit order';
+                if (raw.startsWith('PLAN_UPGRADE_REQUIRED:')) {
+                    setError('Shared table ordering requires Pro or Growth plan. Please upgrade and try again.');
+                    return;
+                }
+                setError(raw);
             });
     }, [
         router,
@@ -193,6 +201,7 @@ function OrderSummaryContent() {
         cart,
         totalPrice,
         checkoutSnapshotKey,
+        sharedTableContext,
     ]);
 
     const displayedCart = submittedCart.length > 0 ? submittedCart : cart;
@@ -214,6 +223,11 @@ function OrderSummaryContent() {
                             <button type="button" onClick={() => router.push(backToMenuUrl)} className="rounded border border-white/20 px-4 py-2 text-sm">
                                 Back to Menu
                             </button>
+                            {error.toLowerCase().includes('requires pro or growth') ? (
+                                <button type="button" onClick={() => router.push('/pricing')} className="rounded border border-amber-300/40 bg-amber-400/20 px-4 py-2 text-sm text-amber-100">
+                                    Upgrade Plan
+                                </button>
+                            ) : null}
                         </div>
                     </div>
                 )}

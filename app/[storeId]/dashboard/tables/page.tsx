@@ -73,10 +73,12 @@ function getTableMenuUrl(baseUrl: string, tableId: string, restaurantId?: string
     try {
         const url = new URL(normalizedPath, normalizedBase.endsWith('/') ? normalizedBase : `${normalizedBase}/`);
         url.searchParams.set('table', tableId);
+        url.searchParams.set('shared', '1');
         return url.toString();
     } catch {
         const params = new URLSearchParams();
         params.set('table', tableId);
+        params.set('shared', '1');
         return `${normalizedBase}${normalizedPath}?${params.toString()}`;
     }
 }

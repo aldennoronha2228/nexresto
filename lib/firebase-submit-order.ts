@@ -1,22 +1,12 @@
 /**
  * lib/firebase-submit-order.ts
  * ---------------------------------
- * Customer-facing order submission using Firestore.
- * Replaces lib/submitOrder.ts.
- *
- * Orders are stored as:
- *   restaurants/{restaurantId}/orders/{auto-id}
- *
- * Items are embedded as an array in the order document (denormalized)
- * since Firestore doesn't support cross-collection joins.
+ * Customer-facing order submission through the backend API.
  */
 
-import { collection, addDoc, serverTimestamp, query, where, getDocs, Timestamp } from 'firebase/firestore';
-import { db } from './firebase';
 import { validateOrderPayload } from './validate';
 import { securityLog } from './logger';
 import { env } from './env';
-import { attachOrderToCustomer, normalizePhone } from './customer-tracking';
 import type { CartItem } from '@/context/CartContext';
 
 export interface SubmitOrderResult {
@@ -29,7 +19,8 @@ export async function submitOrderToFirestore(
     tableId: string,
     total: number,
     restaurantIdOverride?: string,
-    customer?: { name: string; phone: string }
+    customer?: { name: string; phone: string },
+    options?: { sharedTableContext?: boolean }
 ): Promise<SubmitOrderResult> {
     const restaurantId = restaurantIdOverride ?? env.restaurantId;
 
@@ -53,70 +44,49 @@ export async function submitOrderToFirestore(
 
     const payload = validation.data!;
 
-    // ── Step 2: Calculate daily order number ──────────────────────────────────
-    // Count today's orders for this restaurant to generate a sequential number
-    let dailyOrderNumber = 1;
-    try {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const todayTimestamp = Timestamp.fromDate(today);
-
-        const ordersRef = collection(db, 'restaurants', payload.restaurantId, 'orders');
-        const todayQuery = query(
-            ordersRef,
-            where('created_at', '>=', todayTimestamp)
-        );
-        const snapshot = await getDocs(todayQuery);
-        dailyOrderNumber = snapshot.size + 1;
-    } catch {
-        // Non-critical, use default
-    }
-
-    // ── Step 3: Insert order document with embedded items ─────────────────────
-    const orderItems = payload.items.map((item) => ({
-        menu_item_id: null,
-        item_name: item.name.slice(0, 200),
-        item_price: item.price,
-        quantity: item.quantity,
-    }));
-
-    const ordersRef = collection(db, 'restaurants', payload.restaurantId, 'orders');
-    const orderDocRef = await addDoc(ordersRef, {
-        table_number: payload.tableId,
-        total: payload.total,
-        status: 'new',
-        daily_order_number: dailyOrderNumber,
-        customer_name: customer?.name?.trim() || null,
-        customer_phone: customer?.phone ? normalizePhone(customer.phone) : null,
-        items: orderItems,
-        created_at: serverTimestamp(),
+    const response = await fetch('/api/order/place', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            tableId: payload.tableId,
+            total: payload.total,
+            restaurantId: payload.restaurantId,
+            items: payload.items,
+            sharedTableContext: options?.sharedTableContext === true,
+            customer: customer
+                ? {
+                    name: customer.name,
+                    phone: customer.phone,
+                }
+                : undefined,
+        }),
     });
 
-    if (customer?.phone) {
-        try {
-            await attachOrderToCustomer(
-                db,
-                payload.restaurantId,
-                customer.phone,
-                orderDocRef.id,
-                payload.total,
-                customer.name,
-                payload.tableId
-            );
-        } catch {
-            // Do not fail order placement if customer linkage update fails.
+    const body = await response.json().catch(() => ({} as Record<string, unknown>));
+    if (!response.ok) {
+        const code = typeof body?.code === 'string' ? body.code : '';
+        const message = typeof body?.error === 'string' ? body.error : 'Could not submit order';
+        if (code) {
+            throw new Error(`${code}: ${message}`);
         }
+        throw new Error(message);
+    }
+
+    const orderId = typeof body?.orderId === 'string' ? body.orderId : '';
+    const dailyOrderNumber = Number(body?.dailyOrderNumber || 0);
+    if (!orderId || !Number.isFinite(dailyOrderNumber) || dailyOrderNumber <= 0) {
+        throw new Error('Order response is invalid');
     }
 
     securityLog.info('ORDER_SUBMITTED', {
         ok: true,
-        orderId: orderDocRef.id,
+        orderId,
         table: payload.tableId,
         total: payload.total,
     });
 
     return {
-        orderId: orderDocRef.id,
+        orderId,
         dailyOrderNumber,
     };
 }
