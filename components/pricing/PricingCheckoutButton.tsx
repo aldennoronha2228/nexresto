@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 import { PLAN_PRICES, type UpgradablePlan } from '@/lib/pricing';
+import { isWebView } from '@/lib/isWebView';
 
 type RazorpayOrder = {
   id: string;
@@ -61,6 +62,22 @@ type Props = {
 
 const PAYMENT_CANCELLED_ERROR = 'PAYMENT_CANCELLED_BY_USER';
 
+function getAbsolutePayUrl(plan: UpgradablePlan): string {
+  const envBase = String(process.env.NEXT_PUBLIC_APP_URL || '').trim();
+
+  const baseUrl = (() => {
+    if (envBase.startsWith('https://')) return envBase;
+    if (typeof window !== 'undefined' && window.location.origin.startsWith('https://')) return window.location.origin;
+    return '';
+  })();
+
+  if (!baseUrl) {
+    throw new Error('Secure HTTPS app domain is required for payment redirect. Set NEXT_PUBLIC_APP_URL.');
+  }
+
+  return `${baseUrl.replace(/\/$/, '')}/pay?plan=${encodeURIComponent(plan)}`;
+}
+
 export default function PricingCheckoutButton({
   planName,
   planKey,
@@ -115,6 +132,19 @@ export default function PricingCheckoutButton({
     if (!user) {
       toast.error('Please log in to upgrade your plan.');
       router.push('/login');
+      return;
+    }
+
+    if (isWebView()) {
+      try {
+        toast.info('Redirecting to secure payment...');
+        const payUrl = getAbsolutePayUrl(plan);
+        // In APK WebView, use full URL so OS can route it to external browser.
+        window.location.href = payUrl;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unable to redirect to secure payment page';
+        toast.error(message);
+      }
       return;
     }
 
