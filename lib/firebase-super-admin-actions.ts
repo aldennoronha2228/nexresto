@@ -211,6 +211,22 @@ export interface SubscriptionReminderEmailRow {
     last_reminder_source: string | null;
 }
 
+export interface PaymentOverviewRow {
+    id: string;
+    name: string;
+    owner_email: string | null;
+    subscription_tier: 'starter' | 'pro' | '1k' | '2k' | '2.5k';
+    subscription_status: 'active' | 'past_due' | 'cancelled' | 'trial' | 'expired';
+    subscription_end_date: string | null;
+    days_remaining: number | null;
+    renewal_state: 'active' | 'expiring_soon' | 'expired' | 'no_plan';
+    last_payment_provider: string | null;
+    last_payment_id: string | null;
+    last_payment_plan: string | null;
+    last_payment_amount_inr: number | null;
+    last_payment_at: string | null;
+}
+
 export type DemoRequestStatus = 'new' | 'contacted' | 'scheduled' | 'converted' | 'closed';
 
 export interface DemoRequestRow {
@@ -530,6 +546,62 @@ export async function getAllRestaurants(
     };
 }
 
+// ─── Payments Overview ───────────────────────────────────────────────────────
+
+export async function getPaymentOverviewRows(): Promise<PaymentOverviewRow[]> {
+    try {
+        const snapshot = await adminFirestore.collection('restaurants').orderBy('created_at', 'desc').get();
+        const todayYmd = new Date().toISOString().slice(0, 10);
+        const today = new Date(`${todayYmd}T00:00:00Z`);
+
+        const rows = snapshot.docs.map((doc) => {
+            const d = doc.data() || {};
+            const lastPayment = (d.last_payment && typeof d.last_payment === 'object')
+                ? (d.last_payment as Record<string, unknown>)
+                : null;
+
+            const endDateYmd = toYmdFromUnknown(d.subscription_end_date);
+            const normalizedStatus = normalizeStatusForBilling(d.subscription_status, endDateYmd);
+            const daysRemaining = endDateYmd
+                ? Math.round((new Date(`${endDateYmd}T00:00:00Z`).getTime() - today.getTime()) / 86400000)
+                : null;
+
+            const renewalState: PaymentOverviewRow['renewal_state'] = !endDateYmd
+                ? 'no_plan'
+                : (daysRemaining ?? 0) < 0
+                    ? 'expired'
+                    : (daysRemaining ?? 0) <= 7
+                        ? 'expiring_soon'
+                        : 'active';
+
+            return {
+                id: doc.id,
+                name: String(d.name || doc.id),
+                owner_email: d.owner_email ? String(d.owner_email) : null,
+                subscription_tier: (d.subscription_tier || 'starter') as PaymentOverviewRow['subscription_tier'],
+                subscription_status: normalizedStatus,
+                subscription_end_date: endDateYmd,
+                days_remaining: daysRemaining,
+                renewal_state: renewalState,
+                last_payment_provider: lastPayment?.provider ? String(lastPayment.provider) : null,
+                last_payment_id: lastPayment?.payment_id ? String(lastPayment.payment_id) : null,
+                last_payment_plan: lastPayment?.plan ? String(lastPayment.plan) : null,
+                last_payment_amount_inr: lastPayment?.amount_inr != null ? toNumber(lastPayment.amount_inr) : null,
+                last_payment_at: toIsoString(lastPayment?.paid_at || lastPayment?.verified_at) || null,
+            } as PaymentOverviewRow;
+        });
+
+        return rows.sort((a, b) => {
+            const aTs = a.last_payment_at ? new Date(a.last_payment_at).getTime() : 0;
+            const bTs = b.last_payment_at ? new Date(b.last_payment_at).getTime() : 0;
+            return bTs - aTs;
+        });
+    } catch (error) {
+        console.error('Error loading payment overview rows:', error);
+        return [];
+    }
+}
+
 // ─── Temporary Access Control ────────────────────────────────────────────────
 
 export async function setRestaurantTemporaryAccess(
@@ -802,6 +874,39 @@ const DEMO_REQUEST_STATUS_SET = new Set<DemoRequestStatus>([
     'converted',
     'closed',
 ]);
+
+function toYmdFromUnknown(raw: unknown): string | null {
+    if (!raw) return null;
+
+    if (typeof raw === 'string') {
+        const trimmed = raw.trim();
+        if (!trimmed) return null;
+        if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+        const parsed = new Date(trimmed);
+        if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
+    }
+
+    const iso = toIsoString(raw);
+    if (iso) return iso.slice(0, 10);
+
+    return null;
+}
+
+function normalizeStatusForBilling(
+    rawStatus: unknown,
+    endDateYmd: string | null
+): PaymentOverviewRow['subscription_status'] {
+    if (endDateYmd) {
+        const todayYmd = new Date().toISOString().slice(0, 10);
+        if (endDateYmd < todayYmd) return 'expired';
+    }
+
+    if (rawStatus === 'active' || rawStatus === 'past_due' || rawStatus === 'cancelled' || rawStatus === 'trial' || rawStatus === 'expired') {
+        return rawStatus;
+    }
+
+    return 'active';
+}
 
 const DEMO_LOGIN_LINK_COOLDOWN_MS = 10 * 60 * 1000;
 const DEMO_LOGIN_LINK_MAX_SENDS_PER_DAY = 3;

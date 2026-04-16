@@ -23,7 +23,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Geist, Geist_Mono } from 'next/font/google';
 import {
     LayoutDashboard, Building2, ScrollText,
-    ChevronLeft, LogOut, Menu, X, HardDrive, Mail, Inbox, Layers
+    ChevronLeft, LogOut, Menu, X, HardDrive, Mail, Inbox, Layers, WalletCards
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import NexRestoLogo from '@/components/ui/NexRestoLogo';
@@ -35,6 +35,7 @@ const geistMono = Geist_Mono({ subsets: ['latin'] });
 const navigation = [
     { name: 'Overview', href: '/super-admin', icon: LayoutDashboard },
     { name: 'Restaurants', href: '/super-admin/restaurants', icon: Building2 },
+    { name: 'Payments', href: '/super-admin/payments', icon: WalletCards },
     { name: 'Subscription Tiers', href: '/super-admin/subscription-tiers', icon: Layers },
     { name: 'Emails', href: '/super-admin/emails', icon: Mail },
     { name: 'Demo Requests', href: '/super-admin/demo-requests', icon: Inbox },

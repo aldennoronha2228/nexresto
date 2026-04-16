@@ -103,6 +103,7 @@ export function SuperAdminAuthProvider({ children }: { children: ReactNode }) {
 
     const hasInitialized = useRef(false);
     const hasRoleRef = useRef(false);
+    const pendingTokenBootstrapRef = useRef(false);
 
     useEffect(() => {
         let isActive = true;
@@ -115,11 +116,37 @@ export function SuperAdminAuthProvider({ children }: { children: ReactNode }) {
             : null;
 
         if (pendingToken) {
+            pendingTokenBootstrapRef.current = true;
+            if (isActive) {
+                setState(prev => ({
+                    ...prev,
+                    loading: true,
+                    roleLoading: true,
+                    error: null,
+                }));
+            }
             sessionStorage.removeItem('pending_admin_token');
             import('firebase/auth').then(({ signInWithCustomToken }) => {
-                signInWithCustomToken(adminAuth, pendingToken).catch(err => {
-                    console.warn('[SuperAdminAuth] Could not use pending token:', err);
-                });
+                signInWithCustomToken(adminAuth, pendingToken)
+                    .catch(err => {
+                        console.warn('[SuperAdminAuth] Could not use pending token:', err);
+                        if (isActive) {
+                            setState(prev => ({
+                                ...prev,
+                                error: err?.message || 'Could not complete super admin sign-in',
+                            }));
+                        }
+                    })
+                    .finally(() => {
+                        pendingTokenBootstrapRef.current = false;
+                        if (isActive && !adminAuth.currentUser) {
+                            setState(prev => ({
+                                ...prev,
+                                loading: false,
+                                roleLoading: false,
+                            }));
+                        }
+                    });
             });
         }
 
@@ -127,6 +154,9 @@ export function SuperAdminAuthProvider({ children }: { children: ReactNode }) {
             console.log(`[SuperAdminAuth] Firebase auth state changed: ${user ? 'signed in' : 'signed out'}`);
 
             if (!user) {
+                if (pendingTokenBootstrapRef.current) {
+                    return;
+                }
                 clearSuperAdminSessionWindow();
                 if (isActive) {
                     hasRoleRef.current = false;
