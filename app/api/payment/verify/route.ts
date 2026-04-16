@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { adminAuth, adminFirestore } from '@/lib/firebase-admin';
 import { PLAN_PRICES, type UpgradablePlan } from '@/lib/pricing';
+import { verifyPaymentSessionToken } from '@/lib/payment-session';
 
 type VerifyRequestBody = {
   razorpay_order_id?: string;
@@ -75,10 +76,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing authorization token' }, { status: 401 });
     }
 
-    const idToken = authHeader.replace('Bearer ', '').trim();
-    const decoded = await adminAuth.verifyIdToken(idToken);
+    const bearerToken = authHeader.replace('Bearer ', '').trim();
 
-    const restaurantId = getRestaurantIdFromClaims(decoded as unknown as Record<string, unknown>);
+    let restaurantId = '';
+    let sessionPlan: UpgradablePlan | null = null;
+
+    try {
+      const decoded = await adminAuth.verifyIdToken(bearerToken);
+      restaurantId = getRestaurantIdFromClaims(decoded as unknown as Record<string, unknown>);
+    } catch {
+      const sessionPayload = verifyPaymentSessionToken(bearerToken);
+      if (!sessionPayload) {
+        return NextResponse.json({ error: 'Invalid authorization token' }, { status: 401 });
+      }
+
+      restaurantId = sessionPayload.restaurantId;
+      sessionPlan = sessionPayload.plan;
+    }
+
     if (!restaurantId) {
       return NextResponse.json({ error: 'Restaurant context not found' }, { status: 403 });
     }
@@ -113,6 +128,10 @@ export async function POST(request: NextRequest) {
 
     if (!selectedPlan) {
       return NextResponse.json({ error: 'Unsupported payment amount for available plans' }, { status: 400 });
+    }
+
+    if (sessionPlan && sessionPlan !== selectedPlan) {
+      return NextResponse.json({ error: 'Plan mismatch for external payment session' }, { status: 400 });
     }
 
     const orderNotes = (razorpayOrder.notes || {}) as Record<string, unknown>;

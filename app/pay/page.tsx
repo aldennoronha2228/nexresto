@@ -68,6 +68,16 @@ function dashboardRedirectUrl(restaurantId?: string): string {
   return '/login?payment=success';
 }
 
+function tryReturnToApp(restaurantId?: string): boolean {
+  const deepLinkBase = String(process.env.NEXT_PUBLIC_APP_DEEPLINK || '').trim();
+  if (!deepLinkBase || typeof window === 'undefined') return false;
+
+  const normalizedBase = deepLinkBase.replace(/\/$/, '');
+  const target = `${normalizedBase}/payment-success${restaurantId ? `?restaurantId=${encodeURIComponent(restaurantId)}` : ''}`;
+  window.location.href = target;
+  return true;
+}
+
 export default function PayPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -78,6 +88,7 @@ export default function PayPage() {
   const [showManualExternalOpen, setShowManualExternalOpen] = useState(false);
 
   const plan = useMemo(() => normalizePlan(searchParams.get('plan')), [searchParams]);
+  const paymentToken = useMemo(() => String(searchParams.get('pt') || '').trim(), [searchParams]);
 
   useEffect(() => {
     if (!plan) {
@@ -145,7 +156,7 @@ export default function PayPage() {
 
     const runCheckout = async () => {
       try {
-        if (!user) {
+        if (!user && !paymentToken) {
           setStatusText('Redirecting to login...');
           router.replace(`/login?next=${encodeURIComponent(`/pay?plan=${plan}`)}`);
           return;
@@ -159,14 +170,17 @@ export default function PayPage() {
         setStatusText('Loading payment gateway...');
         await loadRazorpayScript();
 
-        const idToken = await user.getIdToken();
+        const authToken = user ? await user.getIdToken() : paymentToken;
+        if (!authToken) {
+          throw new Error('Missing payment authorization');
+        }
 
         setStatusText('Creating secure payment order...');
         const orderRes = await fetch('/api/payment/order', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${idToken}`,
+            Authorization: `Bearer ${authToken}`,
           },
           body: JSON.stringify({ plan }),
         });
@@ -214,7 +228,7 @@ export default function PayPage() {
                   method: 'POST',
                   headers: {
                     'Content-Type': 'application/json',
-                    Authorization: `Bearer ${idToken}`,
+                    Authorization: `Bearer ${authToken}`,
                   },
                   body: JSON.stringify({
                     razorpay_order_id: response.razorpay_order_id,
@@ -235,7 +249,14 @@ export default function PayPage() {
                 }
 
                 setStatusText('Payment successful. Redirecting...');
-                router.replace(dashboardRedirectUrl(verifyPayload.restaurantId));
+                const appReturnTriggered = tryReturnToApp(verifyPayload.restaurantId);
+                if (appReturnTriggered) {
+                  window.setTimeout(() => {
+                    router.replace(dashboardRedirectUrl(verifyPayload.restaurantId));
+                  }, 1200);
+                } else {
+                  router.replace(dashboardRedirectUrl(verifyPayload.restaurantId));
+                }
                 resolve();
               } catch (error) {
                 reject(error);
@@ -270,7 +291,7 @@ export default function PayPage() {
     return () => {
       cancelled = true;
     };
-  }, [plan, router, user]);
+  }, [paymentToken, plan, router, user]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#131313] text-[#e5e2e1] px-6">

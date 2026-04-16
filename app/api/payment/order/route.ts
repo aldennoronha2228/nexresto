@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminAuth } from '@/lib/firebase-admin';
 import { PLAN_PRICES, type UpgradablePlan } from '@/lib/pricing';
+import { verifyPaymentSessionToken } from '@/lib/payment-session';
 
 type OrderRequestBody = {
   plan?: string;
@@ -34,19 +35,37 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing authorization token' }, { status: 401 });
     }
 
-    const idToken = authHeader.replace('Bearer ', '').trim();
-    const decoded = await adminAuth.verifyIdToken(idToken);
-
-    const restaurantId = getRestaurantIdFromClaims(decoded as unknown as Record<string, unknown>);
-    if (!restaurantId) {
-      return NextResponse.json({ error: 'Restaurant context not found' }, { status: 403 });
-    }
-
     const body = (await request.json()) as OrderRequestBody;
     const requestedPlan = String(body?.plan || '').trim().toLowerCase();
 
     if (!isUpgradablePlan(requestedPlan)) {
       return NextResponse.json({ error: 'Invalid plan selected' }, { status: 400 });
+    }
+
+    const bearerToken = authHeader.replace('Bearer ', '').trim();
+
+    let restaurantId = '';
+    let sessionPlan: UpgradablePlan | null = null;
+
+    try {
+      const decoded = await adminAuth.verifyIdToken(bearerToken);
+      restaurantId = getRestaurantIdFromClaims(decoded as unknown as Record<string, unknown>);
+    } catch {
+      const sessionPayload = verifyPaymentSessionToken(bearerToken);
+      if (!sessionPayload) {
+        return NextResponse.json({ error: 'Invalid authorization token' }, { status: 401 });
+      }
+
+      restaurantId = sessionPayload.restaurantId;
+      sessionPlan = sessionPayload.plan;
+    }
+
+    if (!restaurantId) {
+      return NextResponse.json({ error: 'Restaurant context not found' }, { status: 403 });
+    }
+
+    if (sessionPlan && sessionPlan !== requestedPlan) {
+      return NextResponse.json({ error: 'Plan mismatch for external payment session' }, { status: 400 });
     }
 
     const razorpayKeyId = process.env.RAZORPAY_KEY_ID || '';

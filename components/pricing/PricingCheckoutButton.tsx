@@ -138,12 +138,30 @@ export default function PricingCheckoutButton({
 
     if (isWebView()) {
       try {
+        setActivePlan(plan);
         toast.info('Redirecting to secure payment...');
-        const payUrl = getAbsolutePayUrl(plan);
-        openExternalBrowser(payUrl);
+
+        const idToken = await user.getIdToken();
+        const linkRes = await fetch('/api/payment/external-link', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${idToken}`,
+          },
+          body: JSON.stringify({ plan }),
+        });
+
+        const linkPayload = (await linkRes.json()) as { error?: string; url?: string };
+        if (!linkRes.ok || !linkPayload?.url) {
+          throw new Error(linkPayload?.error || 'Unable to create secure payment redirect');
+        }
+
+        openExternalBrowser(linkPayload.url);
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unable to redirect to secure payment page';
         toast.error(message);
+      } finally {
+        setActivePlan(null);
       }
       return;
     }
