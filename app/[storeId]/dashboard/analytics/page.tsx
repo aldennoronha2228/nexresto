@@ -8,7 +8,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-    BarChart3, TrendingUp, TrendingDown, DollarSign,
+    BarChart3, TrendingUp, TrendingDown, IndianRupee,
     ShoppingBag, Users, Clock, Calendar, ArrowUpRight,
     FileText, Download, Loader2, ChevronRight, Lock, Sparkles
 } from 'lucide-react';
@@ -408,7 +408,7 @@ function AnalyticsContent() {
     const hasRevenueData = useMemo(() => revenueData.some((entry) => entry.revenue > 0), [revenueData]);
 
     const statCards = useMemo(() => ([
-        { title: 'Total Revenue', value: formatCurrency(totalRevenue), change: 'Last 7 days', isPositive: true, icon: DollarSign },
+        { title: 'Total Revenue', value: formatCurrency(totalRevenue), change: 'Last 7 days', isPositive: true, icon: IndianRupee },
         { title: 'Total Orders', value: `${totalOrders}`, change: 'Last 7 days', isPositive: true, icon: ShoppingBag },
         { title: 'Avg Order Value', value: formatCurrency(avgOrderValue), change: 'Last 7 days', isPositive: true, icon: TrendingUp },
         { title: 'Repeat Customers', value: `${Math.round(repeatCustomerRate)}%`, change: 'Overall', isPositive: true, icon: Users },
@@ -470,22 +470,36 @@ function AnalyticsContent() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.4 }}
-                className="bg-white rounded-2xl border border-slate-200 p-6"
+                className="relative overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-white via-slate-50/70 to-blue-50/40 p-6 shadow-sm"
             >
+                <div className="pointer-events-none absolute -top-10 -right-10 h-32 w-32 rounded-full bg-blue-200/30 blur-2xl" />
+                <div className="pointer-events-none absolute -bottom-10 -left-10 h-32 w-32 rounded-full bg-indigo-200/20 blur-2xl" />
+
                 <div className="flex items-center justify-between mb-6">
                     <div>
                         <h2 className="text-lg font-semibold text-slate-900">Revenue Trend</h2>
                         <p className="text-sm text-slate-500">Daily revenue for the past week</p>
                     </div>
                     <div className="flex items-center gap-4 text-sm">
-                        <span className="flex items-center gap-2">
-                            <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-                            Revenue
+                        <span className="inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50/80 px-3 py-1 font-medium text-blue-700">
+                            <div className="h-2.5 w-2.5 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500"></div>
+                            Revenue (INR)
                         </span>
                     </div>
                 </div>
 
-                <div className="h-64 flex items-end gap-3">
+                <div className="relative h-72 rounded-2xl border border-slate-100 bg-white/70 p-4">
+                    <div className="pointer-events-none absolute inset-0 px-4 py-4">
+                        {[0, 25, 50, 75, 100].map((line) => (
+                            <div
+                                key={line}
+                                className="absolute left-4 right-4 border-t border-dashed border-slate-200/80"
+                                style={{ bottom: `${line}%` }}
+                            />
+                        ))}
+                    </div>
+
+                    <div className="relative z-10 h-full flex items-end gap-3">
                     {loadingOverview ? (
                         <div className="w-full h-full flex items-center justify-center text-slate-400 text-sm">
                             Loading analytics...
@@ -499,18 +513,19 @@ function AnalyticsContent() {
                             <div key={data.dateKey} className="flex-1 flex flex-col items-center gap-2">
                                 <motion.div
                                     initial={{ height: 0 }}
-                                    animate={{ height: `${(data.revenue / maxRevenue) * 200}px` }}
+                                    animate={{ height: `${Math.max((data.revenue / maxRevenue) * 100, data.revenue > 0 ? 8 : 0)}%` }}
                                     transition={{ delay: 0.5 + i * 0.1, duration: 0.5 }}
-                                    className="w-full bg-gradient-to-t from-blue-500 to-blue-400 rounded-t-lg relative group cursor-pointer"
+                                    className="w-full rounded-t-xl border border-blue-300/30 bg-gradient-to-t from-blue-600 via-blue-500 to-sky-400 shadow-[0_10px_24px_-12px_rgba(59,130,246,0.9)] relative group cursor-pointer"
                                 >
-                                    <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                                    <div className="absolute -top-9 left-1/2 -translate-x-1/2 rounded-md bg-slate-900 px-2 py-1 text-xs text-white opacity-0 shadow-md transition-opacity whitespace-nowrap group-hover:opacity-100">
                                         {formatCurrency(data.revenue)}
                                     </div>
                                 </motion.div>
-                                <span className="text-xs text-slate-500">{data.day}</span>
+                                <span className="text-xs font-medium text-slate-500">{data.day}</span>
                             </div>
                         ))
                     )}
+                    </div>
                 </div>
             </motion.div>
 
