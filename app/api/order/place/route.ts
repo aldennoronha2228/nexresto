@@ -21,6 +21,24 @@ function normalizePhone(phone: unknown): string {
     return String(phone || '').replace(/\D/g, '').slice(-10);
 }
 
+function normalizeTableKey(value: unknown): string {
+    return String(value || '').trim().toLowerCase();
+}
+
+async function clearSharedTableCart(restaurantId: string, tableId: string): Promise<void> {
+    const tableKey = normalizeTableKey(tableId);
+    if (!tableKey) return;
+
+    await adminFirestore.doc(`restaurants/${restaurantId}/shared_carts/${tableKey}`).set(
+        {
+            items: [],
+            updated_at: FieldValue.serverTimestamp(),
+            cleared_at: FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+    );
+}
+
 function createdAtMillis(value: unknown): number {
     if (!value || typeof value !== 'object') return 0;
     const maybe = value as { toDate?: () => Date };
@@ -161,6 +179,9 @@ export async function POST(request: NextRequest) {
                     { merge: true }
                 );
 
+                // Move shared cart into order: clear table cart after successful merge.
+                await clearSharedTableCart(payload.restaurantId, payload.tableId).catch(() => { });
+
                 const existingDailyOrderNumber = Number(activeData.daily_order_number || dailyOrderNumber) || dailyOrderNumber;
 
                 return NextResponse.json({
@@ -181,6 +202,11 @@ export async function POST(request: NextRequest) {
             items: orderItems,
             created_at: FieldValue.serverTimestamp(),
         });
+
+        // Move shared cart into order: clear table cart after successful order creation.
+        if (isSharedTableContext) {
+            await clearSharedTableCart(payload.restaurantId, payload.tableId).catch(() => { });
+        }
 
         if (/^\d{10}$/.test(customerPhone)) {
             const customerRef = adminFirestore.doc(`restaurants/${payload.restaurantId}/customers/${customerPhone}`);
