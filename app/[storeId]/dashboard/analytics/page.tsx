@@ -40,6 +40,7 @@ type AnalyticsOrder = {
 function ReportsSection() {
     const { storeId: tenantId, tenantName, subscriptionTier } = useRestaurant();
     const [reports, setReports] = useState<DailyReport[]>([]);
+    const [showAllReports, setShowAllReports] = useState(false);
     const [loading, setLoading] = useState(true);
     const [generating, setGenerating] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -108,17 +109,64 @@ function ReportsSection() {
         downloadReportPDF(report, tenantName || 'Restaurant');
     };
 
-    const handleDownloadWeekly = () => {
-        if (reports.length === 0) return;
+    const normalizedReports = useMemo(() => {
+        return reports
+            .map((report) => {
+                const parsedDate = new Date(report.report_date);
+                const date = Number.isNaN(parsedDate.getTime())
+                    ? new Date().toISOString().slice(0, 10)
+                    : parsedDate.toISOString().slice(0, 10);
 
-        const sortedReports = [...reports].sort((a, b) =>
+                return {
+                    id: String(report.id || `report_${date}`),
+                    restaurant_id: String(report.restaurant_id || tenantId || ''),
+                    report_date: date,
+                    total_revenue: Number(report.total_revenue || 0),
+                    total_orders: Number(report.total_orders || 0),
+                    avg_order_value: Number(report.avg_order_value || 0),
+                    top_items: Array.isArray(report.top_items)
+                        ? report.top_items.map((item) => ({
+                            name: String(item?.name || 'Item'),
+                            quantity: Number(item?.quantity || 0),
+                            revenue: Number(item?.revenue || 0),
+                        }))
+                        : [],
+                    hourly_breakdown: report.hourly_breakdown && typeof report.hourly_breakdown === 'object'
+                        ? report.hourly_breakdown
+                        : {},
+                    busiest_hour: typeof report.busiest_hour === 'number' ? report.busiest_hour : null,
+                    cancelled_orders: Number(report.cancelled_orders || 0),
+                    generated_at: String(report.generated_at || new Date().toISOString()),
+                } as DailyReport;
+            })
+            .sort((a, b) => new Date(b.report_date).getTime() - new Date(a.report_date).getTime());
+    }, [reports, tenantId]);
+
+    const visibleReports = useMemo(
+        () => (showAllReports ? normalizedReports : normalizedReports.slice(0, 3)),
+        [normalizedReports, showAllReports]
+    );
+
+    const handleDownloadWeekly = () => {
+        if (normalizedReports.length === 0) {
+            setError('No reports available for weekly summary.');
+            return;
+        }
+
+        const sortedReports = [...normalizedReports].sort((a, b) =>
             new Date(a.report_date).getTime() - new Date(b.report_date).getTime()
         );
-        const weekStart = sortedReports[0]?.report_date || '';
-        const weekEnd = sortedReports[sortedReports.length - 1]?.report_date || '';
+        const weeklyReports = sortedReports.slice(-7);
+        const weekStart = weeklyReports[0]?.report_date || '';
+        const weekEnd = weeklyReports[weeklyReports.length - 1]?.report_date || '';
 
-        const doc = generateWeeklySummaryPDF(reports, tenantName || 'Restaurant', weekStart, weekEnd);
-        doc.save(`${(tenantName || 'Restaurant').replace(/\s+/g, '_')}_Weekly_Report.pdf`);
+        try {
+            const doc = generateWeeklySummaryPDF([...weeklyReports], tenantName || 'Restaurant', weekStart, weekEnd);
+            doc.save(`${(tenantName || 'Restaurant').replace(/\s+/g, '_')}_Weekly_Report.pdf`);
+            setError(null);
+        } catch (err) {
+            setError('Weekly summary download failed. Please try again.');
+        }
     };
 
     // Not Pro - show upgrade prompt
@@ -187,7 +235,7 @@ function ReportsSection() {
                         )}
                         Generate Yesterday's Report
                     </motion.button>
-                    {reports.length > 1 && (
+                    {normalizedReports.length > 1 && (
                         <motion.button
                             whileHover={{ scale: 1.02 }}
                             whileTap={{ scale: 0.98 }}
@@ -210,7 +258,7 @@ function ReportsSection() {
                     <FileText className="w-10 h-10 text-slate-300 mx-auto mb-3" />
                     <p>{error}</p>
                 </div>
-            ) : reports.length === 0 ? (
+            ) : normalizedReports.length === 0 ? (
                 <div className="text-center py-12">
                     <FileText className="w-12 h-12 text-slate-300 mx-auto mb-3" />
                     <p className="text-slate-500 font-medium">No reports yet</p>
@@ -218,7 +266,7 @@ function ReportsSection() {
                 </div>
             ) : (
                 <div className="space-y-2">
-                    {reports.map((report, i) => {
+                    {visibleReports.map((report, i) => {
                         const date = new Date(report.report_date);
                         const formattedDate = date.toLocaleDateString('en-IN', {
                             weekday: 'short',
@@ -228,7 +276,7 @@ function ReportsSection() {
 
                         return (
                             <motion.div
-                                key={report.id}
+                                key={`${report.id}-${report.report_date}`}
                                 initial={{ opacity: 0, x: -10 }}
                                 animate={{ opacity: 1, x: 0 }}
                                 transition={{ delay: i * 0.05 }}
@@ -265,6 +313,18 @@ function ReportsSection() {
                             </motion.div>
                         );
                     })}
+
+                    {normalizedReports.length > 3 && (
+                        <div className="pt-2 flex justify-center">
+                            <button
+                                type="button"
+                                onClick={() => setShowAllReports((prev) => !prev)}
+                                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                            >
+                                {showAllReports ? 'Show less' : `See all (${normalizedReports.length})`}
+                            </button>
+                        </div>
+                    )}
                 </div>
             )}
         </motion.div>
