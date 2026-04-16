@@ -72,6 +72,7 @@ export default function ChoosePlanPage() {
                 planKey="starter"
                 ctaLabel="Start with Starter"
                 isAvailable
+                flowContext="choose-plan"
               />
             </article>
 
@@ -89,6 +90,7 @@ export default function ChoosePlanPage() {
                 ctaLabel="Choose Growth"
                 isAvailable
                 isFeatured
+                flowContext="choose-plan"
               />
             </article>
 
@@ -102,6 +104,7 @@ export default function ChoosePlanPage() {
                 planKey="pro"
                 ctaLabel="Coming Soon"
                 isAvailable={false}
+                flowContext="choose-plan"
               />
             </article>
           </div>

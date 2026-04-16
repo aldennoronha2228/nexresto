@@ -56,7 +56,10 @@ type Props = {
   ctaLabel: string;
   isFeatured?: boolean;
   isAvailable?: boolean;
+  flowContext?: 'default' | 'choose-plan';
 };
+
+const PAYMENT_CANCELLED_ERROR = 'PAYMENT_CANCELLED_BY_USER';
 
 export default function PricingCheckoutButton({
   planName,
@@ -64,9 +67,10 @@ export default function PricingCheckoutButton({
   ctaLabel,
   isFeatured = false,
   isAvailable = true,
+  flowContext = 'default',
 }: Props) {
   const router = useRouter();
-  const { user, tenantId, refreshTenant } = useAuth();
+  const { user, tenantId, refreshTenant, subscriptionStatus } = useAuth();
   const [activePlan, setActivePlan] = useState<UpgradablePlan | null>(null);
   const [isRazorpayReady, setRazorpayReady] = useState(false);
 
@@ -193,7 +197,7 @@ export default function PricingCheckoutButton({
             }
           },
           modal: {
-            ondismiss: () => reject(new Error('Payment cancelled by user')),
+            ondismiss: () => reject(new Error(PAYMENT_CANCELLED_ERROR)),
           },
           notes: {
             plan,
@@ -210,6 +214,23 @@ export default function PricingCheckoutButton({
       });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unable to process payment';
+
+      if (message === PAYMENT_CANCELLED_ERROR) {
+        if (flowContext === 'choose-plan') {
+          if (subscriptionStatus === 'trial') {
+            const dashboardTenant = tenantId;
+            router.push(dashboardTenant ? `/${dashboardTenant}/dashboard` : '/login');
+            return;
+          }
+
+          toast.error('Select a plan to proceed.');
+          return;
+        }
+
+        toast.error('Payment cancelled by user.');
+        return;
+      }
+
       toast.error(message);
     } finally {
       setActivePlan(null);
