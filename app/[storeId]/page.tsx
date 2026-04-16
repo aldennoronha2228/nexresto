@@ -3,6 +3,8 @@ import Image from 'next/image';
 import type { Metadata } from 'next';
 import { preload } from 'react-dom';
 import { notFound, redirect } from 'next/navigation';
+import { AuthProvider } from '@/context/AuthContext';
+import TenantHomeAuthRedirect from '@/components/tenant/TenantHomeAuthRedirect';
 import { JsonLd } from '@/components/seo/JsonLd';
 import { getOptimizedHeroImageSrc } from '@/lib/image-optimization';
 import {
@@ -62,6 +64,9 @@ export default async function TenantHomePage({
 
     return (
         <>
+            <AuthProvider>
+                <TenantHomeAuthRedirect storeId={tenant.storeId} />
+            </AuthProvider>
             <JsonLd id={`website-home-${tenant.storeId}`} data={buildWebSiteJsonLd(tenant)} />
             <JsonLd id={`restaurant-home-${tenant.storeId}`} data={buildRestaurantJsonLd(tenant)} />
             <JsonLd
