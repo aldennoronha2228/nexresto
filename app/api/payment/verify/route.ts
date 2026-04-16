@@ -33,6 +33,41 @@ function secureCompare(a: string, b: string): boolean {
   return crypto.timingSafeEqual(aBuf, bBuf);
 }
 
+function resolvePlanFromAmountPaise(amountPaise: number): UpgradablePlan | null {
+  if (!Number.isFinite(amountPaise) || amountPaise <= 0) return null;
+
+  if (amountPaise === PLAN_PRICES.starter * 100) return 'starter';
+  if (amountPaise === PLAN_PRICES.growth * 100) return 'growth';
+
+  return null;
+}
+
+async function fetchRazorpayOrder(razorpayOrderId: string): Promise<Record<string, unknown>> {
+  const razorpayKeyId = process.env.RAZORPAY_KEY_ID || '';
+  const razorpaySecret = process.env.RAZORPAY_KEY_SECRET || '';
+
+  const response = await fetch(`https://api.razorpay.com/v1/orders/${encodeURIComponent(razorpayOrderId)}`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Basic ${Buffer.from(`${razorpayKeyId}:${razorpaySecret}`).toString('base64')}`,
+      'Content-Type': 'application/json',
+    },
+    cache: 'no-store',
+  });
+
+  const payload = (await response.json()) as Record<string, unknown>;
+
+  if (!response.ok) {
+    const errorDescription =
+      typeof payload?.error === 'object' && payload.error && 'description' in payload.error
+        ? String((payload.error as { description?: string }).description || 'Failed to fetch payment order')
+        : 'Failed to fetch payment order';
+    throw new Error(errorDescription);
+  }
+
+  return payload;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const authHeader = request.headers.get('authorization') || '';
@@ -53,18 +88,15 @@ export async function POST(request: NextRequest) {
     const razorpayOrderId = String(body?.razorpay_order_id || '').trim();
     const razorpayPaymentId = String(body?.razorpay_payment_id || '').trim();
     const razorpaySignature = String(body?.razorpay_signature || '').trim();
-    const selectedPlan = String(body?.plan || '').trim().toLowerCase();
+    const requestedPlan = String(body?.plan || '').trim().toLowerCase();
 
     if (!razorpayOrderId || !razorpayPaymentId || !razorpaySignature) {
       return NextResponse.json({ error: 'Missing payment verification fields' }, { status: 400 });
     }
 
-    if (!isUpgradablePlan(selectedPlan)) {
-      return NextResponse.json({ error: 'Invalid plan selected' }, { status: 400 });
-    }
-
+    const razorpayKeyId = process.env.RAZORPAY_KEY_ID || '';
     const razorpaySecret = process.env.RAZORPAY_KEY_SECRET || '';
-    if (!razorpaySecret) {
+    if (!razorpayKeyId || !razorpaySecret) {
       return NextResponse.json({ error: 'Payment gateway is not configured' }, { status: 500 });
     }
 
@@ -75,12 +107,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid payment signature' }, { status: 400 });
     }
 
+    const razorpayOrder = await fetchRazorpayOrder(razorpayOrderId);
+    const paidAmountPaise = Number(razorpayOrder.amount || 0);
+    const selectedPlan = resolvePlanFromAmountPaise(paidAmountPaise);
+
+    if (!selectedPlan) {
+      return NextResponse.json({ error: 'Unsupported payment amount for available plans' }, { status: 400 });
+    }
+
+    const orderNotes = (razorpayOrder.notes || {}) as Record<string, unknown>;
+    const orderRestaurantId = String(orderNotes.restaurantId || '').trim();
+    if (orderRestaurantId && orderRestaurantId !== restaurantId) {
+      return NextResponse.json({ error: 'Order does not belong to this restaurant account' }, { status: 403 });
+    }
+
     const now = new Date();
     const expiresAtDate = addDays(now, 30);
     const subscriptionStartDate = now.toISOString().slice(0, 10);
     const planExpiresAt = expiresAtDate.toISOString();
     const subscriptionEndDate = planExpiresAt.slice(0, 10);
-    const paidAmountInr = PLAN_PRICES[selectedPlan];
+    const paidAmountInr = Math.round(paidAmountPaise / 100);
 
     const restaurantRef = adminFirestore.doc(`restaurants/${restaurantId}`);
     const restaurantSnap = await restaurantRef.get();
@@ -103,6 +149,7 @@ export async function POST(request: NextRequest) {
         paid_at: now.toISOString(),
         verified_at: planExpiresAt,
         plan: selectedPlan,
+        requested_plan: isUpgradablePlan(requestedPlan) ? requestedPlan : null,
       },
       updated_at: Timestamp.now(),
     };
