@@ -21,6 +21,14 @@ function normalizePhone(phone: unknown): string {
     return String(phone || '').replace(/\D/g, '').slice(-10);
 }
 
+function createdAtMillis(value: unknown): number {
+    if (!value || typeof value !== 'object') return 0;
+    const maybe = value as { toDate?: () => Date };
+    if (typeof maybe.toDate !== 'function') return 0;
+    const dt = maybe.toDate();
+    return Number.isFinite(dt.getTime()) ? dt.getTime() : 0;
+}
+
 export async function POST(request: NextRequest) {
     try {
         const body = (await request.json()) as PlaceOrderBody;
@@ -91,13 +99,21 @@ export async function POST(request: NextRequest) {
         if (isSharedTableContext) {
             const activeSnap = await ordersCollection
                 .where('table_number', '==', payload.tableId)
-                .where('status', 'in', ['new', 'preparing'])
-                .orderBy('created_at', 'desc')
-                .limit(1)
+                .limit(50)
                 .get();
 
-            if (!activeSnap.empty) {
-                const activeDoc = activeSnap.docs[0];
+            const activeDoc = activeSnap.docs
+                .filter((doc) => {
+                    const status = String((doc.data() as Record<string, unknown>).status || '').toLowerCase();
+                    return status === 'new' || status === 'preparing';
+                })
+                .sort((a, b) => {
+                    const aData = a.data() as Record<string, unknown>;
+                    const bData = b.data() as Record<string, unknown>;
+                    return createdAtMillis(bData.created_at) - createdAtMillis(aData.created_at);
+                })[0];
+
+            if (activeDoc) {
                 const activeData = activeDoc.data() as Record<string, unknown>;
                 const existingItems = Array.isArray(activeData.items)
                     ? (activeData.items as Array<Record<string, unknown>>)
