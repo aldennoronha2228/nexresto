@@ -52,6 +52,9 @@ export const PRICING_PLANS: PricingPlan[] = [
     featured: true,
     detailTitle: 'Everything in Starter, plus:',
     details: [
+      'Interactive floor plan',
+      'Advanced analytics dashboard',
+      'Custom branding controls',
       'AI mood + menu chat + digest',
       'COD delivery - zero commission',
       'Group ordering - shared cart',
