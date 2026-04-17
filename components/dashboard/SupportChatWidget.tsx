@@ -3,7 +3,7 @@
 import React from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { usePathname } from 'next/navigation';
-import { Bot, Loader2, MessageCircle, SendHorizontal, Sparkles, X } from 'lucide-react';
+import { Bot, MessageCircle, SendHorizontal, Sparkles, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type ChatMessage = {
@@ -47,6 +47,16 @@ function buildWelcomeMessage(): ChatMessage {
         role: 'assistant',
         text: 'Hi, I am Nexo, your restaurant growth assistant. Ask me anything about operations, menu, tables, or sales.',
     };
+}
+
+function TypingDots() {
+    return (
+        <div className="inline-flex items-center gap-1.5" aria-label="Assistant is typing">
+            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.2s]" />
+            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.1s]" />
+            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400" />
+        </div>
+    );
 }
 
 export function SupportChatWidget({ restaurantId, accessToken }: SupportChatWidgetProps) {
@@ -212,10 +222,10 @@ export function SupportChatWidget({ restaurantId, accessToken }: SupportChatWidg
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 className={cn(
-                    'fixed z-50 flex h-14 w-14 items-center justify-center rounded-full border-2 border-slate-800 bg-gradient-to-br from-sky-500 to-emerald-400 text-slate-950 shadow-xl',
+                    'fixed z-50 flex h-14 w-14 items-center justify-center rounded-full border border-sky-300/30 bg-gradient-to-br from-sky-400 via-blue-500 to-cyan-300 text-slate-950 shadow-xl shadow-sky-500/25 ring-1 ring-sky-200/20',
                     floatingPositionClass
                 )}
-                style={{ boxShadow: '0 4px 32px 0 rgba(16, 112, 202, 0.18)' }}
+                style={{ boxShadow: '0 8px 32px 0 rgba(22, 131, 255, 0.28)' }}
                 aria-label="Open Nexo chatbot"
                 title="Open Nexo chatbot"
             >
@@ -230,18 +240,20 @@ export function SupportChatWidget({ restaurantId, accessToken }: SupportChatWidg
                         exit={{ opacity: 0, y: 20, scale: 0.97 }}
                         transition={{ type: 'spring', stiffness: 320, damping: 30 }}
                         className={cn(
-                            'fixed z-[60] flex h-[72vh] w-[min(92vw,430px)] flex-col overflow-hidden rounded-3xl border border-slate-800 bg-slate-950 shadow-2xl',
+                            'fixed z-[60] flex h-[74vh] max-h-[680px] w-[min(94vw,450px)] flex-col overflow-hidden rounded-3xl border border-sky-200/10 bg-[#030714] shadow-2xl shadow-black/55',
                             floatingPositionClass
                         )}
                     >
-                        <div className="flex items-center justify-between border-b border-slate-800 bg-slate-900/70 px-4 py-3">
+                        <div className="relative flex items-center justify-between border-b border-slate-800/80 bg-gradient-to-r from-slate-900/95 via-[#0a1025]/95 to-slate-900/95 px-4 py-3">
+                            <div className="pointer-events-none absolute inset-0 opacity-20" style={{ backgroundImage: 'radial-gradient(circle at 20% 50%, rgba(56,189,248,0.35), transparent 55%)' }} />
                             <div className="flex items-center gap-2">
-                                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-emerald-400 text-white">
+                                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-cyan-300 text-white ring-1 ring-white/20">
                                     <Bot className="h-5 w-5" />
                                 </div>
                                 <div>
-                                    <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Support Assistant</p>
+                                    <p className="text-[10px] uppercase tracking-[0.16em] text-cyan-200/70">Support Assistant</p>
                                     <p className="text-base font-semibold text-slate-100">Nexo</p>
+                                    <p className="mt-0.5 text-[11px] text-emerald-300/90">Online and ready</p>
                                 </div>
                             </div>
                             <div className="flex items-center gap-2">
@@ -249,7 +261,7 @@ export function SupportChatWidget({ restaurantId, accessToken }: SupportChatWidg
                                     type="button"
                                     onClick={clearChat}
                                     disabled={!hasStartedConversation || sending}
-                                    className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] font-medium text-slate-300 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-45"
+                                    className="rounded-full border border-slate-700 bg-slate-900 px-2.5 py-1 text-[11px] font-medium text-slate-300 transition hover:border-slate-500 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-45"
                                     aria-label="Clear chat"
                                     title="Clear chat"
                                 >
@@ -258,7 +270,7 @@ export function SupportChatWidget({ restaurantId, accessToken }: SupportChatWidg
                                 <button
                                     type="button"
                                     onClick={() => setOpen(false)}
-                                    className="rounded-lg border border-slate-700 bg-slate-900 p-1.5 text-slate-300 transition hover:bg-slate-800"
+                                    className="rounded-lg border border-slate-700 bg-slate-900 p-1.5 text-slate-300 transition hover:border-slate-500 hover:bg-slate-800"
                                     aria-label="Close chatbot"
                                 >
                                     <X className="h-4 w-4" />
@@ -266,7 +278,7 @@ export function SupportChatWidget({ restaurantId, accessToken }: SupportChatWidg
                             </div>
                         </div>
 
-                        <div className="border-b border-slate-800 bg-slate-900/50 px-3 py-2">
+                        <div className="border-b border-slate-800/80 bg-slate-900/50 px-3 py-2.5">
                             {!hasStartedConversation ? (
                                 <div className="flex flex-wrap gap-2">
                                     {QUICK_PROMPTS.map((prompt) => (
@@ -277,7 +289,7 @@ export function SupportChatWidget({ restaurantId, accessToken }: SupportChatWidg
                                             onClick={() => {
                                                 void sendMessage(prompt);
                                             }}
-                                            className="rounded-full border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 transition hover:bg-slate-700 disabled:opacity-50"
+                                            className="rounded-full border border-slate-700/80 bg-slate-800/95 px-3 py-1.5 text-xs font-medium text-slate-200 transition hover:border-slate-500 hover:bg-slate-700 disabled:opacity-50"
                                         >
                                             {prompt}
                                         </button>
@@ -293,20 +305,30 @@ export function SupportChatWidget({ restaurantId, accessToken }: SupportChatWidg
                             </div>
                         </div>
 
-                        <div ref={scrollRef} className="flex-1 space-y-2.5 overflow-y-auto bg-slate-950 px-3 py-3">
+                        <div
+                            ref={scrollRef}
+                            className="flex-1 space-y-3 overflow-y-auto bg-[#020617] px-3 py-3"
+                            style={{ backgroundImage: 'radial-gradient(circle at top right, rgba(56, 189, 248, 0.08), transparent 35%)' }}
+                        >
                             {messages.map((message) => {
                                 const assistant = message.role === 'assistant';
                                 return (
-                                    <div key={message.id} className={`flex ${assistant ? 'justify-start' : 'justify-end'}`}>
+                                    <div key={message.id} className={cn('flex items-end gap-2', assistant ? 'justify-start' : 'justify-end')}>
+                                        {assistant ? (
+                                            <div className="mb-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-cyan-300/25 bg-cyan-500/10 text-cyan-200">
+                                                <Bot className="h-3.5 w-3.5" />
+                                            </div>
+                                        ) : null}
                                         <div
-                                            className={
+                                            className={cn(
+                                                'w-fit max-w-[88%] rounded-2xl px-4 py-2.5 text-[15px] font-medium leading-relaxed shadow-lg',
                                                 assistant
-                                                    ? 'w-fit max-w-[82%] rounded-2xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-slate-100'
-                                                    : 'w-fit max-w-[82%] rounded-2xl bg-blue-600 px-3 py-2.5 text-sm text-white'
-                                            }
+                                                    ? 'border border-slate-600/90 bg-slate-800 text-slate-50 shadow-black/35'
+                                                    : 'bg-blue-600 text-white shadow-blue-900/40'
+                                            )}
                                         >
-                                            <p className="whitespace-pre-wrap break-words">{message.text}</p>
-                                            {message.pending ? <Loader2 className="mt-2 h-3.5 w-3.5 animate-spin text-slate-500" /> : null}
+                                            {message.text ? <p className="whitespace-pre-wrap break-words text-current">{message.text}</p> : null}
+                                            {message.pending ? <div className="mt-1.5"><TypingDots /></div> : null}
                                         </div>
                                     </div>
                                 );
@@ -324,9 +346,9 @@ export function SupportChatWidget({ restaurantId, accessToken }: SupportChatWidg
                                 event.preventDefault();
                                 void sendMessage(input);
                             }}
-                            className="border-t border-slate-800 bg-slate-900/60 p-3"
+                            className="border-t border-slate-800/80 bg-slate-900/70 p-3"
                         >
-                            <div className="flex items-center gap-2 rounded-2xl border border-slate-700 bg-slate-950 px-3 py-2">
+                            <div className="flex items-center gap-2 rounded-2xl border border-slate-700/90 bg-[#040b1f] px-3 py-2 shadow-inner shadow-slate-950/40">
                                 <input
                                     value={input}
                                     onChange={(event) => setInput(event.target.value)}
@@ -337,7 +359,7 @@ export function SupportChatWidget({ restaurantId, accessToken }: SupportChatWidg
                                 <button
                                     type="submit"
                                     disabled={sending || !accessToken || cleanText(input).length === 0}
-                                    className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-blue-600 text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                                    className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-cyan-400 text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
                                     aria-label="Send message"
                                 >
                                     <SendHorizontal className="h-4 w-4" />
