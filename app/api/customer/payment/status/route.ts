@@ -66,10 +66,12 @@ export async function GET(request: NextRequest) {
 
         const sessionRef = adminFirestore.doc(`restaurants/${parsed.restaurantId}/table_payment_sessions/${parsed.tableKey}`);
         const cartRef = adminFirestore.doc(`restaurants/${parsed.restaurantId}/shared_carts/${parsed.tableKey}`);
+        const restaurantRef = adminFirestore.doc(`restaurants/${parsed.restaurantId}`);
 
-        const [sessionSnap, cartSnap, paymentsSnap] = await Promise.all([
+        const [sessionSnap, cartSnap, restaurantSnap, paymentsSnap] = await Promise.all([
             sessionRef.get(),
             cartRef.get(),
+            restaurantRef.get(),
             adminFirestore
                 .collection(`restaurants/${parsed.restaurantId}/table_payment_sessions/${parsed.tableKey}/payments`)
                 .where('sessionId', '==', sessionId)
@@ -98,6 +100,9 @@ export async function GET(request: NextRequest) {
             paid: paidBy.has(guestId),
         }));
 
+        const restaurantData = (restaurantSnap.data() || {}) as Record<string, unknown>;
+        const paymentEnabled = Boolean(restaurantData.isPaymentConnected);
+
         const allPaid = participants.length > 0 && participants.every((participant) => participant.paid);
         const isCompleted = Boolean((sessionSnap.data() || {}).isCompleted) || allPaid;
 
@@ -121,6 +126,7 @@ export async function GET(request: NextRequest) {
             payments: Array.from(paidBy.values()),
             allPaid,
             isCompleted,
+            paymentEnabled,
         });
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : 'Unable to load payment status';

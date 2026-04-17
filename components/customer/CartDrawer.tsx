@@ -65,6 +65,7 @@ type CartDrawerProps = {
     payments?: string[];
     enableSplitBilling?: boolean;
     paymentSessionCompleted?: boolean;
+    paymentEnabled?: boolean;
     onRefreshPaymentStatus?: () => Promise<void> | void;
     sharedTableContext?: boolean;
     sharedOrderingLocked?: boolean;
@@ -87,6 +88,7 @@ export function CartDrawer({
     payments = [],
     enableSplitBilling = false,
     paymentSessionCompleted = false,
+    paymentEnabled = true,
     onRefreshPaymentStatus,
     sharedTableContext = false,
     sharedOrderingLocked = false,
@@ -112,6 +114,7 @@ export function CartDrawer({
     const hasCurrentUserPaid = Boolean(normalizedCurrentGuestId && paidSet.has(normalizedCurrentGuestId));
     const effectiveParticipantCount = Math.max(1, participants.length || splitBill.people.length || 1);
     const isPaymentLocked = paymentSessionCompleted;
+    const useOnlinePaymentFlow = enableSplitBilling && paymentEnabled;
 
     const increaseItem = (itemId: string, nextQuantity: number) => {
         if (onExternalIncrease) {
@@ -555,15 +558,21 @@ export function CartDrawer({
                             </div>
                         ) : null}
 
-                        {enableSplitBilling && hasCurrentUserPaid ? (
+                        {useOnlinePaymentFlow && hasCurrentUserPaid ? (
                             <p className="rounded border border-emerald-400/40 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200">You have already paid for this table session.</p>
                         ) : null}
 
-                        {enableSplitBilling && isPaymentLocked ? (
+                        {useOnlinePaymentFlow && isPaymentLocked ? (
                             <p className="rounded border border-sky-300/30 bg-sky-500/10 px-3 py-2 text-xs text-sky-200">All payments completed. Ordering is locked.</p>
                         ) : null}
 
-                        {enableSplitBilling ? (
+                        {enableSplitBilling && !paymentEnabled ? (
+                            <p className="rounded border border-amber-300/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+                                Online payment is currently disabled by the restaurant. Your order will be sent now and payment can be collected later.
+                            </p>
+                        ) : null}
+
+                        {useOnlinePaymentFlow ? (
                             <button
                                 type="button"
                                 onClick={handleProceedToPay}
@@ -576,10 +585,10 @@ export function CartDrawer({
                             <button
                                 type="button"
                                 onClick={goCheckout}
-                                disabled={!manualTable.trim() || (sharedTableContext && sharedOrderingLocked)}
+                                disabled={!manualTable.trim() || (sharedTableContext && sharedOrderingLocked) || (paymentEnabled && isPaymentLocked)}
                                 className="w-full bg-emerald-600 px-4 py-3 text-sm font-semibold uppercase tracking-[0.14em] text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-55"
                             >
-                                Proceed to Checkout
+                                {enableSplitBilling && !paymentEnabled ? 'Send Order to Kitchen' : 'Proceed to Checkout'}
                             </button>
                         )}
                     </div>

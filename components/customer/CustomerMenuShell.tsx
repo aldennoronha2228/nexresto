@@ -246,6 +246,7 @@ export function CustomerMenuShell({ restaurantIdOverride, tableIdOverride, force
     const [paymentParticipants, setPaymentParticipants] = React.useState<Array<{ guestId: string; name: string }>>([]);
     const [paidGuestIds, setPaidGuestIds] = React.useState<string[]>([]);
     const [paymentSessionCompleted, setPaymentSessionCompleted] = React.useState(false);
+    const [paymentEnabled, setPaymentEnabled] = React.useState(true);
 
     const sharedOrderingLocked = sharedTableContext && featuresReady && !sharedOrderingAllowed;
     const paymentLocked = sharedTableContext && paymentSessionCompleted;
@@ -937,6 +938,7 @@ export function CustomerMenuShell({ restaurantIdOverride, tableIdOverride, force
             setPaymentParticipants([]);
             setPaidGuestIds([]);
             setPaymentSessionCompleted(false);
+            setPaymentEnabled(true);
             return;
         }
 
@@ -963,6 +965,7 @@ export function CustomerMenuShell({ restaurantIdOverride, tableIdOverride, force
             setPaymentParticipants(participants);
             setPaidGuestIds(paidIds);
             setPaymentSessionCompleted(Boolean(payload?.allPaid || payload?.isCompleted));
+            setPaymentEnabled(payload?.paymentEnabled !== false);
         } catch {
             // Ignore transient status fetch issues.
         }
@@ -973,6 +976,7 @@ export function CustomerMenuShell({ restaurantIdOverride, tableIdOverride, force
             setPaymentParticipants([]);
             setPaidGuestIds([]);
             setPaymentSessionCompleted(false);
+            setPaymentEnabled(true);
             return;
         }
 
@@ -1071,6 +1075,7 @@ export function CustomerMenuShell({ restaurantIdOverride, tableIdOverride, force
                 payments={paidGuestIds}
                 enableSplitBilling={sharedTableContext}
                 paymentSessionCompleted={paymentSessionCompleted}
+                paymentEnabled={paymentEnabled}
                 onRefreshPaymentStatus={refreshPaymentStatus}
                 onUpgrade={() => router.push(tenantHomePath || '/pricing')}
                 externalCartItems={sharedModeActive ? effectiveCart : undefined}
