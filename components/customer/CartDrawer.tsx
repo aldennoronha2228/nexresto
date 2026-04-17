@@ -40,12 +40,6 @@ type RazorpayInstance = {
     on: (event: string, cb: (response: any) => void) => void;
 };
 
-declare global {
-    interface Window {
-        Razorpay?: new (options: RazorpayOptions) => RazorpayInstance;
-    }
-}
-
 function formatINR(value: number): string {
     return new Intl.NumberFormat('en-IN', {
         style: 'currency',
@@ -205,12 +199,12 @@ export function CartDrawer({
     };
 
     const loadRazorpayScript = React.useCallback(async () => {
-        if (window.Razorpay) return;
+        if ((window as Window & { Razorpay?: new (options: RazorpayOptions) => RazorpayInstance }).Razorpay) return;
 
         await new Promise<void>((resolve, reject) => {
             const existing = document.querySelector<HTMLScriptElement>('script[data-razorpay="true"]');
             if (existing) {
-                if (window.Razorpay) resolve();
+                if ((window as Window & { Razorpay?: new (options: RazorpayOptions) => RazorpayInstance }).Razorpay) resolve();
                 existing.addEventListener('load', () => resolve(), { once: true });
                 existing.addEventListener('error', () => reject(new Error('Failed to load Razorpay SDK')), { once: true });
                 return;
@@ -310,7 +304,7 @@ export function CartDrawer({
                     throw new Error('Razorpay public key missing');
                 }
 
-                const RazorpayCtor = window.Razorpay;
+                const RazorpayCtor = (window as Window & { Razorpay?: new (options: RazorpayOptions) => RazorpayInstance }).Razorpay;
                 if (!RazorpayCtor) {
                     throw new Error('Payment SDK unavailable. Please refresh and try again.');
                 }
