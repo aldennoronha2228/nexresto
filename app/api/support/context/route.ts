@@ -2,6 +2,32 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminFirestore } from '@/lib/firebase-admin';
 import { authorizeTenantAccess } from '@/lib/server/authz/tenant';
 
+const DASHBOARD_PAGES = [
+    '/dashboard',
+    '/dashboard/orders',
+    '/dashboard/history',
+    '/dashboard/menu',
+    '/dashboard/tables',
+    '/dashboard/inventory',
+    '/dashboard/analytics',
+    '/dashboard/customers',
+    '/dashboard/branding',
+    '/dashboard/account',
+    '/dashboard/members',
+    '/dashboard/waiter',
+    '/dashboard/kds',
+] as const;
+
+const DASHBOARD_COMPONENTS = [
+    'GlobalSearch',
+    'NotificationBell',
+    'ProFeatureGate',
+    'RoleGuard',
+    'SubscriptionGuard',
+    'SupportChatWidget',
+    'UpgradeModal',
+] as const;
+
 type AiTier = 'free' | 'pro';
 type GenericRow = { id: string; [key: string]: unknown };
 type ReportRow = {
@@ -352,6 +378,12 @@ export async function GET(request: NextRequest) {
                         active: member['active'] !== false,
                     })),
                 },
+            },
+            navigation: {
+                availableDashboardPages: DASHBOARD_PAGES,
+            },
+            components: {
+                dashboard: DASHBOARD_COMPONENTS,
             },
             uiTips: {
                 keyAreas: ['Live Orders', 'Order History', 'Menu Management', 'Tables & QR', 'Analytics', 'Inventory', 'Branding', 'Account Settings', 'Staff'],

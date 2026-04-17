@@ -62,6 +62,7 @@ const SYSTEM_PROMPT = [
     'Response structure (strict):',
     '- Never start with a list.',
     '- Begin with a direct 1-2 sentence conversational answer tailored to the user question.',
+    '- Keep default answers short: 2-5 lines total unless the user explicitly asks for details.',
     '- Use hybrid formatting: if steps/tips are helpful, follow with a clean bulleted list.',
     '- Keep paragraphs short. Avoid walls of text.',
     '- Use markdown bold for key terms (for example: **Revenue Trend**, **Menu Visibility**).',
@@ -71,6 +72,10 @@ const SYSTEM_PROMPT = [
     '- Technical support (for example: QR scanning/menu opening issues).',
     'Behavior rules:',
     '- Assume full context of this QR Hotel Dashboard when context is available.',
+    '- You have access to all dashboard pages and components provided in the context snapshot; use them when answering.',
+    '- Never reveal internal reasoning, hidden analysis, or chain-of-thought.',
+    '- Never output tags like <think>, <analysis>, or XML-style reasoning wrappers.',
+    '- Return plain user-facing text only.',
     '- If data is missing, ask one clarifying question and still offer best-practice guidance.',
     '- Do not claim inability to perform dashboard actions. If details are missing, ask for exact fields needed.',
 ].join('\n');
@@ -883,13 +888,15 @@ async function executeAction(action: ParsedAction, auth: AuthorizedRestaurant): 
     return null;
 }
 
-function buildContextPrompt(context: DashboardContext | null): string {
+function buildContextPrompt(context: DashboardContext | null, currentPath?: string): string {
     if (!context) return '';
 
     const safe = {
         restaurant: context.restaurant || {},
         metrics: context.metrics || {},
         modules: context.modules || {},
+        navigation: (context as any).navigation || {},
+        components: (context as any).components || {},
         uiTips: context.uiTips || {},
         generatedAt: context.generatedAt || null,
     };
@@ -898,8 +905,9 @@ function buildContextPrompt(context: DashboardContext | null): string {
         'Live dashboard context (trusted application snapshot):',
         JSON.stringify(safe),
         'Use this context to answer operational and usage questions accurately.',
+        currentPath ? `Current dashboard page path: ${currentPath}` : '',
         'If asked about numbers, prefer these values over generic estimates.',
-        'You are connected to all major modules in this context: menu, tables, orders, inventory, reports, analytics, customers, branding, staff, and account settings workflows.',
+        'You are connected to all dashboard pages/components listed in this context, plus major modules: menu, tables, orders, inventory, reports, analytics, customers, branding, staff, account settings, waiter, kitchen, and history workflows.',
     ].join('\n');
 }
 
@@ -924,8 +932,13 @@ function sanitizeMessages(raw: unknown): ChatMessage[] {
 function normalizeAssistantReply(raw: string): string {
     const stripped = raw
         .replace(/\r/g, '')
+        .replace(/<\s*(think|analysis)[^>]*>[\s\S]*?<\s*\/\s*(think|analysis)\s*>/gi, '')
+        .replace(/<\s*(think|analysis)[^>]*>[\s\S]*$/gi, '')
+        .replace(/```(?:think|analysis)?[\s\S]*?```/gi, '')
         .replace(/```[\s\S]*?```/g, '')
         .replace(/`([^`]+)`/g, '$1')
+        .replace(/\*\*([^*]+)\*\*/g, '$1')
+        .replace(/\*([^*]+)\*/g, '$1')
         .trim();
 
     if (!stripped) {
@@ -936,7 +949,7 @@ function normalizeAssistantReply(raw: string): string {
         .split('\n')
         .map((l) => l.trim())
         .filter(Boolean)
-        .slice(0, 14);
+        .slice(0, 8);
 
     if (lines.length === 0) return stripped;
 
@@ -1576,7 +1589,8 @@ export async function POST(request: NextRequest) {
             ? (body.dashboardContext as DashboardContext)
             : null);
 
-        const contextPrompt = buildContextPrompt(dashboardContext);
+        const currentPath = typeof body?.currentPath === 'string' ? body.currentPath.trim().slice(0, 200) : '';
+        const contextPrompt = buildContextPrompt(dashboardContext, currentPath);
         if (messages.length === 0) {
             return NextResponse.json({ error: 'At least one message is required.' }, { status: 400 });
         }

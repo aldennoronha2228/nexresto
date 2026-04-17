@@ -134,6 +134,7 @@ export function SupportChatWidget({ restaurantId, accessToken }: SupportChatWidg
                         content: msg.text,
                     })),
                     dashboardContext,
+                    currentPath: pathname,
                 }),
             });
 
@@ -180,7 +181,7 @@ export function SupportChatWidget({ restaurantId, accessToken }: SupportChatWidg
         } finally {
             setSending(false);
         }
-    }, [restaurantId, accessToken, sending, messages, dashboardContext]);
+    }, [restaurantId, accessToken, sending, messages, dashboardContext, pathname]);
 
     const usageLabel = React.useMemo(() => {
         if (!usage || typeof usage.remaining !== 'number' || typeof usage.limit !== 'number') return '';
