@@ -10,6 +10,7 @@ import { signInWithCredential, GoogleAuthProvider, signInWithEmailAndPassword, s
 import { tenantAuth, adminAuth } from '@/lib/firebase';
 import { useAuth } from '@/context/AuthContext';
 import { useSuperAdminAuth } from '@/context/SuperAdminAuthContext';
+import { isWebView } from '@/lib/isWebView';
 
 
 const GoogleIcon = memo(function GoogleIcon() {
@@ -169,16 +170,18 @@ export default function LoginPage() {
         const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
         const isChrome = /chrome/i.test(ua) && !/edg|opr|opera|brave|vivaldi|duckduckgo/i.test(ua);
         const isMobile = /android|iphone|ipad|ipod|mobile/i.test(ua);
+        const isStandalone = typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(display-mode: standalone)').matches;
         if (!isChrome) return;
         if (isMobile) return;
+        if (isWebView(ua) || isStandalone) return;
 
         const referrer = typeof document !== 'undefined' ? document.referrer : '';
         const sameOriginReferrer =
             typeof window !== 'undefined' && referrer.startsWith(window.location.origin);
-        const hasHistory = typeof window !== 'undefined' && window.history.length > 1;
 
-        // Redirect only when /login is opened directly/external in Chrome.
-        if (!sameOriginReferrer && !hasHistory) {
+        // Redirect only for explicit external Chrome referrers.
+        // Empty referrer is common in mobile wrappers/webviews and should not force home.
+        if (referrer && !sameOriginReferrer) {
             router.replace('/');
         }
     }, [
