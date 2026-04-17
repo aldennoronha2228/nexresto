@@ -168,14 +168,17 @@ export default function LoginPage() {
 
         const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
         const isChrome = /chrome/i.test(ua) && !/edg|opr|opera|brave|vivaldi|duckduckgo/i.test(ua);
+        const isMobile = /android|iphone|ipad|ipod|mobile/i.test(ua);
         if (!isChrome) return;
+        if (isMobile) return;
 
         const referrer = typeof document !== 'undefined' ? document.referrer : '';
         const sameOriginReferrer =
             typeof window !== 'undefined' && referrer.startsWith(window.location.origin);
+        const hasHistory = typeof window !== 'undefined' && window.history.length > 1;
 
         // Redirect only when /login is opened directly/external in Chrome.
-        if (!sameOriginReferrer) {
+        if (!sameOriginReferrer && !hasHistory) {
             router.replace('/');
         }
     }, [
