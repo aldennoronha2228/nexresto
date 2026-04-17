@@ -7,6 +7,44 @@ import { QuantitySelector } from '@/components/customer/QuantitySelector';
 import { getTenantCheckoutSnapshotKey, getTenantTableStorageKey } from '@/lib/client/storage/tenantKeys';
 import { UpgradeCard } from '@/components/customer/UpgradeCard';
 import { buildSplitBill } from '@/lib/split-bill';
+import { PaymentMethodModal, type PaymentMode } from '@/components/customer/PaymentMethodModal';
+import { toast } from 'sonner';
+
+type RazorpayOrder = {
+    id: string;
+    amount: number;
+    currency: string;
+};
+
+type RazorpaySuccessResponse = {
+    razorpay_order_id: string;
+    razorpay_payment_id: string;
+    razorpay_signature: string;
+};
+
+type RazorpayOptions = {
+    key: string;
+    amount: number;
+    currency: string;
+    name: string;
+    description: string;
+    order_id: string;
+    handler: (response: RazorpaySuccessResponse) => void;
+    modal?: {
+        ondismiss?: () => void;
+    };
+};
+
+type RazorpayInstance = {
+    open: () => void;
+    on: (event: string, cb: (response: any) => void) => void;
+};
+
+declare global {
+    interface Window {
+        Razorpay?: new (options: RazorpayOptions) => RazorpayInstance;
+    }
+}
 
 function formatINR(value: number): string {
     return new Intl.NumberFormat('en-IN', {
@@ -19,6 +57,15 @@ function formatINR(value: number): string {
 type CartDrawerProps = {
     tableId?: string;
     restaurantId?: string;
+    restaurantName?: string;
+    sessionId?: string;
+    currentGuestId?: string;
+    currentGuestName?: string;
+    participants?: Array<{ guestId: string; name: string }>;
+    payments?: string[];
+    enableSplitBilling?: boolean;
+    paymentSessionCompleted?: boolean;
+    onRefreshPaymentStatus?: () => Promise<void> | void;
     sharedTableContext?: boolean;
     sharedOrderingLocked?: boolean;
     onUpgrade?: () => void;
@@ -32,6 +79,15 @@ type CartDrawerProps = {
 export function CartDrawer({
     tableId = '',
     restaurantId,
+    restaurantName,
+    sessionId,
+    currentGuestId,
+    currentGuestName,
+    participants = [],
+    payments = [],
+    enableSplitBilling = false,
+    paymentSessionCompleted = false,
+    onRefreshPaymentStatus,
     sharedTableContext = false,
     sharedOrderingLocked = false,
     onUpgrade,
@@ -45,10 +101,17 @@ export function CartDrawer({
     const router = useRouter();
     const [manualTable, setManualTable] = React.useState('');
     const [tableError, setTableError] = React.useState<string | null>(null);
+    const [showPaymentModal, setShowPaymentModal] = React.useState(false);
+    const [paying, setPaying] = React.useState(false);
 
     const effectiveCart = externalCartItems ?? cart;
     const effectiveTotalPrice = typeof externalTotalPrice === 'number' ? externalTotalPrice : totalPrice;
     const splitBill = React.useMemo(() => buildSplitBill(effectiveCart), [effectiveCart]);
+    const paidSet = React.useMemo(() => new Set(payments.map((entry) => String(entry || '').toLowerCase())), [payments]);
+    const normalizedCurrentGuestId = String(currentGuestId || '').toLowerCase();
+    const hasCurrentUserPaid = Boolean(normalizedCurrentGuestId && paidSet.has(normalizedCurrentGuestId));
+    const effectiveParticipantCount = Math.max(1, participants.length || splitBill.people.length || 1);
+    const isPaymentLocked = paymentSessionCompleted;
 
     const increaseItem = (itemId: string, nextQuantity: number) => {
         if (onExternalIncrease) {
@@ -93,6 +156,11 @@ export function CartDrawer({
     }, [tableId, restaurantId]);
 
     const goCheckout = () => {
+        if (isPaymentLocked) {
+            setTableError('All payments are completed for this table session.');
+            return;
+        }
+
         if (sharedTableContext && sharedOrderingLocked) {
             setTableError('Shared table ordering is locked on your current plan.');
             return;
@@ -131,6 +199,208 @@ export function CartDrawer({
         if (sharedTableContext) params.set('shared', '1');
         setIsCartOpen(false);
         router.push(`/customer/order-summary${params.toString() ? `?${params.toString()}` : ''}`);
+    };
+
+    const loadRazorpayScript = React.useCallback(async () => {
+        if (window.Razorpay) return;
+
+        await new Promise<void>((resolve, reject) => {
+            const existing = document.querySelector<HTMLScriptElement>('script[data-razorpay="true"]');
+            if (existing) {
+                if (window.Razorpay) resolve();
+                existing.addEventListener('load', () => resolve(), { once: true });
+                existing.addEventListener('error', () => reject(new Error('Failed to load Razorpay SDK')), { once: true });
+                return;
+            }
+
+            const script = document.createElement('script');
+            script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+            script.async = true;
+            script.dataset.razorpay = 'true';
+            script.onload = () => resolve();
+            script.onerror = () => reject(new Error('Failed to load Razorpay SDK'));
+            document.body.appendChild(script);
+        });
+    }, []);
+
+    const resolveAmountForMode = React.useCallback(
+        (mode: PaymentMode): number => {
+            if (mode === 'one_pays_all') {
+                return effectiveTotalPrice;
+            }
+
+            if (mode === 'split_equally') {
+                return Number((effectiveTotalPrice / effectiveParticipantCount).toFixed(2));
+            }
+
+            if (!normalizedCurrentGuestId) {
+                return Number((effectiveTotalPrice / effectiveParticipantCount).toFixed(2));
+            }
+
+            const person = splitBill.people.find((entry) => String(entry.key || '').toLowerCase() === normalizedCurrentGuestId);
+            if (person && person.subtotal > 0) {
+                return Number(person.subtotal.toFixed(2));
+            }
+
+            return Number((effectiveTotalPrice / effectiveParticipantCount).toFixed(2));
+        },
+        [effectiveParticipantCount, effectiveTotalPrice, normalizedCurrentGuestId, splitBill.people]
+    );
+
+    const openPayment = React.useCallback(
+        async (mode: PaymentMode) => {
+            if (!restaurantId || !manualTable.trim() || !sessionId || !normalizedCurrentGuestId) {
+                toast.error('Payment context is incomplete. Refresh and try again.');
+                return;
+            }
+
+            if (hasCurrentUserPaid) {
+                toast.info('You have already paid.');
+                return;
+            }
+
+            if (isPaymentLocked) {
+                toast.info('All payments are already completed.');
+                return;
+            }
+
+            const amount = resolveAmountForMode(mode);
+            if (amount <= 0) {
+                toast.error('Nothing to pay for this selection.');
+                return;
+            }
+
+            try {
+                setPaying(true);
+                setShowPaymentModal(false);
+
+                await loadRazorpayScript();
+
+                const createRes = await fetch('/api/customer/payment/create', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        sessionId,
+                        restaurantId,
+                        tableId: manualTable.trim(),
+                        guestId: normalizedCurrentGuestId,
+                        guestName: currentGuestName || 'Guest',
+                        amount,
+                        mode,
+                    }),
+                });
+
+                const createPayload = (await createRes.json().catch(() => ({}))) as {
+                    error?: string;
+                    paymentId?: string;
+                    keyId?: string;
+                    order?: RazorpayOrder;
+                    restaurant?: { name?: string };
+                };
+
+                if (!createRes.ok || !createPayload.paymentId || !createPayload.order?.id) {
+                    throw new Error(createPayload.error || 'Unable to create payment');
+                }
+
+                const key = String(createPayload.keyId || '').trim();
+                if (!key) {
+                    throw new Error('Razorpay public key missing');
+                }
+
+                const RazorpayCtor = window.Razorpay;
+                if (!RazorpayCtor) {
+                    throw new Error('Payment SDK unavailable. Please refresh and try again.');
+                }
+
+                await new Promise<void>((resolve, reject) => {
+                    const razorpay = new RazorpayCtor({
+                        key,
+                        amount: Number(createPayload.order?.amount || 0),
+                        currency: String(createPayload.order?.currency || 'INR'),
+                        name: createPayload.restaurant?.name || restaurantName || 'Restaurant',
+                        description: 'Table Payment',
+                        order_id: String(createPayload.order?.id || ''),
+                        handler: async (response: RazorpaySuccessResponse) => {
+                            try {
+                                const verifyRes = await fetch('/api/customer/payment/verify', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        ...response,
+                                        paymentId: createPayload.paymentId,
+                                    }),
+                                });
+
+                                const verifyPayload = await verifyRes.json().catch(() => ({}));
+                                if (!verifyRes.ok) {
+                                    throw new Error(verifyPayload?.error || 'Payment verification failed');
+                                }
+
+                                await onRefreshPaymentStatus?.();
+                                toast.success('Payment successful');
+                                resolve();
+                            } catch (error) {
+                                reject(error instanceof Error ? error : new Error('Payment verification failed'));
+                            }
+                        },
+                        modal: {
+                            ondismiss: () => reject(new Error('PAYMENT_CANCELLED_BY_USER')),
+                        },
+                    });
+
+                    razorpay.on('payment.failed', (response) => {
+                        const message = response?.error?.description || 'Payment failed. Please try again.';
+                        reject(new Error(message));
+                    });
+
+                    razorpay.open();
+                });
+            } catch (error: unknown) {
+                const message = error instanceof Error ? error.message : 'Payment failed';
+                if (message === 'PAYMENT_CANCELLED_BY_USER') {
+                    toast.error('Payment cancelled by user.');
+                } else {
+                    toast.error(message);
+                }
+            } finally {
+                setPaying(false);
+            }
+        },
+        [
+            currentGuestName,
+            hasCurrentUserPaid,
+            isPaymentLocked,
+            loadRazorpayScript,
+            manualTable,
+            normalizedCurrentGuestId,
+            onRefreshPaymentStatus,
+            resolveAmountForMode,
+            restaurantId,
+            restaurantName,
+            sessionId,
+        ]
+    );
+
+    const handleProceedToPay = () => {
+        if (!manualTable.trim()) {
+            setTableError('Please enter your table number before payment.');
+            return;
+        }
+        if (hasCurrentUserPaid) {
+            toast.info('You have already paid.');
+            return;
+        }
+        if (isPaymentLocked) {
+            toast.info('All payments are already completed.');
+            return;
+        }
+
+        if (effectiveParticipantCount <= 1) {
+            void openPayment('one_pays_all');
+            return;
+        }
+
+        setShowPaymentModal(true);
     };
 
     if (!isCartOpen) return null;
@@ -265,17 +535,65 @@ export function CartDrawer({
                             <span className="text-lg font-bold">{formatINR(effectiveTotalPrice)}</span>
                         </div>
 
-                        <button
-                            type="button"
-                            onClick={goCheckout}
-                            disabled={!manualTable.trim() || (sharedTableContext && sharedOrderingLocked)}
-                            className="w-full bg-emerald-600 px-4 py-3 text-sm font-semibold uppercase tracking-[0.14em] text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-55"
-                        >
-                            Proceed to Checkout
-                        </button>
+                        {enableSplitBilling ? (
+                            <div className="rounded border border-stone-700 bg-black/30 p-3">
+                                <p className="text-[10px] uppercase tracking-[0.14em] text-stone-500">Participants</p>
+                                <div className="mt-2 space-y-1.5">
+                                    {participants.length > 0 ? participants.map((participant) => {
+                                        const paid = paidSet.has(String(participant.guestId || '').toLowerCase());
+                                        const isCurrent = normalizedCurrentGuestId && String(participant.guestId || '').toLowerCase() === normalizedCurrentGuestId;
+                                        return (
+                                            <div key={participant.guestId} className={`flex items-center justify-between rounded px-2 py-1 text-xs ${isCurrent ? 'bg-emerald-500/10 text-emerald-100' : 'bg-black/20 text-stone-300'}`}>
+                                                <span>{participant.name}{isCurrent ? ' (You)' : ''}</span>
+                                                <span>{paid ? 'Paid ✅' : 'Pending ⏳'}</span>
+                                            </div>
+                                        );
+                                    }) : (
+                                        <p className="text-xs text-stone-400">No participants yet.</p>
+                                    )}
+                                </div>
+                            </div>
+                        ) : null}
+
+                        {enableSplitBilling && hasCurrentUserPaid ? (
+                            <p className="rounded border border-emerald-400/40 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200">You have already paid for this table session.</p>
+                        ) : null}
+
+                        {enableSplitBilling && isPaymentLocked ? (
+                            <p className="rounded border border-sky-300/30 bg-sky-500/10 px-3 py-2 text-xs text-sky-200">All payments completed. Ordering is locked.</p>
+                        ) : null}
+
+                        {enableSplitBilling ? (
+                            <button
+                                type="button"
+                                onClick={handleProceedToPay}
+                                disabled={paying || !manualTable.trim() || (sharedTableContext && sharedOrderingLocked) || hasCurrentUserPaid || isPaymentLocked}
+                                className="w-full bg-emerald-600 px-4 py-3 text-sm font-semibold uppercase tracking-[0.14em] text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-55"
+                            >
+                                {paying ? 'Processing Payment...' : 'Proceed to Pay'}
+                            </button>
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={goCheckout}
+                                disabled={!manualTable.trim() || (sharedTableContext && sharedOrderingLocked)}
+                                className="w-full bg-emerald-600 px-4 py-3 text-sm font-semibold uppercase tracking-[0.14em] text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-55"
+                            >
+                                Proceed to Checkout
+                            </button>
+                        )}
                     </div>
                 )}
             </aside>
+
+            <PaymentMethodModal
+                open={showPaymentModal}
+                loading={paying}
+                onClose={() => setShowPaymentModal(false)}
+                onSelect={(mode) => {
+                    void openPayment(mode);
+                }}
+            />
         </div>
     );
 }

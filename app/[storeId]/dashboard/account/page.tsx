@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import { motion, AnimatePresence } from 'motion/react';
 import {
     User, Mail, Shield, Lock, ShieldAlert, Loader2,
@@ -451,6 +452,27 @@ export default function AccountPage() {
                             </div>
                         </div>
                     ) : null}
+                </section>
+
+                {/* Payments Settings Shortcut */}
+                <section className="bg-white rounded-3xl border border-slate-200/60 shadow-sm p-6">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+                                <CreditCard className="w-5 h-5 text-blue-600" />
+                                Payments Settings
+                            </h3>
+                            <p className="text-sm text-slate-600 mt-1">
+                                Connect your Razorpay account to receive customer payments securely.
+                            </p>
+                        </div>
+                        <Link
+                            href={`/${tenantId}/dashboard/settings/payments`}
+                            className="inline-flex h-10 items-center justify-center rounded-xl border border-blue-200 bg-blue-50 px-4 text-sm font-semibold text-blue-700 transition-colors hover:bg-blue-100"
+                        >
+                            Open Payments Settings
+                        </Link>
+                    </div>
                 </section>
 
                 {/* Email Reports Toggle (Pro Only) */}

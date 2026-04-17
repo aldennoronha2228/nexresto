@@ -44,6 +44,9 @@ export interface Restaurant {
     id: string;
     name: string;
     logo?: string;
+    razorpayKeyId?: string;
+    razorpayKeySecret?: string;
+    isPaymentConnected?: boolean;
 }
 
 // Flat order shape used internally in the dashboard

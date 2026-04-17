@@ -175,6 +175,7 @@ export const ROUTE_PERMISSIONS: Record<string, PermissionType> = {
     '/dashboard/inventory': 'can_view_inventory',
     '/dashboard/branding': 'can_view_branding',
     '/dashboard/account': 'can_view_account',
+    '/dashboard/settings/payments': 'can_view_billing',
     '/dashboard/members': 'can_manage_admins',
 };
 

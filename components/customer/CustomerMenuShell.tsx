@@ -10,6 +10,7 @@ import { applyAvailabilityOverrides, seedAvailabilityMap } from '@/lib/menuAvail
 import { getOptimizedHeroImageSrc, getOptimizedMenuItemImageSrc } from '@/lib/image-optimization';
 import { getTenantCustomerStorageKey, getTenantTableStorageKey } from '@/lib/client/storage/tenantKeys';
 import { isValidPhone, normalizePhone } from '@/lib/customer-tracking';
+import { buildSplitBill } from '@/lib/split-bill';
 import { toast } from 'sonner';
 import type { CartItem } from '@/context/CartContext';
 import { UpgradeCard } from './UpgradeCard';
@@ -134,6 +135,8 @@ function writeMenuCache(restaurantId: string, payload: Omit<MenuCachePayload, 'u
 
 type CustomerMenuShellProps = {
     restaurantIdOverride?: string;
+    tableIdOverride?: string;
+    forceSharedTableContext?: boolean;
     tenantHomePath?: string;
     restaurantName?: string;
 };
@@ -208,7 +211,7 @@ function formatRestaurantDisplayName(value: string): string {
         .join(' ');
 }
 
-export function CustomerMenuShell({ restaurantIdOverride, tenantHomePath, restaurantName }: CustomerMenuShellProps) {
+export function CustomerMenuShell({ restaurantIdOverride, tableIdOverride, forceSharedTableContext = false, tenantHomePath, restaurantName }: CustomerMenuShellProps) {
     const [categories, setCategories] = React.useState<string[]>(['All']);
     const [menuItems, setMenuItems] = React.useState<MenuCatalogItem[]>([]);
     const [loading, setLoading] = React.useState(true);
@@ -225,7 +228,13 @@ export function CustomerMenuShell({ restaurantIdOverride, tenantHomePath, restau
     const router = useRouter();
     const searchParams = useSearchParams();
 
-    const queryTableId = searchParams.get('table') ?? searchParams.get('tableId') ?? searchParams.get('table_id') ?? searchParams.get('t') ?? '';
+    const queryTableId =
+        tableIdOverride ||
+        searchParams.get('table') ||
+        searchParams.get('tableId') ||
+        searchParams.get('table_id') ||
+        searchParams.get('t') ||
+        '';
     const sharedParam = String(searchParams.get('shared') || '').trim().toLowerCase();
     const restaurantFromQuery = searchParams.get('restaurant') ?? '';
     const restaurantId = (restaurantIdOverride || restaurantFromQuery || '').trim();
@@ -234,9 +243,19 @@ export function CustomerMenuShell({ restaurantIdOverride, tenantHomePath, restau
     const [sharedOrderingAllowed, setSharedOrderingAllowed] = React.useState(true);
     const [featuresReady, setFeaturesReady] = React.useState(false);
     const [sharedCartItems, setSharedCartItems] = React.useState<CartItem[]>([]);
+    const [paymentParticipants, setPaymentParticipants] = React.useState<Array<{ guestId: string; name: string }>>([]);
+    const [paidGuestIds, setPaidGuestIds] = React.useState<string[]>([]);
+    const [paymentSessionCompleted, setPaymentSessionCompleted] = React.useState(false);
 
     const sharedOrderingLocked = sharedTableContext && featuresReady && !sharedOrderingAllowed;
-    const sharedModeActive = sharedTableContext && !sharedOrderingLocked && restaurantId.length > 0 && resolvedTableId.length > 0;
+    const paymentLocked = sharedTableContext && paymentSessionCompleted;
+    const effectiveOrderingLocked = sharedOrderingLocked || paymentLocked;
+    const sharedModeActive = sharedTableContext && !effectiveOrderingLocked && restaurantId.length > 0 && resolvedTableId.length > 0;
+    const tableKey = React.useMemo(() => resolvedTableId.trim().toLowerCase(), [resolvedTableId]);
+    const sessionId = React.useMemo(() => {
+        if (!restaurantId || !tableKey) return '';
+        return `${restaurantId}::${tableKey}`;
+    }, [restaurantId, tableKey]);
 
     const buildSharedCartUrl = React.useCallback(() => {
         const params = new URLSearchParams();
@@ -385,7 +404,7 @@ export function CustomerMenuShell({ restaurantIdOverride, tenantHomePath, restau
         const inferredFromEligibleTableSession = normalized.length > 0 && !explicitNonShared && sharedOrderingAllowed;
 
         // Keep compatibility with older QR links by inferring shared mode for eligible paid plans.
-        setSharedTableContext(sharedFromParam || inferredFromEligibleTableSession);
+        setSharedTableContext(forceSharedTableContext || sharedFromParam || inferredFromEligibleTableSession);
 
         if (normalized) {
             setResolvedTableId(normalized);
@@ -401,7 +420,7 @@ export function CustomerMenuShell({ restaurantIdOverride, tenantHomePath, restau
         }
 
         setResolvedTableId((localStorage.getItem(getTenantTableStorageKey(restaurantId)) || '').trim());
-    }, [queryTableId, restaurantId, sharedParam, sharedOrderingAllowed]);
+    }, [forceSharedTableContext, queryTableId, restaurantId, sharedParam, sharedOrderingAllowed]);
 
     React.useEffect(() => {
         let active = true;
@@ -812,7 +831,7 @@ export function CustomerMenuShell({ restaurantIdOverride, tenantHomePath, restau
         price: number;
         available?: boolean;
     }) => {
-        if (sharedOrderingLocked) {
+        if (effectiveOrderingLocked) {
             toast.error('Shared table ordering is locked for this restaurant plan.');
             return;
         }
@@ -837,7 +856,7 @@ export function CustomerMenuShell({ restaurantIdOverride, tenantHomePath, restau
     };
 
     const decrementMenuItem = (item: { id: string }) => {
-        if (sharedOrderingLocked) {
+        if (effectiveOrderingLocked) {
             toast.error('Shared table ordering is locked for this restaurant plan.');
             return;
         }
@@ -882,6 +901,104 @@ export function CustomerMenuShell({ restaurantIdOverride, tenantHomePath, restau
         void mutateSharedCartItem(item, 0);
     };
 
+    const currentGuestId = React.useMemo(() => {
+        const name = String(capturedCustomer?.name || '').trim().toLowerCase();
+        const phone = String(capturedCustomer?.phone || '').trim();
+        if (!name) return '';
+        return `${name}|${phone}`;
+    }, [capturedCustomer]);
+
+    const derivedParticipants = React.useMemo(() => {
+        const split = buildSplitBill(effectiveCart);
+        const map = new Map<string, { guestId: string; name: string }>();
+
+        split.people.forEach((person) => {
+            if (person.key === '__unassigned__') return;
+            const guestId = String(person.key || '').toLowerCase();
+            if (!guestId) return;
+            map.set(guestId, {
+                guestId,
+                name: person.name || 'Guest',
+            });
+        });
+
+        if (currentGuestId && !map.has(currentGuestId)) {
+            map.set(currentGuestId, {
+                guestId: currentGuestId,
+                name: capturedCustomer?.name || 'You',
+            });
+        }
+
+        return Array.from(map.values());
+    }, [capturedCustomer?.name, currentGuestId, effectiveCart]);
+
+    const refreshPaymentStatus = React.useCallback(async () => {
+        if (!sessionId) {
+            setPaymentParticipants([]);
+            setPaidGuestIds([]);
+            setPaymentSessionCompleted(false);
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/customer/payment/status?sessionId=${encodeURIComponent(sessionId)}`, {
+                cache: 'no-store',
+            });
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok) return;
+
+            const participants = Array.isArray(payload?.participants)
+                ? payload.participants
+                    .map((entry: any) => ({
+                        guestId: String(entry?.guestId || '').toLowerCase(),
+                        name: String(entry?.name || 'Guest'),
+                    }))
+                    .filter((entry: { guestId: string; name: string }) => entry.guestId)
+                : [];
+
+            const paidIds = Array.isArray(payload?.payments)
+                ? payload.payments.map((entry: unknown) => String(entry || '').toLowerCase()).filter(Boolean)
+                : [];
+
+            setPaymentParticipants(participants);
+            setPaidGuestIds(paidIds);
+            setPaymentSessionCompleted(Boolean(payload?.allPaid || payload?.isCompleted));
+        } catch {
+            // Ignore transient status fetch issues.
+        }
+    }, [sessionId]);
+
+    React.useEffect(() => {
+        if (!sessionId) {
+            setPaymentParticipants([]);
+            setPaidGuestIds([]);
+            setPaymentSessionCompleted(false);
+            return;
+        }
+
+        let active = true;
+        const tick = async () => {
+            if (!active) return;
+            await refreshPaymentStatus();
+        };
+
+        void tick();
+        const timer = window.setInterval(tick, 5000);
+
+        return () => {
+            active = false;
+            window.clearInterval(timer);
+        };
+    }, [refreshPaymentStatus, sessionId]);
+
+    React.useEffect(() => {
+        if (paymentSessionCompleted) {
+            toast.success('All payments completed');
+        }
+    }, [paymentSessionCompleted]);
+
+    const participantsForUI = paymentParticipants.length > 0 ? paymentParticipants : derivedParticipants;
+
     return (
         <div className="min-h-screen">
             {sharedOrderingLocked ? (
@@ -923,7 +1040,7 @@ export function CustomerMenuShell({ restaurantIdOverride, tenantHomePath, restau
                 }}
                 getItemQuantity={(itemId) => cartQuantityById.get(itemId) || 0}
                 onOpenCart={() => {
-                    if (sharedOrderingLocked) {
+                    if (effectiveOrderingLocked) {
                         toast.error('Shared table ordering is locked for this restaurant plan.');
                         return;
                     }
@@ -945,7 +1062,16 @@ export function CustomerMenuShell({ restaurantIdOverride, tenantHomePath, restau
                 tableId={resolvedTableId}
                 restaurantId={restaurantId || undefined}
                 sharedTableContext={sharedTableContext}
-                sharedOrderingLocked={sharedOrderingLocked}
+                sharedOrderingLocked={effectiveOrderingLocked}
+                restaurantName={displayRestaurantName}
+                sessionId={sessionId || undefined}
+                currentGuestId={currentGuestId || undefined}
+                currentGuestName={capturedCustomer?.name || undefined}
+                participants={participantsForUI}
+                payments={paidGuestIds}
+                enableSplitBilling={sharedTableContext}
+                paymentSessionCompleted={paymentSessionCompleted}
+                onRefreshPaymentStatus={refreshPaymentStatus}
                 onUpgrade={() => router.push(tenantHomePath || '/pricing')}
                 externalCartItems={sharedModeActive ? effectiveCart : undefined}
                 externalTotalPrice={sharedModeActive ? effectiveTotalPrice : undefined}

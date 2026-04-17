@@ -179,6 +179,12 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'item.id is required' }, { status: 400 });
         }
 
+        const sessionRef = adminFirestore.doc(`restaurants/${restaurantId}/table_payment_sessions/${tableKey}`);
+        const sessionSnap = await sessionRef.get();
+        if (Boolean((sessionSnap.data() || {}).isCompleted)) {
+            return NextResponse.json({ error: 'This table session is completed. Ordering is locked.' }, { status: 423 });
+        }
+
         const quantity = Math.max(0, Math.floor(Number(body.quantity || 0)));
         const actor = normalizeActor(body.actor);
         const nextItem: SharedCartItem = {
