@@ -211,8 +211,12 @@ export function SupportChatWidget({ restaurantId, accessToken }: SupportChatWidg
 
     const isTablesPage = pathname?.includes('/dashboard/tables');
     const floatingPositionClass = isTablesPage
-        ? 'bottom-40 right-4 md:bottom-10 md:right-10'
-        : 'bottom-24 right-6 md:bottom-10 md:right-10';
+        ? 'bottom-36 right-4 md:bottom-10 md:right-10'
+        : 'bottom-24 right-4 md:bottom-10 md:right-10';
+
+    const mobileSheetPositionClass = isTablesPage
+        ? 'left-2 right-2 bottom-[calc(env(safe-area-inset-bottom)+6rem)] md:left-auto md:right-10 md:bottom-10 md:w-[min(94vw,450px)]'
+        : 'left-2 right-2 bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] md:left-auto md:right-10 md:bottom-10 md:w-[min(94vw,450px)]';
 
     return (
         <>
@@ -240,8 +244,8 @@ export function SupportChatWidget({ restaurantId, accessToken }: SupportChatWidg
                         exit={{ opacity: 0, y: 20, scale: 0.97 }}
                         transition={{ type: 'spring', stiffness: 320, damping: 30 }}
                         className={cn(
-                            'fixed z-[60] flex h-[74vh] max-h-[680px] w-[min(94vw,450px)] flex-col overflow-hidden rounded-3xl border border-sky-200/10 bg-[#030714] shadow-2xl shadow-black/55',
-                            floatingPositionClass
+                            'fixed z-[60] flex h-[68vh] min-h-[360px] max-h-[680px] w-[calc(100vw-1rem)] flex-col overflow-hidden rounded-3xl border border-sky-200/10 bg-[#030714] shadow-2xl shadow-black/55 md:h-[74vh] md:min-h-0',
+                            mobileSheetPositionClass
                         )}
                     >
                         <div className="relative flex items-center justify-between border-b border-slate-800/80 bg-gradient-to-r from-slate-900/95 via-[#0a1025]/95 to-slate-900/95 px-4 py-3">
