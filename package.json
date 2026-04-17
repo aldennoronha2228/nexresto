@@ -16,7 +16,8 @@
     "test": "jest --forceExit",
     "test:security": "jest __tests__/security.test.ts --no-coverage --forceExit --verbose",
     "test:coverage": "jest --coverage --forceExit",
-    "audit:security": "npm audit --audit-level=high"
+    "audit:security": "npm audit --audit-level=high",
+    "ai:groq": "node scripts/groq-stream.mjs"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
@@ -58,6 +59,7 @@
     "firebase": "^12.10.0",
     "firebase-admin": "^13.7.0",
     "framer-motion": "^12.38.0",
+    "groq-sdk": "^1.1.2",
     "input-otp": "^1.4.2",
     "jspdf": "^4.2.0",
     "lucide-react": "^0.575.0",
