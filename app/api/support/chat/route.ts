@@ -81,15 +81,15 @@ const MODEL_CANDIDATES = [
     'gemini-flash-latest',
 ];
 
-function resolveGlmChatCompletionsUrl(apiUrl: string): string {
+function resolveGroqChatCompletionsUrl(apiUrl?: string): string {
     const base = String(apiUrl || '').trim().replace(/\/+$/, '');
-    if (!base) return '';
+    if (!base) return 'https://api.groq.com/openai/v1/chat/completions';
     if (base.endsWith('/chat/completions')) return base;
     return `${base}/chat/completions`;
 }
 
-function resolveGlmModelCandidates(): string[] {
-    const raw = process.env.GLM4_MODEL || 'zhipu/glm-5.1,glm-4.6v,GLM-4.6V';
+function resolveGroqModelCandidates(): string[] {
+    const raw = process.env.GROQ_MODEL_CANDIDATES || process.env.GROQ_MODEL || 'qwen/qwen3-32b,llama-3.3-70b-versatile';
     return Array.from(new Set(raw.split(',').map((m) => m.trim()).filter(Boolean)));
 }
 
@@ -1224,11 +1224,11 @@ async function inferActionFromGemini(apiKey: string, latestUserMessage: string):
     return { type: 'unknown' };
 }
 
-async function inferActionFromGlm(apiKey: string, apiUrl: string, latestUserMessage: string): Promise<ParsedAction> {
-    const endpoint = resolveGlmChatCompletionsUrl(apiUrl);
-    let lastError = 'GLM action planner failed';
+async function inferActionFromGroq(apiKey: string, latestUserMessage: string): Promise<ParsedAction> {
+    const endpoint = resolveGroqChatCompletionsUrl(process.env.GROQ_API_URL);
+    let lastError = 'Groq action planner failed';
 
-    for (const modelName of resolveGlmModelCandidates()) {
+    for (const modelName of resolveGroqModelCandidates()) {
         const response = await fetch(endpoint, {
             method: 'POST',
             headers: {
@@ -1250,7 +1250,7 @@ async function inferActionFromGlm(apiKey: string, apiUrl: string, latestUserMess
             const details = await response.text();
             lastError = `${modelName}: ${response.status} ${details.slice(0, 220)}`;
             if (response.status === 400 || response.status === 404) continue;
-            throw new Error(`GLM action planner failed: ${response.status}`);
+            throw new Error(`Groq action planner failed: ${response.status}`);
         }
 
         const data: any = await response.json();
@@ -1270,10 +1270,10 @@ async function inferActionFromGlm(apiKey: string, apiUrl: string, latestUserMess
     throw new Error(lastError);
 }
 
-async function inferActionFromAi(latestUserMessage: string, glm4ApiKey?: string, glm4ApiUrl?: string, openAiApiKey?: string, openAiModelCandidates?: string[], geminiApiKey?: string): Promise<ParsedAction> {
-    if (glm4ApiKey && glm4ApiUrl) {
+async function inferActionFromAi(latestUserMessage: string, groqApiKey?: string, openAiApiKey?: string, openAiModelCandidates?: string[], geminiApiKey?: string): Promise<ParsedAction> {
+    if (groqApiKey) {
         try {
-            const action = await inferActionFromGlm(glm4ApiKey, glm4ApiUrl, latestUserMessage);
+            const action = await inferActionFromGroq(groqApiKey, latestUserMessage);
             if (action.type !== 'unknown') return action;
         } catch {
             // Non-fatal fallback.
@@ -1364,11 +1364,11 @@ function resolveOpenAiModelCandidates(): string[] {
     return Array.from(unique);
 }
 
-async function requestGlmReply(apiKey: string, apiUrl: string, messages: ChatMessage[], contextPrompt: string): Promise<ProviderReply> {
-    const endpoint = resolveGlmChatCompletionsUrl(apiUrl);
-    let lastError = 'GLM request failed';
+async function requestGroqReply(apiKey: string, messages: ChatMessage[], contextPrompt: string): Promise<ProviderReply> {
+    const endpoint = resolveGroqChatCompletionsUrl(process.env.GROQ_API_URL);
+    let lastError = 'Groq request failed';
 
-    for (const modelName of resolveGlmModelCandidates()) {
+    for (const modelName of resolveGroqModelCandidates()) {
         const response = await fetch(endpoint, {
             method: 'POST',
             headers: {
@@ -1394,7 +1394,7 @@ async function requestGlmReply(apiKey: string, apiUrl: string, messages: ChatMes
             const errorText = await response.text();
             lastError = `${modelName}: ${response.status} ${errorText.slice(0, 500)}`;
             if (response.status === 429) {
-                throw Object.assign(new Error('GLM quota exceeded for this API key.'), {
+                throw Object.assign(new Error('Groq quota exceeded for this API key.'), {
                     statusCode: 429,
                     errorCode: 'quota_exceeded',
                     details: errorText.slice(0, 500),
@@ -1402,7 +1402,7 @@ async function requestGlmReply(apiKey: string, apiUrl: string, messages: ChatMes
             }
             if (response.status === 400 || response.status === 404) continue;
 
-            throw Object.assign(new Error(`GLM request failed: ${response.status}`), {
+            throw Object.assign(new Error(`Groq request failed: ${response.status}`), {
                 statusCode: response.status >= 400 && response.status < 600 ? response.status : 502,
                 details: errorText.slice(0, 500),
             });
@@ -1424,7 +1424,7 @@ async function requestGlmReply(apiKey: string, apiUrl: string, messages: ChatMes
         };
     }
 
-    throw Object.assign(new Error('No configured GLM model candidate succeeded.'), {
+    throw Object.assign(new Error('No configured Groq model candidate succeeded.'), {
         statusCode: 502,
         details: lastError,
     });
@@ -1515,15 +1515,14 @@ async function requestGeminiReply(apiKey: string, messages: ChatMessage[], conte
 }
 
 export async function POST(request: NextRequest) {
-    const glm4ApiKey = process.env.GLM4_API_KEY;
-    const glm4ApiUrl = process.env.GLM4_API_URL;
+    const groqApiKey = process.env.GROQ_API_KEY;
     const openAiApiKey = process.env.OPENAI_API_KEY;
     const openAiModelCandidates = resolveOpenAiModelCandidates();
     const geminiApiKey = process.env.GEMINI_API_KEY;
 
-    if (!(glm4ApiKey && glm4ApiUrl) && !openAiApiKey && !geminiApiKey) {
+    if (!groqApiKey && !openAiApiKey && !geminiApiKey) {
         return NextResponse.json(
-            { error: 'No AI provider key configured. Set GLM4_API_KEY + GLM4_API_URL, OPENAI_API_KEY, or GEMINI_API_KEY.' },
+            { error: 'No AI provider key configured. Set GROQ_API_KEY, OPENAI_API_KEY, or GEMINI_API_KEY.' },
             { status: 500 }
         );
     }
@@ -1585,7 +1584,7 @@ export async function POST(request: NextRequest) {
         const latestUserMessage = [...messages].reverse().find((m) => m.role === 'user')?.content || '';
         let parsedAction = parseActionFromText(latestUserMessage);
         if (parsedAction.type === 'unknown' && looksLikeControlIntent(latestUserMessage)) {
-            parsedAction = await inferActionFromAi(latestUserMessage, glm4ApiKey, glm4ApiUrl, openAiApiKey, openAiModelCandidates, geminiApiKey);
+            parsedAction = await inferActionFromAi(latestUserMessage, groqApiKey, openAiApiKey, openAiModelCandidates, geminiApiKey);
         }
 
         if (parsedAction.type !== 'unknown') {
@@ -1617,8 +1616,8 @@ export async function POST(request: NextRequest) {
 
         let providerReply: ProviderReply;
         try {
-            if (glm4ApiKey && glm4ApiUrl) {
-                providerReply = await requestGlmReply(glm4ApiKey, glm4ApiUrl, messages, contextPrompt);
+            if (groqApiKey) {
+                providerReply = await requestGroqReply(groqApiKey, messages, contextPrompt);
             } else if (openAiApiKey) {
                 let openAiError: any = null;
                 let resolvedReply: ProviderReply | null = null;
@@ -1654,7 +1653,7 @@ export async function POST(request: NextRequest) {
                 providerReply = await requestGeminiReply(geminiApiKey, messages, contextPrompt);
             } else {
                 return NextResponse.json(
-                    { error: 'No AI provider key configured. Set GLM4_API_KEY + GLM4_API_URL, OPENAI_API_KEY, or GEMINI_API_KEY.' },
+                    { error: 'No AI provider key configured. Set GROQ_API_KEY, OPENAI_API_KEY, or GEMINI_API_KEY.' },
                     { status: 500 }
                 );
             }

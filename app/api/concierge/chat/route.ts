@@ -2,20 +2,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { checkRateLimit } from '@/lib/rateLimit';
 
-function resolveGlmChatCompletionsUrl(apiUrl: string): string {
+function resolveGroqChatCompletionsUrl(apiUrl?: string): string {
     const base = String(apiUrl || '').trim().replace(/\/+$/, '');
-    if (!base) return '';
+    if (!base) return 'https://api.groq.com/openai/v1/chat/completions';
     if (base.endsWith('/chat/completions')) return base;
     return `${base}/chat/completions`;
 }
 
-function resolveGlmModelCandidates(): string[] {
-    const raw = process.env.GLM4_MODEL || 'zhipu/glm-5.1,glm-4.6v,GLM-4.6V';
+function resolveGroqModelCandidates(): string[] {
+    const raw = process.env.GROQ_MODEL_CANDIDATES || process.env.GROQ_MODEL || 'qwen/qwen3-32b,llama-3.3-70b-versatile';
     return Array.from(new Set(raw.split(',').map((m) => m.trim()).filter(Boolean)));
 }
 
-// GLM-4.6V integration
-async function askGLM4(apiKey: string, apiUrl: string, userInput: string, menu: ConciergeMenuItem[], hour24: number, mealPeriod: string): Promise<ConciergeResponse> {
+async function askGroq(apiKey: string, userInput: string, menu: ConciergeMenuItem[], hour24: number, mealPeriod: string): Promise<ConciergeResponse> {
     const system = [
         'You are Nexie, a sophisticated, witty, helpful digital sommelier and food guide for NexResto.',
         'Be empathetic and premium, but concise.',
@@ -40,10 +39,10 @@ async function askGLM4(apiKey: string, apiUrl: string, userInput: string, menu: 
         }))),
     ].join('\n\n');
 
-    const endpoint = resolveGlmChatCompletionsUrl(apiUrl);
-    let lastError = 'GLM request failed';
+    const endpoint = resolveGroqChatCompletionsUrl(process.env.GROQ_API_URL);
+    let lastError = 'Groq request failed';
 
-    for (const modelName of resolveGlmModelCandidates()) {
+    for (const modelName of resolveGroqModelCandidates()) {
         const response = await fetch(endpoint, {
             method: 'POST',
             headers: {
@@ -66,7 +65,7 @@ async function askGLM4(apiKey: string, apiUrl: string, userInput: string, menu: 
             if (response.status === 400 || response.status === 404) {
                 continue;
             }
-            throw new Error(`GLM request failed (${response.status})`);
+            throw new Error(`Groq request failed (${response.status})`);
         }
 
         const payload = await response.json();
@@ -364,13 +363,12 @@ export async function POST(request: NextRequest) {
 
 
         try {
-            const glm4Key = process.env.GLM4_API_KEY;
-            const glm4Url = process.env.GLM4_API_URL;
+            const groqApiKey = process.env.GROQ_API_KEY;
             const geminiKey = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
             const openAiKey = process.env.OPENAI_API_KEY;
 
-            if (glm4Key && glm4Url) {
-                aiReply = await askGLM4(glm4Key, glm4Url, userInput, menu, hour24, mealPeriod);
+            if (groqApiKey) {
+                aiReply = await askGroq(groqApiKey, userInput, menu, hour24, mealPeriod);
             } else if (geminiKey) {
                 aiReply = await askGemini(geminiKey, userInput, menu, hour24, mealPeriod);
             } else if (openAiKey) {

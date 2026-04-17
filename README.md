@@ -34,9 +34,9 @@ It includes:
 	- quick suggestions hidden after conversation starts
 	- small `Clear` chat action in header
 - AI provider flow updated:
-	- GLM-4.6V prioritized for concierge and support chat routes
-	- GLM endpoint normalization for base URLs (`/chat/completions` auto-resolved)
-	- model candidate fallback support for GLM naming variants
+	- Groq prioritized for concierge and support chat routes
+	- Groq endpoint normalization for base URLs (`/chat/completions` auto-resolved)
+	- model candidate fallback support for Groq model variants
 	- OpenAI/Gemini retained as fallback providers
 - Mobile table editing improvements in 2D review:
 	- tap-to-select table
@@ -87,7 +87,7 @@ npm install
 - Restaurant defaults (`NEXT_PUBLIC_RESTAURANT_ID`)
 - Optional integrations:
 	- Email (`RESEND_API_KEY`, `RESEND_FROM_EMAIL`)
-	- AI providers (`GLM4_API_KEY` + `GLM4_API_URL` recommended, `OPENAI_API_KEY`, `GEMINI_API_KEY`)
+		- AI providers (`GROQ_API_KEY` recommended, `OPENAI_API_KEY`, `GEMINI_API_KEY`)
 
 3. Run dev server:
 
