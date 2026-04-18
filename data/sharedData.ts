@@ -13,7 +13,7 @@ export interface Table {
     seats: number;
     x: number;
     y: number;
-    status: 'available' | 'busy' | 'reserved';
+    status: 'available' | 'busy' | 'reserved' | 'pending_payment'; // Added pending_payment
 }
 
 // Re-export MenuItem alias for backwards compatibility with dashboard pages
@@ -32,7 +32,7 @@ export interface MenuItem {
 
 const defaultTables: Table[] = [
     { id: 'T-01', name: 'Table 1', seats: 2, x: 50, y: 50, status: 'available' },
-    { id: 'T-02', name: 'Table 2', seats: 4, x: 200, y: 50, status: 'available' },
+    { id: 'T-02', name: 'Table 2', seats: 4, x: 200, y: 50, status: 'pending_payment' }, // Example pending_payment
     { id: 'T-03', name: 'Table 3', seats: 2, x: 350, y: 50, status: 'available' },
     { id: 'T-04', name: 'Table 4', seats: 6, x: 500, y: 50, status: 'available' },
     { id: 'T-05', name: 'Table 5', seats: 4, x: 50, y: 200, status: 'busy' },

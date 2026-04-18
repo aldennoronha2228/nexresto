@@ -15,6 +15,7 @@ function PaymentsSettingsContent() {
     const [saving, setSaving] = useState(false);
     const [savingToggle, setSavingToggle] = useState(false);
     const [isPaymentConnected, setIsPaymentConnected] = useState(false);
+    const [showSaveConfirm, setShowSaveConfirm] = useState(false);
 
     const canSubmit = useMemo(() => {
         return Boolean(keyId.trim() && keySecret.trim()) && !saving;
@@ -67,8 +68,7 @@ function PaymentsSettingsContent() {
         };
     }, [storeId]);
 
-    const handleSubmit = async (event: React.FormEvent) => {
-        event.preventDefault();
+    const saveRazorpayKeys = async () => {
         if (!storeId) {
             toast.error('Restaurant context missing');
             return;
@@ -97,12 +97,28 @@ function PaymentsSettingsContent() {
 
             setIsPaymentConnected(true);
             setKeySecret('');
+            setShowSaveConfirm(false);
             toast.success('Razorpay connected successfully');
         } catch (error: any) {
             toast.error(error?.message || 'Failed to connect Razorpay');
         } finally {
             setSaving(false);
         }
+    };
+
+    const handleSubmit = (event: React.FormEvent) => {
+        event.preventDefault();
+        if (!storeId) {
+            toast.error('Restaurant context missing');
+            return;
+        }
+
+        if (!keyId.trim() || !keySecret.trim()) {
+            toast.error('Please enter both Razorpay Key ID and Secret Key');
+            return;
+        }
+
+        setShowSaveConfirm(true);
     };
 
     const handleTogglePayments = async () => {
@@ -233,10 +249,10 @@ function PaymentsSettingsContent() {
                             {saving ? (
                                 <>
                                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Connecting...
+                                    Saving...
                                 </>
                             ) : (
-                                'Connect Razorpay'
+                                'Save Keys'
                             )}
                         </button>
 
@@ -249,6 +265,45 @@ function PaymentsSettingsContent() {
                     </div>
                 </form>
             </div>
+
+            {showSaveConfirm ? (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+                    <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-xl">
+                        <h2 className="text-lg font-semibold text-slate-900">Save Razorpay Keys?</h2>
+                        <p className="mt-2 text-sm text-slate-600">
+                            Your Razorpay Secret Key will be encrypted before storage. Continue saving these payment credentials?
+                        </p>
+
+                        <div className="mt-5 flex items-center justify-end gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setShowSaveConfirm(false)}
+                                disabled={saving}
+                                className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-300 px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    void saveRazorpayKeys();
+                                }}
+                                disabled={saving}
+                                className="inline-flex h-10 items-center justify-center rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                                {saving ? (
+                                    <>
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        Saving...
+                                    </>
+                                ) : (
+                                    'Yes, Save Keys'
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            ) : null}
         </div>
     );
 }

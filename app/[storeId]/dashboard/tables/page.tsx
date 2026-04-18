@@ -1,4 +1,6 @@
+
 'use client';
+
 
 import { useState, useEffect, useCallback, useMemo, useRef, Suspense, Component, type ErrorInfo, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -595,6 +597,7 @@ const statusConfig = {
     available: { color: 'bg-emerald-100', border: 'border-emerald-400', text: 'text-emerald-700' },
     busy: { color: 'bg-rose-100', border: 'border-rose-400', text: 'text-rose-700' },
     reserved: { color: 'bg-amber-100', border: 'border-amber-400', text: 'text-amber-700' },
+    pending_payment: { color: 'bg-blue-100', border: 'border-blue-400', text: 'text-blue-700', mark: 'bg-blue-500' }, // Blue mark for pending payment
 };
 
 function DraggableTable({
@@ -602,11 +605,13 @@ function DraggableTable({
     onPlaceAtPoint,
     isActive,
     onActivate,
+    onShowSplitStatus,
 }: {
     table: Table;
     onPlaceAtPoint: (id: string, pointX: number, pointY: number, anchor?: { offsetX: number; offsetY: number }) => void;
     isActive?: boolean;
     onActivate?: (id: string) => void;
+    onShowSplitStatus?: (table: Table) => void;
 }) {
     const cfg = statusConfig[table.status];
     const [isDragging, setIsDragging] = useState(false);
@@ -645,21 +650,75 @@ function DraggableTable({
             onPointerMove={moveDrag}
             onPointerUp={endDrag}
             onPointerCancel={endDrag}
+            onDoubleClick={() => {
+                if (onShowSplitStatus) onShowSplitStatus(table);
+            }}
             style={{ position: 'absolute', left: table.x, top: table.y, cursor: isDragging ? 'grabbing' : 'grab', touchAction: 'none', userSelect: 'none' }}
             whileHover={{ scale: 1.05 }}
             animate={{ scale: isDragging ? 1.08 : 1, opacity: isDragging ? 0.92 : 1 }}
             className={cn(
-                'w-20 h-20 rounded-lg border-2 flex flex-col items-center justify-center shadow-md transition-colors',
+                'w-20 h-20 rounded-lg border-2 flex flex-col items-center justify-center shadow-md transition-colors relative',
                 cfg.color,
                 cfg.border,
                 cfg.text,
                 isActive && 'border-orange-500 ring-2 ring-orange-300/80 shadow-md shadow-orange-500/25'
             )}
         >
+            {/* Blue mark for pending payment */}
+            {table.status === 'pending_payment' && (
+                <span className="absolute top-2 right-2 w-4 h-4 rounded-full bg-blue-500 border-2 border-white shadow-lg" title="Payment Pending"></span>
+            )}
             <span className="text-xs font-bold pointer-events-none">{table.id}</span>
             <span className="text-[10px] opacity-70 pointer-events-none">{table.seats}🪑</span>
         </motion.div>
     );
+// --- Split Payment Progress Modal ---
+
+function SplitPaymentProgressModal({ open, onClose, table, splitStatus }: { open: boolean; onClose: () => void; table: Table | null; splitStatus: { paid: number; pending: number } | null }) {
+    if (!open || !table || !splitStatus) return null;
+    return (
+        <ReactModal isOpen={open} onRequestClose={onClose} ariaHideApp={false} className="fixed inset-0 flex items-center justify-center z-50">
+            <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-xs w-full text-center">
+                <h2 className="text-lg font-bold mb-2 text-blue-700">Split Payment Progress</h2>
+                <p className="mb-2 text-slate-700 font-medium">Table <span className="font-bold">{table.name}</span></p>
+                <div className="mb-4">
+                    <span className="text-emerald-600 font-semibold">{splitStatus.paid}</span> paid, <span className="text-rose-600 font-semibold">{splitStatus.pending}</span> pending
+                </div>
+                <button onClick={onClose} className="mt-2 px-4 py-2 rounded bg-blue-600 text-white font-semibold">Close</button>
+            </div>
+        </ReactModal>
+    );
+}
+// --- Main Dashboard Table Page: Add split payment modal state and handler ---
+// ...existing code...
+// Add state for split payment modal
+const [splitModalOpen, setSplitModalOpen] = useState(false);
+const [splitModalTable, setSplitModalTable] = useState<Table | null>(null);
+const [splitModalStatus, setSplitModalStatus] = useState<{ paid: number; pending: number } | null>(null);
+
+// Dummy logic for split payment status (replace with real data source)
+function getSplitPaymentStatus(table: Table): { paid: number; pending: number } {
+    // TODO: Replace with real backend data
+    // For demo: 2 paid, 3 pending if table id is even, else 1 paid, 2 pending
+    const n = parseInt(table.id.replace(/\D/g, ''));
+    if (n % 2 === 0) return { paid: 2, pending: 3 };
+    return { paid: 1, pending: 2 };
+}
+
+function handleShowSplitStatus(table: Table) {
+    const status = getSplitPaymentStatus(table);
+    setSplitModalTable(table);
+    setSplitModalStatus(status);
+    setSplitModalOpen(true);
+}
+
+// ...existing code...
+// Pass handleShowSplitStatus to DraggableTable
+// Example usage:
+// <DraggableTable ... onShowSplitStatus={handleShowSplitStatus} />
+
+// Render the modal at the root of the page
+// <SplitPaymentProgressModal open={splitModalOpen} onClose={() => setSplitModalOpen(false)} table={splitModalTable} splitStatus={splitModalStatus} />
 }
 
 function DraggableWall({ wall, onDelete, onUpdate }: { wall: Wall; onDelete: (id: string) => void; onUpdate: (id: string, x: number, y: number) => void }) {

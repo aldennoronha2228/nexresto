@@ -247,10 +247,15 @@ export function CustomerMenuShell({ restaurantIdOverride, tableIdOverride, force
     const [paidGuestIds, setPaidGuestIds] = React.useState<string[]>([]);
     const [paymentSessionCompleted, setPaymentSessionCompleted] = React.useState(false);
     const [paymentEnabled, setPaymentEnabled] = React.useState(true);
+    const [sessionStatus, setSessionStatus] = React.useState<'active' | 'billing' | 'completed'>('active');
+    const [billedItems, setBilledItems] = React.useState<CartItem[]>([]);
+    const [billedTotal, setBilledTotal] = React.useState(0);
 
     const sharedOrderingLocked = sharedTableContext && featuresReady && !sharedOrderingAllowed;
-    const paymentLocked = sharedTableContext && paymentSessionCompleted;
-    const effectiveOrderingLocked = sharedOrderingLocked || paymentLocked;
+    const isBillingPhase = sessionStatus === 'billing';
+    const isCompletedPhase = sessionStatus === 'completed';
+    const effectiveOrderingLocked = sharedOrderingLocked;
+    const orderingLockedBySession = sharedTableContext && (isBillingPhase || isCompletedPhase);
     const sharedModeActive = sharedTableContext && !effectiveOrderingLocked && restaurantId.length > 0 && resolvedTableId.length > 0;
     const tableKey = React.useMemo(() => resolvedTableId.trim().toLowerCase(), [resolvedTableId]);
     const sessionId = React.useMemo(() => {
@@ -779,7 +784,7 @@ export function CustomerMenuShell({ restaurantIdOverride, tableIdOverride, force
         price: number;
         available?: boolean;
     }): boolean => {
-        if (sharedOrderingLocked) {
+        if (sharedOrderingLocked || orderingLockedBySession) {
             toast.error('Shared table ordering is locked for this restaurant plan.');
             return false;
         }
@@ -807,15 +812,31 @@ export function CustomerMenuShell({ restaurantIdOverride, tableIdOverride, force
         return true;
     };
 
-    const effectiveCart = sharedModeActive ? sharedCartItems : cart;
+    const inBillView = sharedTableContext && (isBillingPhase || isCompletedPhase);
+    const billedPhaseCart = inBillView && billedItems.length > 0 ? billedItems : null;
+    const effectiveCart = sharedModeActive ? (billedPhaseCart || sharedCartItems) : cart;
+    const sentSharedItems = sharedModeActive && !inBillView ? billedItems : [];
+    const sentSharedItemCount = React.useMemo(
+        () => sentSharedItems.reduce((sum, item) => sum + item.quantity, 0),
+        [sentSharedItems]
+    );
+    const sentSharedTotal = React.useMemo(
+        () => sentSharedItems.reduce((sum, item) => sum + item.price * item.quantity, 0),
+        [sentSharedItems]
+    );
     const effectiveTotalItems = React.useMemo(
-        () => effectiveCart.reduce((sum, item) => sum + item.quantity, 0),
-        [effectiveCart]
+        () => effectiveCart.reduce((sum, item) => sum + item.quantity, 0) + sentSharedItemCount,
+        [effectiveCart, sentSharedItemCount]
     );
-    const effectiveTotalPrice = React.useMemo(
-        () => effectiveCart.reduce((sum, item) => sum + item.price * item.quantity, 0),
-        [effectiveCart]
-    );
+    const effectiveTotalPrice = React.useMemo(() => {
+        if (inBillView && billedTotal > 0) {
+            return billedTotal;
+        }
+        if (billedPhaseCart) {
+            return billedTotal > 0 ? billedTotal : billedPhaseCart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+        }
+        return effectiveCart.reduce((sum, item) => sum + item.price * item.quantity, 0) + sentSharedTotal;
+    }, [billedPhaseCart, billedTotal, effectiveCart, inBillView, sentSharedTotal]);
 
     const cartQuantityById = React.useMemo(() => {
         const map = new Map<string, number>();
@@ -832,7 +853,7 @@ export function CustomerMenuShell({ restaurantIdOverride, tableIdOverride, force
         price: number;
         available?: boolean;
     }) => {
-        if (effectiveOrderingLocked) {
+        if (effectiveOrderingLocked || orderingLockedBySession) {
             toast.error('Shared table ordering is locked for this restaurant plan.');
             return;
         }
@@ -857,7 +878,7 @@ export function CustomerMenuShell({ restaurantIdOverride, tableIdOverride, force
     };
 
     const decrementMenuItem = (item: { id: string }) => {
-        if (effectiveOrderingLocked) {
+        if (effectiveOrderingLocked || orderingLockedBySession) {
             toast.error('Shared table ordering is locked for this restaurant plan.');
             return;
         }
@@ -939,6 +960,9 @@ export function CustomerMenuShell({ restaurantIdOverride, tableIdOverride, force
             setPaidGuestIds([]);
             setPaymentSessionCompleted(false);
             setPaymentEnabled(true);
+            setSessionStatus('active');
+            setBilledItems([]);
+            setBilledTotal(0);
             return;
         }
 
@@ -962,10 +986,46 @@ export function CustomerMenuShell({ restaurantIdOverride, tableIdOverride, force
                 ? payload.payments.map((entry: unknown) => String(entry || '').toLowerCase()).filter(Boolean)
                 : [];
 
+            const billItemsPayload: unknown[] = Array.isArray(payload?.billItems) ? payload.billItems : [];
+            const normalizedBillItems: CartItem[] = billItemsPayload
+                .map((row: unknown) => {
+                    const entry = row as Partial<CartItem>;
+                    return {
+                        id: String(entry.id || '').trim(),
+                        name: String(entry.name || '').trim(),
+                        description: String(entry.description || ''),
+                        price: Number(entry.price || 0),
+                        image: String(entry.image || ''),
+                        category: String(entry.category || 'Others') || 'Others',
+                        quantity: Math.max(0, Math.floor(Number(entry.quantity || 0))),
+                        contributors: Array.isArray(entry.contributors)
+                            ? entry.contributors
+                                .map((c) => ({
+                                    name: String(c?.name || '').trim(),
+                                    phone: String(c?.phone || '').trim(),
+                                    quantity: Math.max(0, Math.floor(Number(c?.quantity || 0))),
+                                }))
+                                .filter((c) => c.name && c.quantity > 0)
+                            : [],
+                    };
+                })
+                .filter((entry) => entry.id && entry.name && Number.isFinite(entry.price) && entry.quantity > 0);
+
+            const payloadBillTotal = Number(payload?.billTotal || 0);
+            const computedBillTotal = normalizedBillItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+
             setPaymentParticipants(participants);
             setPaidGuestIds(paidIds);
             setPaymentSessionCompleted(Boolean(payload?.allPaid || payload?.isCompleted));
             setPaymentEnabled(payload?.paymentEnabled !== false);
+            setBilledItems(normalizedBillItems);
+            setBilledTotal(Number.isFinite(payloadBillTotal) && payloadBillTotal > 0 ? payloadBillTotal : computedBillTotal);
+            const nextStatus = String(payload?.status || '').toLowerCase();
+            if (nextStatus === 'billing' || nextStatus === 'completed' || nextStatus === 'active') {
+                setSessionStatus(nextStatus);
+            } else {
+                setSessionStatus(Boolean(payload?.allPaid || payload?.isCompleted) ? 'completed' : 'active');
+            }
         } catch {
             // Ignore transient status fetch issues.
         }
@@ -977,6 +1037,9 @@ export function CustomerMenuShell({ restaurantIdOverride, tableIdOverride, force
             setPaidGuestIds([]);
             setPaymentSessionCompleted(false);
             setPaymentEnabled(true);
+            setSessionStatus('active');
+            setBilledItems([]);
+            setBilledTotal(0);
             return;
         }
 
@@ -1052,6 +1115,8 @@ export function CustomerMenuShell({ restaurantIdOverride, tableIdOverride, force
                     setIsCartOpen(true);
                 }}
                 onOpenOrders={() => router.push(buildCustomerUrl('/customer/order-history'))}
+                itemsLocked={orderingLockedBySession}
+                lockMessage={isCompletedPhase ? 'Payment completed. Thank you!' : 'Bill generated. Please complete payment.'}
             />
             {restaurantId ? (
                 <MenuConcierge
@@ -1077,8 +1142,39 @@ export function CustomerMenuShell({ restaurantIdOverride, tableIdOverride, force
                 paymentSessionCompleted={paymentSessionCompleted}
                 paymentEnabled={paymentEnabled}
                 onRefreshPaymentStatus={refreshPaymentStatus}
+                sessionStatus={sessionStatus}
+                onProceedToPay={async () => {
+                    if (!sessionId || !restaurantId || !tableKey) return;
+                    const response = await fetch('/api/customer/session/proceed-to-pay', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            sessionId,
+                            restaurantId,
+                            tableId: tableKey,
+                            customer: capturedCustomer
+                                ? {
+                                    name: capturedCustomer.name,
+                                    phone: capturedCustomer.phone,
+                                }
+                                : undefined,
+                        }),
+                    });
+
+                    const payload = await response.json().catch(() => ({}));
+                    if (!response.ok) {
+                        throw new Error(String(payload?.error || 'Unable to proceed to payment'));
+                    }
+
+                    setSessionStatus('billing');
+                    await refreshPaymentStatus();
+                    return {
+                        billTotal: Number(payload?.billTotal || 0),
+                    };
+                }}
                 onUpgrade={() => router.push(tenantHomePath || '/pricing')}
                 externalCartItems={sharedModeActive ? effectiveCart : undefined}
+                sentItems={sharedModeActive ? billedItems : undefined}
                 externalTotalPrice={sharedModeActive ? effectiveTotalPrice : undefined}
                 onExternalIncrease={sharedModeActive ? handleSharedDrawerIncrease : undefined}
                 onExternalDecrease={sharedModeActive ? handleSharedDrawerDecrease : undefined}

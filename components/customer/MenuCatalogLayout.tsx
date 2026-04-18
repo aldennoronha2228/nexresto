@@ -56,6 +56,8 @@ type GourmetCatalogLayoutProps = {
     getItemQuantity: (itemId: string) => number;
     onOpenCart: () => void;
     onOpenOrders: () => void;
+    itemsLocked?: boolean;
+    lockMessage?: string;
 };
 
 function formatINR(value: number): string {
@@ -90,6 +92,8 @@ export function GourmetCatalogLayout({
     getItemQuantity,
     onOpenCart,
     onOpenOrders,
+    itemsLocked = false,
+    lockMessage,
 }: GourmetCatalogLayoutProps) {
     const [activeCategory, setActiveCategory] = React.useState('All');
     const [query, setQuery] = React.useState('');
@@ -302,6 +306,11 @@ export function GourmetCatalogLayout({
                 </section>
 
                 <section className="px-4 pb-2 sm:px-6">
+                    {itemsLocked ? (
+                        <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                            {lockMessage || 'Bill generated. Please complete payment.'}
+                        </div>
+                    ) : null}
                     <div className="mb-3 flex items-center justify-between">
                         <h3 className={`${cormorant.className} text-3xl leading-none text-[#181b1f]`}>Popular</h3>
                         <span className="rounded-full bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500 shadow-sm">Table {tableId || 'Guest'}</span>
@@ -364,8 +373,9 @@ export function GourmetCatalogLayout({
                                                             <div className="mt-2 flex items-center justify-between rounded-full border border-slate-300 bg-white px-2 py-1.5">
                                                                 <button
                                                                     type="button"
+                                                                    disabled={itemsLocked}
                                                                     onClick={() => onDecrementItem(item)}
-                                                                    className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-300 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                                                                    className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-300 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                                                                     aria-label={`Decrease ${item.name}`}
                                                                 >
                                                                     -
@@ -373,8 +383,9 @@ export function GourmetCatalogLayout({
                                                                 <span className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-700">{quantity}</span>
                                                                 <button
                                                                     type="button"
+                                                                    disabled={itemsLocked}
                                                                     onClick={() => onIncrementItem(item)}
-                                                                    className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-300 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                                                                    className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-300 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                                                                     aria-label={`Increase ${item.name}`}
                                                                 >
                                                                     +
@@ -383,10 +394,11 @@ export function GourmetCatalogLayout({
                                                         ) : (
                                                             <motion.button
                                                                 type="button"
+                                                                disabled={itemsLocked}
                                                                 onClick={() => handleAddClick(item)}
                                                                 whileHover={{ scale: 1.02 }}
                                                                 whileTap={{ scale: 0.98 }}
-                                                                className="mt-2 w-full rounded-full border border-slate-300 bg-white px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
+                                                                className="mt-2 w-full rounded-full border border-slate-300 bg-white px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-700 transition hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                                                             >
                                                                 {justAddedItemId === item.id ? 'Added' : '+ Add'}
                                                             </motion.button>

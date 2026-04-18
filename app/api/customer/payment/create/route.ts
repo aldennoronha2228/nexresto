@@ -53,6 +53,25 @@ function getSessionRef(restaurantId: string, tableKey: string) {
     return adminFirestore.doc(`restaurants/${restaurantId}/table_payment_sessions/${tableKey}`);
 }
 
+function parseBilledItems(raw: unknown): Array<Record<string, unknown>> {
+    if (!Array.isArray(raw)) return [];
+    return raw.filter((entry) => !!entry && typeof entry === 'object') as Array<Record<string, unknown>>;
+}
+
+function computeBillTotalInr(items: Array<Record<string, unknown>>, fallbackTotal: unknown): number {
+    if (items.length > 0) {
+        return items.reduce((sum, item) => {
+            const price = Number(item.price || 0);
+            const quantity = Math.max(0, Math.floor(Number(item.quantity || 0)));
+            if (!Number.isFinite(price) || quantity <= 0) return sum;
+            return sum + price * quantity;
+        }, 0);
+    }
+
+    const fallback = Number(fallbackTotal || 0);
+    return Number.isFinite(fallback) && fallback > 0 ? fallback : 0;
+}
+
 export async function POST(request: NextRequest) {
     try {
         const body = (await request.json().catch(() => ({}))) as CreatePaymentBody;
@@ -99,6 +118,48 @@ export async function POST(request: NextRequest) {
         }
 
         const sessionRef = getSessionRef(restaurantId, tableKey);
+        const sessionSnap = await sessionRef.get();
+        const sessionData = (sessionSnap.data() || {}) as Record<string, unknown>;
+        const sessionStatus = clean(sessionData.status) || (Boolean(sessionData.isCompleted) ? 'completed' : 'active');
+
+        if (sessionStatus !== 'billing') {
+            return NextResponse.json({ error: 'Bill must be requested before payment', status: sessionStatus }, { status: 409 });
+        }
+
+        const billedItems = parseBilledItems(sessionData.billed_items);
+        const billedTotalInr = computeBillTotalInr(billedItems, sessionData.billed_total);
+        const billedTotalPaise = Math.round(billedTotalInr * 100);
+
+        if (billedTotalPaise <= 0) {
+            return NextResponse.json({ error: 'No bill amount found for this table session' }, { status: 409 });
+        }
+
+        const paidSnapshot = await adminFirestore
+            .collection(`restaurants/${restaurantId}/table_payment_sessions/${tableKey}/payments`)
+            .where('sessionId', '==', sessionId)
+            .where('status', '==', 'paid')
+            .get();
+
+        const paidPaise = paidSnapshot.docs.reduce((sum, doc) => {
+            const row = (doc.data() || {}) as Record<string, unknown>;
+            const value = Number(row.amountPaise || 0);
+            return sum + (Number.isFinite(value) && value > 0 ? Math.floor(value) : 0);
+        }, 0);
+
+        const remainingPaise = Math.max(0, billedTotalPaise - paidPaise);
+        if (remainingPaise <= 0) {
+            return NextResponse.json({ error: 'This bill is already settled' }, { status: 409 });
+        }
+
+        if (amountPaise > remainingPaise) {
+            return NextResponse.json(
+                {
+                    error: 'Requested payment exceeds pending amount',
+                    pendingAmountInr: Number((remainingPaise / 100).toFixed(2)),
+                },
+                { status: 409 }
+            );
+        }
 
         const alreadyPaid = await adminFirestore
             .collection(`restaurants/${restaurantId}/table_payment_sessions/${tableKey}/payments`)
@@ -174,6 +235,7 @@ export async function POST(request: NextRequest) {
                 restaurantId,
                 tableKey,
                 tableId: tableKey,
+                status: 'billing',
                 isCompleted: false,
                 updatedAt: FieldValue.serverTimestamp(),
             },

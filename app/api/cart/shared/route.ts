@@ -181,8 +181,11 @@ export async function POST(request: NextRequest) {
 
         const sessionRef = adminFirestore.doc(`restaurants/${restaurantId}/table_payment_sessions/${tableKey}`);
         const sessionSnap = await sessionRef.get();
-        if (Boolean((sessionSnap.data() || {}).isCompleted)) {
-            return NextResponse.json({ error: 'This table session is completed. Ordering is locked.' }, { status: 423 });
+        const sessionData = (sessionSnap.data() || {}) as Record<string, unknown>;
+        const status = String(sessionData.status || '').trim().toLowerCase() || (Boolean(sessionData.isCompleted) ? 'completed' : 'active');
+
+        if (status !== 'active') {
+            return NextResponse.json({ error: 'This table session is locked for ordering.', status }, { status: 423 });
         }
 
         const quantity = Math.max(0, Math.floor(Number(body.quantity || 0)));
@@ -230,6 +233,20 @@ export async function POST(request: NextRequest) {
                     restaurant_id: restaurantId,
                     items,
                     updated_at: FieldValue.serverTimestamp(),
+                },
+                { merge: true }
+            );
+
+            tx.set(
+                sessionRef,
+                {
+                    sessionId: `${restaurantId}::${tableKey}`,
+                    restaurantId,
+                    tableKey,
+                    tableId: tableKey,
+                    status: 'active',
+                    isCompleted: false,
+                    updatedAt: FieldValue.serverTimestamp(),
                 },
                 { merge: true }
             );

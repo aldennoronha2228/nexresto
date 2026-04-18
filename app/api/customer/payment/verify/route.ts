@@ -56,7 +56,8 @@ async function markSessionCompletedIfAllPaid(restaurantId: string, tableKey: str
     const cartRef = adminFirestore.doc(`restaurants/${restaurantId}/shared_carts/${tableKey}`);
     const sessionRef = adminFirestore.doc(`restaurants/${restaurantId}/table_payment_sessions/${tableKey}`);
 
-    const [cartSnap, paidSnap] = await Promise.all([
+    const [sessionSnap, cartSnap, paidSnap] = await Promise.all([
+        sessionRef.get(),
         cartRef.get(),
         adminFirestore
             .collection(`restaurants/${restaurantId}/table_payment_sessions/${tableKey}/payments`)
@@ -65,7 +66,9 @@ async function markSessionCompletedIfAllPaid(restaurantId: string, tableKey: str
             .get(),
     ]);
 
-    const participantIds = getContributorsFromItems((cartSnap.data() || {}).items);
+    const sessionData = (sessionSnap.data() || {}) as Record<string, unknown>;
+    const participantIds = getContributorsFromItems(sessionData.billed_items);
+    const fallbackParticipantIds = participantIds.length > 0 ? participantIds : getContributorsFromItems((cartSnap.data() || {}).items);
     const paidBy = new Set<string>();
     paidSnap.forEach((doc) => {
         const row = (doc.data() || {}) as Record<string, unknown>;
@@ -73,17 +76,29 @@ async function markSessionCompletedIfAllPaid(restaurantId: string, tableKey: str
         if (guestId) paidBy.add(guestId);
     });
 
-    const allPaid = participantIds.length > 0 && participantIds.every((id) => paidBy.has(id));
+    const allPaid = fallbackParticipantIds.length > 0 && fallbackParticipantIds.every((id) => paidBy.has(id));
 
     if (allPaid) {
         await sessionRef.set(
             {
+                status: 'completed',
                 isCompleted: true,
                 completedAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
             },
             { merge: true }
         );
+
+        await adminFirestore
+            .doc(`restaurants/${restaurantId}/tables/${tableKey}`)
+            .set(
+                {
+                    status: 'free',
+                    updated_at: FieldValue.serverTimestamp(),
+                },
+                { merge: true }
+            )
+            .catch(() => { });
     }
 
     return allPaid;
@@ -173,6 +188,56 @@ export async function POST(request: NextRequest) {
             },
             { merge: true }
         );
+
+        // If one person paid all, mark all participants as paid for this session.
+        if (clean(paymentData.mode) === 'one_pays_all') {
+            const restaurantId = parsedSession.restaurantId;
+            const tableKey = parsedSession.tableKey;
+
+            const [sessionSnap, cartSnap] = await Promise.all([
+                adminFirestore.doc(`restaurants/${restaurantId}/table_payment_sessions/${tableKey}`).get(),
+                adminFirestore.doc(`restaurants/${restaurantId}/shared_carts/${tableKey}`).get(),
+            ]);
+            const sessionData = (sessionSnap.data() || {}) as Record<string, unknown>;
+            const fromBill = getContributorsFromItems(sessionData.billed_items);
+            const participantIds = fromBill.length > 0 ? fromBill : getContributorsFromItems((cartSnap.data() || {}).items);
+            const sessionPaymentsRef = adminFirestore.collection(`restaurants/${restaurantId}/table_payment_sessions/${tableKey}/payments`);
+
+            const existingPayments = await sessionPaymentsRef.where('sessionId', '==', sessionId).get();
+            const existingByGuest = new Map<string, FirebaseFirestore.QueryDocumentSnapshot<FirebaseFirestore.DocumentData>>();
+            existingPayments.forEach((doc) => {
+                const row = (doc.data() || {}) as Record<string, unknown>;
+                const guestId = clean(row.guestId).toLowerCase();
+                if (guestId) existingByGuest.set(guestId, doc);
+            });
+
+            const batch = adminFirestore.batch();
+            for (const guestId of participantIds) {
+                if (!guestId) continue;
+                const existing = existingByGuest.get(guestId);
+                const targetRef = existing
+                    ? existing.ref
+                    : sessionPaymentsRef.doc(`${clean(paymentData.paymentId)}-covered-${guestId.replace(/[^a-z0-9|_-]/gi, '')}`);
+
+                batch.set(
+                    targetRef,
+                    {
+                        sessionId,
+                        restaurantId,
+                        tableKey,
+                        guestId,
+                        status: 'paid',
+                        mode: existing ? existing.data().mode || 'split_equally' : 'covered_by_full_payment',
+                        coveredByPaymentId: clean(paymentData.paymentId),
+                        paidAt: FieldValue.serverTimestamp(),
+                        updatedAt: FieldValue.serverTimestamp(),
+                    },
+                    { merge: true }
+                );
+            }
+
+            await batch.commit();
+        }
 
         const allPaid = await markSessionCompletedIfAllPaid(parsedSession.restaurantId, parsedSession.tableKey, sessionId);
 

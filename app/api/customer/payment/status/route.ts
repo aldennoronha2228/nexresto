@@ -52,6 +52,11 @@ function collectParticipantsFromCartItems(items: unknown): Map<string, string> {
     return participants;
 }
 
+function parseBillItems(raw: unknown): Array<Record<string, unknown>> {
+    if (!Array.isArray(raw)) return [];
+    return raw.filter((entry) => !!entry && typeof entry === 'object') as Array<Record<string, unknown>>;
+}
+
 export async function GET(request: NextRequest) {
     try {
         const sessionId = clean(request.nextUrl.searchParams.get('sessionId'));
@@ -78,7 +83,12 @@ export async function GET(request: NextRequest) {
                 .get(),
         ]);
 
-        const participantMap = collectParticipantsFromCartItems((cartSnap.data() || {}).items);
+        const cartItems = parseBillItems((cartSnap.data() || {}).items);
+        const sessionData = (sessionSnap.data() || {}) as Record<string, unknown>;
+        const billedItems = parseBillItems(sessionData.billed_items);
+        const sourceItems = billedItems.length > 0 ? billedItems : cartItems;
+
+        const participantMap = collectParticipantsFromCartItems(sourceItems);
         const paidBy = new Set<string>();
 
         paymentsSnap.forEach((doc) => {
@@ -104,7 +114,45 @@ export async function GET(request: NextRequest) {
         const paymentEnabled = Boolean(restaurantData.isPaymentConnected);
 
         const allPaid = participants.length > 0 && participants.every((participant) => participant.paid);
-        const isCompleted = Boolean((sessionSnap.data() || {}).isCompleted) || allPaid;
+
+        const computedBillTotal = sourceItems.reduce((sum, item) => {
+            const price = Number(item.price || 0);
+            const quantity = Math.max(0, Math.floor(Number(item.quantity || 0)));
+            if (!Number.isFinite(price) || quantity <= 0) return sum;
+            return sum + price * quantity;
+        }, 0);
+        const sessionBilledTotal = Number(sessionData.billed_total || 0);
+        const billTotal = computedBillTotal > 0
+            ? computedBillTotal
+            : (Number.isFinite(sessionBilledTotal) && sessionBilledTotal > 0 ? sessionBilledTotal : 0);
+
+        const currentStatus = clean(sessionData.status) || (Boolean(sessionData.isCompleted) ? 'completed' : 'active');
+        if (currentStatus === 'billing' && billedItems.length === 0 && billTotal <= 0) {
+            await sessionRef.set(
+                {
+                    sessionId,
+                    restaurantId: parsed.restaurantId,
+                    tableKey: parsed.tableKey,
+                    status: 'active',
+                    updatedAt: FieldValue.serverTimestamp(),
+                },
+                { merge: true }
+            );
+
+            return NextResponse.json({
+                sessionId,
+                status: 'active',
+                participants,
+                payments: Array.from(paidBy.values()),
+                allPaid: false,
+                isCompleted: false,
+                paymentEnabled,
+                billItems: cartItems,
+                billTotal: 0,
+            });
+        }
+
+        const isCompleted = currentStatus === 'completed' || Boolean(sessionData.isCompleted) || allPaid;
 
         if (allPaid && !Boolean((sessionSnap.data() || {}).isCompleted)) {
             await sessionRef.set(
@@ -112,21 +160,37 @@ export async function GET(request: NextRequest) {
                     sessionId,
                     restaurantId: parsed.restaurantId,
                     tableKey: parsed.tableKey,
+                    status: 'completed',
                     isCompleted: true,
                     completedAt: FieldValue.serverTimestamp(),
                     updatedAt: FieldValue.serverTimestamp(),
                 },
                 { merge: true }
             );
+
+            // Best-effort table release marker.
+            await adminFirestore
+                .doc(`restaurants/${parsed.restaurantId}/tables/${parsed.tableKey}`)
+                .set(
+                    {
+                        status: 'free',
+                        updated_at: FieldValue.serverTimestamp(),
+                    },
+                    { merge: true }
+                )
+                .catch(() => { });
         }
 
         return NextResponse.json({
             sessionId,
+            status: allPaid ? 'completed' : currentStatus,
             participants,
             payments: Array.from(paidBy.values()),
             allPaid,
             isCompleted,
             paymentEnabled,
+            billItems: sourceItems,
+            billTotal,
         });
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : 'Unable to load payment status';
