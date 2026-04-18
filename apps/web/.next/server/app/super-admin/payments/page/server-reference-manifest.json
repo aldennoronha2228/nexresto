@@ -1,0 +1,20 @@
+{
+  "node": {
+    "000627f08a3a7a3d70deb080c7d31e4564a2e9fb0e": {
+      "workers": {
+        "app/super-admin/payments/page": {
+          "moduleId": 96067,
+          "async": true,
+          "exportedName": "getPaymentOverviewRows",
+          "filename": "lib/firebase-super-admin-actions.ts"
+        }
+      },
+      "layer": {
+        "app/super-admin/payments/page": "action-browser"
+      },
+      "exportedName": "getPaymentOverviewRows",
+      "filename": "lib/firebase-super-admin-actions.ts"
+    }
+  },
+  "edge": {}
+}

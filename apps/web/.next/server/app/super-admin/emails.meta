@@ -1,0 +1,16 @@
+{
+  "headers": {
+    "x-nextjs-stale-time": "300",
+    "x-nextjs-prerender": "1",
+    "x-next-cache-tags": "_N_T_/layout,_N_T_/super-admin/layout,_N_T_/super-admin/emails/layout,_N_T_/super-admin/emails/page,_N_T_/super-admin/emails"
+  },
+  "segmentPaths": [
+    "/_tree",
+    "/_full",
+    "/super-admin/emails/__PAGE__",
+    "/super-admin/emails",
+    "/super-admin",
+    "/_index",
+    "/_head"
+  ]
+}

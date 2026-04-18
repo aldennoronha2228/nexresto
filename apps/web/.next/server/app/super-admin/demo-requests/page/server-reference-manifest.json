@@ -1,0 +1,50 @@
+{
+  "node": {
+    "402ebe7e545b2568cbe5b3750733f600c6a7ac0e2d": {
+      "workers": {
+        "app/super-admin/demo-requests/page": {
+          "moduleId": 15999,
+          "async": true,
+          "exportedName": "getDemoRequests",
+          "filename": "lib/firebase-super-admin-actions.ts"
+        }
+      },
+      "layer": {
+        "app/super-admin/demo-requests/page": "action-browser"
+      },
+      "exportedName": "getDemoRequests",
+      "filename": "lib/firebase-super-admin-actions.ts"
+    },
+    "402aba6b1bcaa37c7de5557d9376290aa5b5733c33": {
+      "workers": {
+        "app/super-admin/demo-requests/page": {
+          "moduleId": 15999,
+          "async": true,
+          "exportedName": "sendDemoRequestLoginLink",
+          "filename": "lib/firebase-super-admin-actions.ts"
+        }
+      },
+      "layer": {
+        "app/super-admin/demo-requests/page": "action-browser"
+      },
+      "exportedName": "sendDemoRequestLoginLink",
+      "filename": "lib/firebase-super-admin-actions.ts"
+    },
+    "70fd179b514679356e828f3110677a5563493dc957": {
+      "workers": {
+        "app/super-admin/demo-requests/page": {
+          "moduleId": 15999,
+          "async": true,
+          "exportedName": "updateDemoRequestStatus",
+          "filename": "lib/firebase-super-admin-actions.ts"
+        }
+      },
+      "layer": {
+        "app/super-admin/demo-requests/page": "action-browser"
+      },
+      "exportedName": "updateDemoRequestStatus",
+      "filename": "lib/firebase-super-admin-actions.ts"
+    }
+  },
+  "edge": {}
+}

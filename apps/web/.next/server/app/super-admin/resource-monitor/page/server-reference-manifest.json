@@ -1,0 +1,20 @@
+{
+  "node": {
+    "00aa55c9199abe25ec060fbdbc3399e683b36d1fb6": {
+      "workers": {
+        "app/super-admin/resource-monitor/page": {
+          "moduleId": 29820,
+          "async": true,
+          "exportedName": "getResourceMonitorData",
+          "filename": "lib/firebase-super-admin-actions.ts"
+        }
+      },
+      "layer": {
+        "app/super-admin/resource-monitor/page": "action-browser"
+      },
+      "exportedName": "getResourceMonitorData",
+      "filename": "lib/firebase-super-admin-actions.ts"
+    }
+  },
+  "edge": {}
+}

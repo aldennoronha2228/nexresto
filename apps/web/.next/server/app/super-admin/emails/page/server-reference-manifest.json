@@ -1,0 +1,50 @@
+{
+  "node": {
+    "0012a4f312f9405d18eed09701f42b38aaeb6f573f": {
+      "workers": {
+        "app/super-admin/emails/page": {
+          "moduleId": 25004,
+          "async": true,
+          "exportedName": "getSubscriptionReminderEmailRows",
+          "filename": "lib/firebase-super-admin-actions.ts"
+        }
+      },
+      "layer": {
+        "app/super-admin/emails/page": "action-browser"
+      },
+      "exportedName": "getSubscriptionReminderEmailRows",
+      "filename": "lib/firebase-super-admin-actions.ts"
+    },
+    "40a6105741f8778c967f060f811d10d8ed0b87c8d5": {
+      "workers": {
+        "app/super-admin/emails/page": {
+          "moduleId": 25004,
+          "async": true,
+          "exportedName": "sendManualSubscriptionReminderEmail",
+          "filename": "lib/firebase-super-admin-actions.ts"
+        }
+      },
+      "layer": {
+        "app/super-admin/emails/page": "action-browser"
+      },
+      "exportedName": "sendManualSubscriptionReminderEmail",
+      "filename": "lib/firebase-super-admin-actions.ts"
+    },
+    "601a22277876384ec7fe3a51bc9441c5df5094897e": {
+      "workers": {
+        "app/super-admin/emails/page": {
+          "moduleId": 25004,
+          "async": true,
+          "exportedName": "setRestaurantReminderEmailsEnabled",
+          "filename": "lib/firebase-super-admin-actions.ts"
+        }
+      },
+      "layer": {
+        "app/super-admin/emails/page": "action-browser"
+      },
+      "exportedName": "setRestaurantReminderEmailsEnabled",
+      "filename": "lib/firebase-super-admin-actions.ts"
+    }
+  },
+  "edge": {}
+}

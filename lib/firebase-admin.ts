@@ -58,7 +58,6 @@ function getAdminApp(): App | null {
             projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
         });
         if (!adminInitLogged) {
-            console.log('[Firebase Admin] Initialized Successfully');
             adminInitLogged = true;
         }
         return cachedAdminApp;

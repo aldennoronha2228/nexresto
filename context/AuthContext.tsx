@@ -503,7 +503,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
                 // Skip re-fetching tenant if we already have it
                 if (hasTenantRef.current && isSameResolvedUser) {
-                    console.log('[AuthContext] Skipping profile re-fetch - tenant data exists');
                     const freshTokenResult = await user.getIdTokenResult(true).catch(() => null);
                     const freshMustChangePassword = typeof freshTokenResult?.claims?.must_change_password === 'boolean'
                         ? Boolean(freshTokenResult.claims.must_change_password)

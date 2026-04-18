@@ -10,7 +10,7 @@ const config: Config = {
     testEnvironment: 'node',
     testMatch: ['**/__tests__/**/*.test.ts'],
     moduleNameMapper: {
-        '^@/(.*)$': '<rootDir>/$1',
+        '^@/(.*)$': ['<rootDir>/$1', '<rootDir>/apps/web/$1'],
     },
     transform: {
         '^.+\\.tsx?$': ['ts-jest', {

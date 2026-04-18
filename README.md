@@ -2,6 +2,8 @@
 
 NexResto is a multi-tenant restaurant platform built with Next.js and Firebase.
 
+This repository was reorganized into a scalable architecture with clear separation between web app entrypoints, domain features, shared services, and data documentation.
+
 It includes:
 - Restaurant dashboard (orders, menu, inventory, analytics, branding)
 - Super admin console (restaurants, subscription status, logs)
@@ -154,17 +156,39 @@ Automated release:
 - Workflow file: `.github/workflows/windows-desktop-release.yml`
 - Trigger by pushing tags like `desktop-v1.0.1` (or use manual workflow dispatch).
 
+Installer source artifact locations:
+- NSIS script: `desktop/scripts/installer/NexRestoSetup.nsi`
+- Root-level generated installer artifacts are archived under `archive/debug-artifacts/installer/`
+
+Local git push diagnostics (if generated manually) are kept in:
+- `docs/notes/git/`
+
 ## Project Structure (High-Level)
 
-- `app/`: App Router pages + API routes
-- `components/`: dashboard/customer/ui components
-- `context/`: auth/cart contexts
-- `lib/`: Firebase, validation, utils, server helpers
+- `apps/web/`: Next.js App Router entrypoint (pages, route handlers, web config)
+- `apps/api/`: reserved standalone backend service boundary (Node/Express bootstrap)
+- `components/`: reusable UI components
+- `features/`: feature-first modules (`cart`, `orders`, `menu`, `auth`)
+- `services/`: external integration/service clients (for example Razorpay)
+- `lib/`: core shared logic, Firebase, validation, utilities
+- `hooks/`: reusable React hooks
+- `context/`: auth/cart/session context providers
+- `styles/`: global stylesheet assets
+- `database/`: schema and migration documentation
+- `config/`: runtime config adapters
+- `types/`: cross-layer TypeScript contracts
+- `docs/`: architecture and operational documents
 - `scripts/`: admin/debug/maintenance scripts
-- `__tests__/`: test suites
+- `__tests__/`: automated test suites
 
 ## Notes
 
 - Keep all server secrets out of `NEXT_PUBLIC_*` variables.
 - Rotate any leaked keys immediately and update deployment secrets.
 - For customer preview testing, use `?restaurant=<id>&preview=1` on `/customer`.
+
+## Architecture Notes
+
+- Web runtime is now launched from `apps/web` via root npm scripts.
+- Existing endpoint behavior remains intact because Next.js route handlers were moved with the app into `apps/web/app/api`.
+- Shared modules remain importable with `@/*` aliases to avoid widespread breaking changes during migration.

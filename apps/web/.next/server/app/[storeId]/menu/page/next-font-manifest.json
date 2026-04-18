@@ -1,0 +1,12 @@
+{
+  "pages": {},
+  "app": {
+    "[project]/apps/web/app/[storeId]/menu/page": [
+      "static/media/2b4132881b3b5587-s.p.f89bf1e6.woff2",
+      "static/media/01e4147cff8141ee-s.p.7787e134.woff2",
+      "static/media/a343f882a40d2cc9-s.p.71e1367e.woff2"
+    ]
+  },
+  "appUsingSizeAdjust": true,
+  "pagesUsingSizeAdjust": false
+}

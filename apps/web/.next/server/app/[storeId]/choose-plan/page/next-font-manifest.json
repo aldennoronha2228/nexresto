@@ -1,0 +1,11 @@
+{
+  "pages": {},
+  "app": {
+    "[project]/apps/web/app/[storeId]/choose-plan/page": [
+      "static/media/2a65768255d6b625-s.p.d19752fb.woff2",
+      "static/media/a343f882a40d2cc9-s.p.71e1367e.woff2"
+    ]
+  },
+  "appUsingSizeAdjust": true,
+  "pagesUsingSizeAdjust": false
+}

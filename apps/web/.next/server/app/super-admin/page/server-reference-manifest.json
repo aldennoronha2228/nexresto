@@ -1,0 +1,35 @@
+{
+  "node": {
+    "0028e7d6fbedf28397be307be0e8b75daa84caf959": {
+      "workers": {
+        "app/super-admin/page": {
+          "moduleId": 56287,
+          "async": true,
+          "exportedName": "getPlatformStats",
+          "filename": "lib/firebase-super-admin-actions.ts"
+        }
+      },
+      "layer": {
+        "app/super-admin/page": "action-browser"
+      },
+      "exportedName": "getPlatformStats",
+      "filename": "lib/firebase-super-admin-actions.ts"
+    },
+    "706377a26924af6b4e96941027016cea655004dd61": {
+      "workers": {
+        "app/super-admin/page": {
+          "moduleId": 56287,
+          "async": true,
+          "exportedName": "getGlobalLogs",
+          "filename": "lib/firebase-super-admin-actions.ts"
+        }
+      },
+      "layer": {
+        "app/super-admin/page": "action-browser"
+      },
+      "exportedName": "getGlobalLogs",
+      "filename": "lib/firebase-super-admin-actions.ts"
+    }
+  },
+  "edge": {}
+}

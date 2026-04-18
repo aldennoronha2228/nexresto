@@ -1,0 +1,16 @@
+{
+  "headers": {
+    "x-nextjs-stale-time": "300",
+    "x-nextjs-prerender": "1",
+    "x-next-cache-tags": "_N_T_/layout,_N_T_/super-admin/layout,_N_T_/super-admin/resource-monitor/layout,_N_T_/super-admin/resource-monitor/page,_N_T_/super-admin/resource-monitor"
+  },
+  "segmentPaths": [
+    "/_tree",
+    "/_full",
+    "/super-admin/resource-monitor/__PAGE__",
+    "/super-admin/resource-monitor",
+    "/super-admin",
+    "/_index",
+    "/_head"
+  ]
+}

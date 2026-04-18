@@ -1,0 +1,20 @@
+{
+  "node": {
+    "706377a26924af6b4e96941027016cea655004dd61": {
+      "workers": {
+        "app/super-admin/logs/page": {
+          "moduleId": 4700,
+          "async": true,
+          "exportedName": "getGlobalLogs",
+          "filename": "lib/firebase-super-admin-actions.ts"
+        }
+      },
+      "layer": {
+        "app/super-admin/logs/page": "action-browser"
+      },
+      "exportedName": "getGlobalLogs",
+      "filename": "lib/firebase-super-admin-actions.ts"
+    }
+  },
+  "edge": {}
+}

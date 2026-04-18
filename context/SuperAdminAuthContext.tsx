@@ -151,7 +151,6 @@ export function SuperAdminAuthProvider({ children }: { children: ReactNode }) {
         }
 
         const unsubscribe = onAuthStateChanged(adminAuth, async (user) => {
-            console.log(`[SuperAdminAuth] Firebase auth state changed: ${user ? 'signed in' : 'signed out'}`);
 
             if (!user) {
                 if (pendingTokenBootstrapRef.current) {
@@ -210,7 +209,6 @@ export function SuperAdminAuthProvider({ children }: { children: ReactNode }) {
 
             // Skip re-fetching role if we already have it
             if (hasRoleRef.current) {
-                console.log('[SuperAdminAuth] Skipping profile re-fetch - role data exists');
                 setState(prev => ({ ...prev, roleLoading: false }));
                 return;
             }

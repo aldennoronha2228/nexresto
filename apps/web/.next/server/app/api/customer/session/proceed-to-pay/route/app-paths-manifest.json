@@ -1,0 +1,3 @@
+{
+  "/api/customer/session/proceed-to-pay/route": "app/api/customer/session/proceed-to-pay/route.js"
+}

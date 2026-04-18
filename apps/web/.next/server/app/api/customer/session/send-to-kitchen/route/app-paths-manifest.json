@@ -1,0 +1,3 @@
+{
+  "/api/customer/session/send-to-kitchen/route": "app/api/customer/session/send-to-kitchen/route.js"
+}

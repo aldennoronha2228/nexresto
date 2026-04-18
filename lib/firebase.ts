@@ -80,7 +80,6 @@ function getTenantApp(): FirebaseApp {
     const existing = getApps().find(app => app.name === '[DEFAULT]');
     if (existing) return existing;
     const app = initializeApp(firebaseConfig);
-    console.log('[Firebase] Tenant App Initialized');
     return app;
 }
 
@@ -94,7 +93,6 @@ function getAdminApp(): FirebaseApp {
         return getApp('admin');
     } catch {
         const app = initializeApp(firebaseConfig, 'admin');
-        console.log('[Firebase] Admin App Initialized');
         return app;
     }
 }

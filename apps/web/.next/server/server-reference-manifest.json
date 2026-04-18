@@ -1,0 +1,357 @@
+{
+  "node": {
+    "00e4925f36180c066d9a325929d5ad1a10561bbb25": {
+      "workers": {
+        "app/[storeId]/dashboard/account/page": {
+          "moduleId": 45323,
+          "async": true,
+          "exportedName": "getSubscriptionTierSettings",
+          "filename": "lib/firebase-super-admin-actions.ts"
+        },
+        "app/super-admin/subscription-tiers/page": {
+          "moduleId": 97766,
+          "async": true,
+          "exportedName": "getSubscriptionTierSettings",
+          "filename": "lib/firebase-super-admin-actions.ts"
+        }
+      },
+      "layer": {
+        "app/[storeId]/dashboard/account/page": "action-browser",
+        "app/super-admin/subscription-tiers/page": "action-browser"
+      },
+      "filename": "lib/firebase-super-admin-actions.ts",
+      "exportedName": "getSubscriptionTierSettings"
+    },
+    "0028e7d6fbedf28397be307be0e8b75daa84caf959": {
+      "workers": {
+        "app/super-admin/page": {
+          "moduleId": 56287,
+          "async": true,
+          "exportedName": "getPlatformStats",
+          "filename": "lib/firebase-super-admin-actions.ts"
+        }
+      },
+      "layer": {
+        "app/super-admin/page": "action-browser"
+      },
+      "filename": "lib/firebase-super-admin-actions.ts",
+      "exportedName": "getPlatformStats"
+    },
+    "706377a26924af6b4e96941027016cea655004dd61": {
+      "workers": {
+        "app/super-admin/logs/page": {
+          "moduleId": 4700,
+          "async": true,
+          "exportedName": "getGlobalLogs",
+          "filename": "lib/firebase-super-admin-actions.ts"
+        },
+        "app/super-admin/page": {
+          "moduleId": 56287,
+          "async": true,
+          "exportedName": "getGlobalLogs",
+          "filename": "lib/firebase-super-admin-actions.ts"
+        }
+      },
+      "layer": {
+        "app/super-admin/logs/page": "action-browser",
+        "app/super-admin/page": "action-browser"
+      },
+      "filename": "lib/firebase-super-admin-actions.ts",
+      "exportedName": "getGlobalLogs"
+    },
+    "402ebe7e545b2568cbe5b3750733f600c6a7ac0e2d": {
+      "workers": {
+        "app/super-admin/demo-requests/page": {
+          "moduleId": 15999,
+          "async": true,
+          "exportedName": "getDemoRequests",
+          "filename": "lib/firebase-super-admin-actions.ts"
+        }
+      },
+      "layer": {
+        "app/super-admin/demo-requests/page": "action-browser"
+      },
+      "filename": "lib/firebase-super-admin-actions.ts",
+      "exportedName": "getDemoRequests"
+    },
+    "402aba6b1bcaa37c7de5557d9376290aa5b5733c33": {
+      "workers": {
+        "app/super-admin/demo-requests/page": {
+          "moduleId": 15999,
+          "async": true,
+          "exportedName": "sendDemoRequestLoginLink",
+          "filename": "lib/firebase-super-admin-actions.ts"
+        }
+      },
+      "layer": {
+        "app/super-admin/demo-requests/page": "action-browser"
+      },
+      "filename": "lib/firebase-super-admin-actions.ts",
+      "exportedName": "sendDemoRequestLoginLink"
+    },
+    "70fd179b514679356e828f3110677a5563493dc957": {
+      "workers": {
+        "app/super-admin/demo-requests/page": {
+          "moduleId": 15999,
+          "async": true,
+          "exportedName": "updateDemoRequestStatus",
+          "filename": "lib/firebase-super-admin-actions.ts"
+        }
+      },
+      "layer": {
+        "app/super-admin/demo-requests/page": "action-browser"
+      },
+      "filename": "lib/firebase-super-admin-actions.ts",
+      "exportedName": "updateDemoRequestStatus"
+    },
+    "0012a4f312f9405d18eed09701f42b38aaeb6f573f": {
+      "workers": {
+        "app/super-admin/emails/page": {
+          "moduleId": 25004,
+          "async": true,
+          "exportedName": "getSubscriptionReminderEmailRows",
+          "filename": "lib/firebase-super-admin-actions.ts"
+        }
+      },
+      "layer": {
+        "app/super-admin/emails/page": "action-browser"
+      },
+      "filename": "lib/firebase-super-admin-actions.ts",
+      "exportedName": "getSubscriptionReminderEmailRows"
+    },
+    "40a6105741f8778c967f060f811d10d8ed0b87c8d5": {
+      "workers": {
+        "app/super-admin/emails/page": {
+          "moduleId": 25004,
+          "async": true,
+          "exportedName": "sendManualSubscriptionReminderEmail",
+          "filename": "lib/firebase-super-admin-actions.ts"
+        }
+      },
+      "layer": {
+        "app/super-admin/emails/page": "action-browser"
+      },
+      "filename": "lib/firebase-super-admin-actions.ts",
+      "exportedName": "sendManualSubscriptionReminderEmail"
+    },
+    "601a22277876384ec7fe3a51bc9441c5df5094897e": {
+      "workers": {
+        "app/super-admin/emails/page": {
+          "moduleId": 25004,
+          "async": true,
+          "exportedName": "setRestaurantReminderEmailsEnabled",
+          "filename": "lib/firebase-super-admin-actions.ts"
+        },
+        "app/super-admin/restaurants/page": {
+          "moduleId": 63297,
+          "async": true,
+          "exportedName": "setRestaurantReminderEmailsEnabled",
+          "filename": "lib/firebase-super-admin-actions.ts"
+        }
+      },
+      "layer": {
+        "app/super-admin/emails/page": "action-browser",
+        "app/super-admin/restaurants/page": "action-browser"
+      },
+      "filename": "lib/firebase-super-admin-actions.ts",
+      "exportedName": "setRestaurantReminderEmailsEnabled"
+    },
+    "000627f08a3a7a3d70deb080c7d31e4564a2e9fb0e": {
+      "workers": {
+        "app/super-admin/payments/page": {
+          "moduleId": 96067,
+          "async": true,
+          "exportedName": "getPaymentOverviewRows",
+          "filename": "lib/firebase-super-admin-actions.ts"
+        }
+      },
+      "layer": {
+        "app/super-admin/payments/page": "action-browser"
+      },
+      "filename": "lib/firebase-super-admin-actions.ts",
+      "exportedName": "getPaymentOverviewRows"
+    },
+    "00aa55c9199abe25ec060fbdbc3399e683b36d1fb6": {
+      "workers": {
+        "app/super-admin/resource-monitor/page": {
+          "moduleId": 29820,
+          "async": true,
+          "exportedName": "getResourceMonitorData",
+          "filename": "lib/firebase-super-admin-actions.ts"
+        }
+      },
+      "layer": {
+        "app/super-admin/resource-monitor/page": "action-browser"
+      },
+      "filename": "lib/firebase-super-admin-actions.ts",
+      "exportedName": "getResourceMonitorData"
+    },
+    "78793acb9daa943ab1244a210ec248e24210dd1ac7": {
+      "workers": {
+        "app/super-admin/restaurants/page": {
+          "moduleId": 63297,
+          "async": true,
+          "exportedName": "getAllRestaurants",
+          "filename": "lib/firebase-super-admin-actions.ts"
+        }
+      },
+      "layer": {
+        "app/super-admin/restaurants/page": "action-browser"
+      },
+      "filename": "lib/firebase-super-admin-actions.ts",
+      "exportedName": "getAllRestaurants"
+    },
+    "606277dd99d5bc83cd0e483d20ded72b04e9ebebbc": {
+      "workers": {
+        "app/super-admin/restaurants/page": {
+          "moduleId": 63297,
+          "async": true,
+          "exportedName": "updateRestaurantSubscription",
+          "filename": "lib/firebase-super-admin-actions.ts"
+        }
+      },
+      "layer": {
+        "app/super-admin/restaurants/page": "action-browser"
+      },
+      "filename": "lib/firebase-super-admin-actions.ts",
+      "exportedName": "updateRestaurantSubscription"
+    },
+    "603d22c413349f9d62c48b8aabd4a0d74a11fc7667": {
+      "workers": {
+        "app/super-admin/restaurants/page": {
+          "moduleId": 63297,
+          "async": true,
+          "exportedName": "updateRestaurantStatus",
+          "filename": "lib/firebase-super-admin-actions.ts"
+        }
+      },
+      "layer": {
+        "app/super-admin/restaurants/page": "action-browser"
+      },
+      "filename": "lib/firebase-super-admin-actions.ts",
+      "exportedName": "updateRestaurantStatus"
+    },
+    "60451856b355edb91e9810b6dfa2b6231b1bc5ec9a": {
+      "workers": {
+        "app/super-admin/restaurants/page": {
+          "moduleId": 63297,
+          "async": true,
+          "exportedName": "setRestaurantTemporaryAccess",
+          "filename": "lib/firebase-super-admin-actions.ts"
+        }
+      },
+      "layer": {
+        "app/super-admin/restaurants/page": "action-browser"
+      },
+      "filename": "lib/firebase-super-admin-actions.ts",
+      "exportedName": "setRestaurantTemporaryAccess"
+    },
+    "40933d9c6ca613a74fc83a661983cd4b27450e1ace": {
+      "workers": {
+        "app/super-admin/restaurants/page": {
+          "moduleId": 63297,
+          "async": true,
+          "exportedName": "archiveRestaurant",
+          "filename": "lib/firebase-super-admin-actions.ts"
+        }
+      },
+      "layer": {
+        "app/super-admin/restaurants/page": "action-browser"
+      },
+      "filename": "lib/firebase-super-admin-actions.ts",
+      "exportedName": "archiveRestaurant"
+    },
+    "40da55676655384635e305801c0d89894b054f1b61": {
+      "workers": {
+        "app/super-admin/restaurants/page": {
+          "moduleId": 63297,
+          "async": true,
+          "exportedName": "deleteRestaurant",
+          "filename": "lib/firebase-super-admin-actions.ts"
+        }
+      },
+      "layer": {
+        "app/super-admin/restaurants/page": "action-browser"
+      },
+      "filename": "lib/firebase-super-admin-actions.ts",
+      "exportedName": "deleteRestaurant"
+    },
+    "60df4a89145518d5c111eee2d99f27956aa21b87e2": {
+      "workers": {
+        "app/super-admin/restaurants/page": {
+          "moduleId": 63297,
+          "async": true,
+          "exportedName": "resetUserPassword",
+          "filename": "lib/firebase-super-admin-actions.ts"
+        }
+      },
+      "layer": {
+        "app/super-admin/restaurants/page": "action-browser"
+      },
+      "filename": "lib/firebase-super-admin-actions.ts",
+      "exportedName": "resetUserPassword"
+    },
+    "40776d1e653dd1f2b73f3c04b6344ff9e04692e706": {
+      "workers": {
+        "app/super-admin/restaurants/page": {
+          "moduleId": 63297,
+          "async": true,
+          "exportedName": "sendPasswordResetEmail",
+          "filename": "lib/firebase-super-admin-actions.ts"
+        }
+      },
+      "layer": {
+        "app/super-admin/restaurants/page": "action-browser"
+      },
+      "filename": "lib/firebase-super-admin-actions.ts",
+      "exportedName": "sendPasswordResetEmail"
+    },
+    "4076b106eca3c604adb527fb19ebfbee8266cd2b1c": {
+      "workers": {
+        "app/super-admin/restaurants/page": {
+          "moduleId": 63297,
+          "async": true,
+          "exportedName": "getRestaurantUsers",
+          "filename": "lib/firebase-super-admin-actions.ts"
+        }
+      },
+      "layer": {
+        "app/super-admin/restaurants/page": "action-browser"
+      },
+      "filename": "lib/firebase-super-admin-actions.ts",
+      "exportedName": "getRestaurantUsers"
+    },
+    "7078defd008d129e4e6ab069b1d90940f00ea91964": {
+      "workers": {
+        "app/super-admin/restaurants/page": {
+          "moduleId": 63297,
+          "async": true,
+          "exportedName": "updateSubscriptionDates",
+          "filename": "lib/firebase-super-admin-actions.ts"
+        }
+      },
+      "layer": {
+        "app/super-admin/restaurants/page": "action-browser"
+      },
+      "filename": "lib/firebase-super-admin-actions.ts",
+      "exportedName": "updateSubscriptionDates"
+    },
+    "40f976d1d02fb19709ca3efbec054f45e491f56942": {
+      "workers": {
+        "app/super-admin/subscription-tiers/page": {
+          "moduleId": 97766,
+          "async": true,
+          "exportedName": "saveSubscriptionTierSettings",
+          "filename": "lib/firebase-super-admin-actions.ts"
+        }
+      },
+      "layer": {
+        "app/super-admin/subscription-tiers/page": "action-browser"
+      },
+      "filename": "lib/firebase-super-admin-actions.ts",
+      "exportedName": "saveSubscriptionTierSettings"
+    }
+  },
+  "edge": {},
+  "encryptionKey": "uOmac5g8rl2yU0rMFNFZosluTI98sOYjrz8BLx9df9Y="
+}

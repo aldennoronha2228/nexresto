@@ -1,0 +1,20 @@
+{
+  "node": {
+    "00e4925f36180c066d9a325929d5ad1a10561bbb25": {
+      "workers": {
+        "app/[storeId]/dashboard/account/page": {
+          "moduleId": 45323,
+          "async": true,
+          "exportedName": "getSubscriptionTierSettings",
+          "filename": "lib/firebase-super-admin-actions.ts"
+        }
+      },
+      "layer": {
+        "app/[storeId]/dashboard/account/page": "action-browser"
+      },
+      "exportedName": "getSubscriptionTierSettings",
+      "filename": "lib/firebase-super-admin-actions.ts"
+    }
+  },
+  "edge": {}
+}
