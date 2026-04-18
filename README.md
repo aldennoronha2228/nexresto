@@ -1,194 +1,178 @@
-# NexResto Platform
+# NexResto
 
-NexResto is a multi-tenant restaurant platform built with Next.js and Firebase.
+<p align="center">
+	<strong>Multi-Tenant Restaurant Platform</strong><br />
+	Dashboard, customer experience, AI assistance, and operations in one codebase.
+</p>
 
-This repository was reorganized into a scalable architecture with clear separation between web app entrypoints, domain features, shared services, and data documentation.
+<p align="center">
+	<img alt="Next.js" src="https://img.shields.io/badge/Next.js-16-black?style=for-the-badge&logo=next.js" />
+	<img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5.x-3178C6?style=for-the-badge&logo=typescript&logoColor=white" />
+	<img alt="Firebase" src="https://img.shields.io/badge/Firebase-Auth%20%7C%20Firestore%20%7C%20Storage-FFCA28?style=for-the-badge&logo=firebase&logoColor=black" />
+	<img alt="Jest" src="https://img.shields.io/badge/Tests-Jest-C21325?style=for-the-badge&logo=jest&logoColor=white" />
+</p>
 
-It includes:
-- Restaurant dashboard (orders, menu, inventory, analytics, branding)
-- Super admin console (restaurants, subscription status, logs)
-- Customer menu experience with live theming support
-- Firebase-backed authentication and role-based access control
+---
 
-## Tech Stack
+## What Is NexResto?
 
-- Framework: Next.js 16 (App Router)
-- Language: TypeScript
-- Styling: Tailwind CSS + motion
-- Auth/DB/Storage: Firebase Auth, Firestore, Firebase Storage
-- Testing: Jest
+NexResto is a full-stack, multi-tenant platform for restaurants to run digital menus, manage orders, monitor operations, and personalize customer-facing branding.
 
-## Core Features
+It is built with a production-first architecture that separates app entrypoints, domain features, shared services, and infrastructure concerns.
 
-- Multi-tenant restaurant routing by `storeId`
-- Role guards for owner/manager/staff/super-admin
-- Restaurant and admin auth flows
+## The 4-Layer Product Flow
+
+| Layer | Purpose |
+| --- | --- |
+| Tenant & Auth | Secure store-based access with role guards for owner, manager, staff, and super-admin. |
+| Operations | Orders, menu, inventory, analytics, and table-aware workflows for day-to-day management. |
+| Customer Experience | Branded customer menu, cart, order history, and live theme-aware storefront behavior. |
+| AI Assistance | Concierge and support assistants with Groq-first routing and fallback logic. |
+
+## Core Capabilities
+
+- Multi-tenant routing by `storeId`
+- Restaurant and super-admin authentication flows
+- Role-based access control and tenant isolation
 - Table-aware customer menu + cart + order history
-- Real branding management from dashboard
-- Live customer preview from branding panel
-- Branding persistence in Firestore with collection-first fallback
+- Dashboard branding with live preview sync
+- Firestore-first data model with fallback handling for branding
 
-## What's New (April 2026)
+## What Is New (April 2026)
 
-- Nexo support chatbot restored in dashboard with:
-	- dark theme UI
-	- compact chat bubbles for short messages
-	- quick suggestions hidden after conversation starts
-	- small `Clear` chat action in header
-- AI provider flow updated:
-	- Groq prioritized for concierge and support chat routes
-	- Groq endpoint normalization for base URLs (`/chat/completions` auto-resolved)
-	- model candidate fallback support for Groq model variants
-	- OpenAI/Gemini retained as fallback providers
-- Mobile table editing improvements in 2D review:
-	- tap-to-select table
-	- table selection highlight
-	- mobile nudge pad with Fine/Fast movement steps
-	- tap empty grid to place selected table
-	- detected table side-list tap selection support
-	- chatbot floating button repositioned on tables page to reduce overlap
-- Account Settings subscription UI simplified:
-	- large always-on tier cards removed
-	- subscription end date remains visible in a compact summary
-	- one toggle button reveals current tier + additional plan details on demand
-- Upgrade modal pricing/cards now use shared `PRICING_PLANS` data to stay in sync with account/pricing pages.
+- Support chatbot UX refresh:
+	- compact dark chat styling
+	- quick suggestions auto-hidden after conversation starts
+	- compact `Clear` action in the header
+- AI provider reliability:
+	- Groq prioritized for support and concierge routes
+	- automatic endpoint normalization for `/chat/completions`
+	- model fallback handling for Groq variants
+	- OpenAI/Gemini fallback retained
+- Groq quota resilience:
+	- support for multiple Groq API keys
+	- automatic failover when one key reaches rate/quota limits
+- Dashboard UX improvements:
+	- mobile table editing with tap-select + nudge movement controls
+	- cleaner subscription summary controls in account settings
+	- pricing cards unified via shared `PRICING_PLANS`
+- Deployment stability:
+	- post-build sync ensures root `.next/routes-manifest.json` availability for runtime environments that expect root output
 
-## Branding System (Latest)
+## Branding System
 
-Branding now uses both:
+Branding is persisted with a primary + fallback strategy:
+
 - `branding/{restaurantId}` (primary)
 - `restaurants/{restaurantId}.branding` (fallback/mirror)
 
-Implemented capabilities:
-- Primary/secondary/background color settings
-- Font family selection
-- Logo upload
-- Hero image upload
-- Hero overlay opacity
-- Hero headline + tagline
-- Hero visibility toggle
-- Catalog headline + featured images payload support
-- Live preview sync through `postMessage` in preview mode
+Supported branding controls:
 
-API routes involved:
+- Primary, secondary, and background colors
+- Font family configuration
+- Logo and hero image uploads
+- Hero overlay opacity + headline + tagline
+- Hero visibility toggles
+- Catalog headline and featured images payloads
+- Live preview synchronization via `postMessage`
+
+Related API routes:
+
 - `GET/POST /api/branding/settings`
 - `POST /api/branding/upload`
 - `GET /api/tenant/branding`
 
-## Local Development
+## Quick Start
 
-1. Install dependencies:
+1. Install dependencies.
 
 ```bash
 npm install
 ```
 
-2. Add environment variables in `.env` (or `.env.local`) for:
-- Firebase client config (`NEXT_PUBLIC_FIREBASE_*`)
-- Firebase Admin credentials (`FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`)
-- Restaurant defaults (`NEXT_PUBLIC_RESTAURANT_ID`)
-- Optional integrations:
-	- Email (`RESEND_API_KEY`, `RESEND_FROM_EMAIL`)
-		- AI providers (`GROQ_API_KEY` recommended, `OPENAI_API_KEY`, `GEMINI_API_KEY`)
+2. Configure `.env` (or `.env.local`).
 
-3. Run dev server:
+- Firebase client config: `NEXT_PUBLIC_FIREBASE_*`
+- Firebase Admin credentials: `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`
+- Tenant defaults: `NEXT_PUBLIC_RESTAURANT_ID`
+- Optional integrations:
+	- Email: `RESEND_API_KEY`, `RESEND_FROM_EMAIL`
+	- AI: `GROQ_API_KEY` (recommended), `GROQ_API_KEY_2`, `OPENAI_API_KEY`, `GEMINI_API_KEY`
+
+3. Start local development.
 
 ```bash
 npm run dev
 ```
 
-4. Build production bundle:
+4. Build for production.
 
 ```bash
 npm run build
 ```
 
-## Tests
-
-Run all tests:
+## Testing
 
 ```bash
 npm test
-```
-
-Run security suite:
-
-```bash
 npm run test:security
 ```
 
 ## Secure Build / Obfuscation
 
-This repo includes optional hardening scripts:
-
 ```bash
 npm run build:secure
+npm run obfuscate:build
+npm run verify:obfuscation
 ```
 
-Related scripts:
-- `npm run obfuscate:build`
-- `npm run verify:obfuscation`
-
-See detailed notes in:
-- `docs/SECURE_BUILD_OBFUSCATION.md`
+Reference: `docs/SECURE_BUILD_OBFUSCATION.md`
 
 ## Windows Desktop Auto-Updates
 
-This repository now includes an updater-enabled Windows desktop wrapper in `desktop/`.
+The repository includes an updater-enabled desktop wrapper under `desktop/`.
 
-How updates work:
-- Existing users on old ZIP/EXE builds must install the new installer one time.
-- After that, the desktop app checks GitHub Releases, downloads updates, and prompts for restart.
+Key notes:
 
-Local desktop build commands:
+- Existing users on legacy ZIP/EXE builds must install the new installer one time.
+- After migration, the app checks GitHub Releases and prompts users to restart after update download.
 
-```bash
-npm run desktop:dist
-```
-
-Desktop app local run:
+Commands:
 
 ```bash
 npm run desktop:dev
+npm run desktop:dist
 ```
 
-Automated release:
-- Workflow file: `.github/workflows/windows-desktop-release.yml`
-- Trigger by pushing tags like `desktop-v1.0.1` (or use manual workflow dispatch).
+Release pipeline:
 
-Installer source artifact locations:
-- NSIS script: `desktop/scripts/installer/NexRestoSetup.nsi`
-- Root-level generated installer artifacts are archived under `archive/debug-artifacts/installer/`
+- Workflow: `.github/workflows/windows-desktop-release.yml`
+- Tag pattern: `desktop-v1.0.1`
 
-Local git push diagnostics (if generated manually) are kept in:
-- `docs/notes/git/`
+Installer artifacts:
 
-## Project Structure (High-Level)
+- NSIS source: `desktop/scripts/installer/NexRestoSetup.nsi`
+- Archived generated installers: `archive/debug-artifacts/installer/`
 
-- `apps/web/`: Next.js App Router entrypoint (pages, route handlers, web config)
-- `apps/api/`: reserved standalone backend service boundary (Node/Express bootstrap)
-- `components/`: reusable UI components
-- `features/`: feature-first modules (`cart`, `orders`, `menu`, `auth`)
-- `services/`: external integration/service clients (for example Razorpay)
-- `lib/`: core shared logic, Firebase, validation, utilities
-- `hooks/`: reusable React hooks
-- `context/`: auth/cart/session context providers
-- `styles/`: global stylesheet assets
-- `database/`: schema and migration documentation
-- `config/`: runtime config adapters
-- `types/`: cross-layer TypeScript contracts
-- `docs/`: architecture and operational documents
-- `scripts/`: admin/debug/maintenance scripts
-- `__tests__/`: automated test suites
+## Architecture Snapshot
 
-## Notes
+| Path | Responsibility |
+| --- | --- |
+| `apps/web/` | Next.js App Router app (UI + route handlers) |
+| `apps/api/` | Standalone backend boundary (Node/Express bootstrap) |
+| `features/` | Feature-first domain modules (`cart`, `orders`, `menu`, `auth`) |
+| `components/` | Shared UI components |
+| `services/` | Service clients and external integrations |
+| `lib/` | Shared runtime logic, Firebase, validation, utilities |
+| `context/`, `hooks/` | Client state and reusable React hooks |
+| `config/`, `types/` | Runtime configuration and cross-layer contracts |
+| `database/` | Schema and migration documentation |
+| `scripts/`, `docs/` | Operations, maintenance, and architecture notes |
+| `__tests__/` | Automated test suites |
 
-- Keep all server secrets out of `NEXT_PUBLIC_*` variables.
-- Rotate any leaked keys immediately and update deployment secrets.
-- For customer preview testing, use `?restaurant=<id>&preview=1` on `/customer`.
+## Operational Notes
 
-## Architecture Notes
-
-- Web runtime is now launched from `apps/web` via root npm scripts.
-- Existing endpoint behavior remains intact because Next.js route handlers were moved with the app into `apps/web/app/api`.
-- Shared modules remain importable with `@/*` aliases to avoid widespread breaking changes during migration.
+- Never place server secrets in `NEXT_PUBLIC_*` variables.
+- Rotate leaked credentials immediately and update deployment secrets.
+- Use `?restaurant=<id>&preview=1` on `/customer` for branding preview testing.
+- Runtime is launched from `apps/web` via root scripts; route behavior remains preserved under `apps/web/app/api`.
