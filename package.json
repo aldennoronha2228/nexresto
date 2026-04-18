@@ -4,11 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "next dev ./apps/web --webpack",
-    "build": "next build ./apps/web",
+    "build": "next build ./apps/web && node scripts/sync-next-output.js",
     "desktop:dev": "npm run dev --prefix desktop",
     "desktop:dist": "npm run dist --prefix desktop",
     "desktop:publish": "npm run publish --prefix desktop",
-    "build:secure": "next build ./apps/web --webpack && node scripts/obfuscate-build.js && node scripts/verify-obfuscation.js",
+    "build:secure": "next build ./apps/web --webpack && node scripts/sync-next-output.js && node scripts/obfuscate-build.js && node scripts/verify-obfuscation.js",
     "obfuscate:build": "node scripts/obfuscate-build.js",
     "verify:obfuscation": "node scripts/verify-obfuscation.js",
     "start": "next start ./apps/web",
