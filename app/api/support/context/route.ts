@@ -12,6 +12,7 @@ const DASHBOARD_PAGES = [
     '/dashboard/analytics',
     '/dashboard/customers',
     '/dashboard/branding',
+    '/dashboard/settings',
     '/dashboard/account',
     '/dashboard/members',
     '/dashboard/waiter',
@@ -29,6 +30,7 @@ const DASHBOARD_COMPONENTS = [
 ] as const;
 
 type AiTier = 'free' | 'pro';
+const AI_DAILY_LIMIT = Number.MAX_SAFE_INTEGER;
 type GenericRow = { id: string; [key: string]: unknown };
 type ReportRow = {
     id: string;
@@ -45,7 +47,7 @@ function resolveAiTier(subscriptionTierRaw: unknown): AiTier {
 }
 
 function getDailyLimit(tier: AiTier): number {
-    return tier === 'pro' ? 30 : 5;
+    return AI_DAILY_LIMIT;
 }
 
 function getNextUtcMidnightIso(): string {

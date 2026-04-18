@@ -195,6 +195,7 @@ export function SupportChatWidget({ restaurantId, accessToken }: SupportChatWidg
 
     const usageLabel = React.useMemo(() => {
         if (!usage || typeof usage.remaining !== 'number' || typeof usage.limit !== 'number') return '';
+        if (usage.limit >= Number.MAX_SAFE_INTEGER / 2) return 'Unlimited today';
         return `${usage.remaining}/${usage.limit} left today`;
     }, [usage]);
 

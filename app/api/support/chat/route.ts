@@ -78,7 +78,10 @@ const SYSTEM_PROMPT = [
     '- Return plain user-facing text only.',
     '- If data is missing, ask one clarifying question and still offer best-practice guidance.',
     '- Do not claim inability to perform dashboard actions. If details are missing, ask for exact fields needed.',
+    '- For any monetary value, always use INR format with the rupee symbol (for example: ₹1,25,000).',
 ].join('\n');
+
+const AI_DAILY_LIMIT = Number.MAX_SAFE_INTEGER;
 
 const MODEL_CANDIDATES = [
     'gemini-2.5-flash',
@@ -137,7 +140,16 @@ function resolveAiTier(subscriptionTierRaw: unknown): AiTier {
 }
 
 function getDailyLimit(tier: AiTier): number {
-    return tier === 'pro' ? 30 : 5;
+    return AI_DAILY_LIMIT;
+}
+
+function formatINR(value: number): string {
+    const amount = Number.isFinite(value) ? value : 0;
+    return new Intl.NumberFormat('en-IN', {
+        style: 'currency',
+        currency: 'INR',
+        maximumFractionDigits: 2,
+    }).format(amount);
 }
 
 const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
@@ -591,7 +603,7 @@ async function executeAction(action: ParsedAction, auth: AuthorizedRestaurant): 
 
         return {
             ok: true,
-            message: `Done. Added menu item ${action.name} in ${categoryName} at ${action.price}.`,
+            message: `Done. Added menu item ${action.name} in ${categoryName} at ${formatINR(action.price)}.`,
             data: {
                 id: menuItemRef.id,
                 name: action.name,
@@ -618,7 +630,7 @@ async function executeAction(action: ParsedAction, auth: AuthorizedRestaurant): 
 
         return {
             ok: true,
-            message: `Done. Updated ${String(menuItemDoc.data()?.name || action.name)} price to ${action.price}.`,
+            message: `Done. Updated ${String(menuItemDoc.data()?.name || action.name)} price to ${formatINR(action.price)}.`,
             data: {
                 id: menuItemDoc.id,
                 name: String(menuItemDoc.data()?.name || action.name),
@@ -846,7 +858,7 @@ async function executeAction(action: ParsedAction, auth: AuthorizedRestaurant): 
         const { report } = await generateDailyReport(auth.restaurantId, reportDate);
         return {
             ok: true,
-            message: `Done. Generated report for ${report.report_date} with ${report.total_orders} orders and ${report.total_revenue.toLocaleString('en-IN')} revenue.`,
+            message: `Done. Generated report for ${report.report_date} with ${report.total_orders} orders and ${formatINR(Number(report.total_revenue || 0))} revenue.`,
             data: {
                 reportDate: report.report_date,
                 totalOrders: report.total_orders,
@@ -874,7 +886,7 @@ async function executeAction(action: ParsedAction, auth: AuthorizedRestaurant): 
 
         return {
             ok: true,
-            message: `Analytics summary for last ${days} days: ${valid.length} active orders, ${cancelled} cancelled, revenue ${revenue.toLocaleString('en-IN')}, average order value ${Math.round(avg).toLocaleString('en-IN')}.`,
+            message: `Analytics summary for last ${days} days: ${valid.length} active orders, ${cancelled} cancelled, revenue ${formatINR(revenue)}, average order value ${formatINR(Math.round(avg))}.`,
             data: {
                 days,
                 orders: valid.length,
@@ -1573,16 +1585,7 @@ export async function POST(request: NextRequest) {
         }
 
         const currentUsage = buildUsage(tier, dailyAiCount);
-        if (currentUsage.isLimitReached) {
-            return NextResponse.json(
-                {
-                    error: 'Daily AI limit reached for your plan.',
-                    code: 'daily_limit_reached',
-                    usage: currentUsage,
-                },
-                { status: 429 },
-            );
-        }
+        // AI dashboard assistant runs without per-plan daily caps.
 
         const messages = sanitizeMessages(body?.messages);
         const dashboardContext = (body?.dashboardContext && typeof body.dashboardContext === 'object'
