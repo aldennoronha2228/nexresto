@@ -28,20 +28,40 @@ function walk(dir, callback) {
   }
 }
 
-function normalizeNodeModulesTracePath(tracePath) {
-  if (!tracePath.includes('node_modules/')) {
+function retargetNodeModulesTracePath(nftFilePath, tracePath) {
+  const marker = 'node_modules/';
+  if (!tracePath.includes(marker)) {
     return tracePath;
   }
 
-  // We move from apps/web/.next to .next (2 levels up), so node_modules traces
-  // must drop two leading "../" segments to keep the same absolute target.
-  let normalized = tracePath;
-  for (let i = 0; i < 2; i += 1) {
-    if (normalized.startsWith('../')) {
-      normalized = normalized.slice(3);
-    }
+  const nftDir = path.dirname(nftFilePath);
+  const currentTarget = path.resolve(nftDir, tracePath);
+  if (fs.existsSync(currentTarget)) {
+    return tracePath;
   }
-  return normalized;
+
+  const markerIndex = tracePath.indexOf(marker);
+  if (markerIndex === -1) {
+    return tracePath;
+  }
+
+  const moduleSuffix = tracePath
+    .slice(markerIndex + marker.length)
+    .split('/')
+    .join(path.sep);
+
+  const nextNodeModulesTarget = path.join(targetDir, 'node_modules', moduleSuffix);
+  if (fs.existsSync(nextNodeModulesTarget)) {
+    return path.relative(nftDir, nextNodeModulesTarget).split(path.sep).join('/');
+  }
+
+  const rootNodeModulesTarget = path.join(rootDir, 'node_modules', moduleSuffix);
+
+  if (!fs.existsSync(rootNodeModulesTarget)) {
+    return tracePath;
+  }
+
+  return path.relative(nftDir, rootNodeModulesTarget).split(path.sep).join('/');
 }
 
 let normalizedFiles = 0;
@@ -65,7 +85,7 @@ walk(targetDir, (filePath) => {
 
   let changed = false;
   data.files = data.files.map((entry) => {
-    const updated = normalizeNodeModulesTracePath(entry);
+    const updated = retargetNodeModulesTracePath(filePath, entry);
     if (updated !== entry) {
       changed = true;
       normalizedEntries += 1;
