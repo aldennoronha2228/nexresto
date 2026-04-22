@@ -1,0 +1,12 @@
+import { NextResponse } from 'next/server';
+
+const LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="NexResto hollow cube mark"><g fill="none" stroke="#ff6500" stroke-width="12" stroke-linecap="butt" stroke-linejoin="miter" transform="translate(128 128) scale(1.1) translate(-128 -128)"><path d="M128 34L56 76L128 118L200 76Z" /><path d="M56 76V166L128 208V118" /><path d="M200 76V166L128 208" /></g></svg>`;
+
+export async function GET() {
+  return new NextResponse(LOGO_SVG, {
+    headers: {
+      'Content-Type': 'image/svg+xml; charset=utf-8',
+      'Cache-Control': 'public, max-age=31536000, immutable',
+    },
+  });
+}
