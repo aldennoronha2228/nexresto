@@ -8,6 +8,7 @@ import { useAuth } from '@/context/AuthContext';
 import { isWebView } from '@/lib/isWebView';
 import { openExternalBrowser } from '@/lib/openExternalBrowser';
 import type { UpgradablePlan } from '@/lib/pricing';
+import { getSiteOrigin } from '@/lib/seo/url';
 
 type RazorpayOrder = {
   id: string;
@@ -49,13 +50,9 @@ function normalizePlan(raw: string | null): UpgradablePlan | null {
 }
 
 function getHttpsBaseUrl(): string {
-  const envBase = String(process.env.NEXT_PUBLIC_APP_URL || '').trim();
-  if (envBase.startsWith('https://')) return envBase.replace(/\/$/, '');
-
-  if (typeof window !== 'undefined' && window.location.origin.startsWith('https://')) {
-    return window.location.origin;
-  }
-
+  const baseUrl = getSiteOrigin().replace(/\/$/, '');
+  if (baseUrl.startsWith('https://')) return baseUrl;
+  if (/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(baseUrl)) return baseUrl;
   return '';
 }
 

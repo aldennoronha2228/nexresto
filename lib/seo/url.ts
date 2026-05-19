@@ -41,9 +41,9 @@ export function getSiteOrigin(): string {
         process.env.SEO_SITE_ORIGIN,
         process.env.NEXT_PUBLIC_SITE_URL,
         process.env.NEXT_PUBLIC_APP_URL,
-        process.env.VERCEL_PROJECT_PRODUCTION_URL,
-        process.env.VERCEL_URL,
         process.env.NEXT_PUBLIC_MENU_BASE_URL,
+        process.env.VERCEL_PROJECT_PRODUCTION_URL,
+        !isProduction ? process.env.VERCEL_URL : '',
     ];
 
     for (const candidate of candidates) {

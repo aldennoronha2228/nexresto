@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminAuth } from '@/lib/firebase-admin';
 import { createPaymentSessionToken } from '@/lib/payment-session';
 import type { UpgradablePlan } from '@/lib/pricing';
+import { getSiteOrigin } from '@/lib/seo/url';
 
 type ExternalLinkBody = {
   plan?: string;
@@ -16,13 +17,11 @@ function getRestaurantIdFromClaims(claims: Record<string, unknown>): string {
 }
 
 function getBaseUrl(request: NextRequest): string {
-  const envBase = String(process.env.NEXT_PUBLIC_APP_URL || '').trim();
-  if (envBase.startsWith('https://')) return envBase.replace(/\/$/, '');
+  const baseUrl = getSiteOrigin().replace(/\/$/, '');
+  if (baseUrl.startsWith('https://')) return baseUrl;
+  if (/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(baseUrl)) return baseUrl;
 
-  const requestOrigin = request.nextUrl.origin;
-  if (requestOrigin.startsWith('https://')) return requestOrigin;
-
-  throw new Error('NEXT_PUBLIC_APP_URL must be HTTPS for external payment redirects');
+  throw new Error('NEXT_PUBLIC_APP_URL must resolve to a secure production origin for external payment redirects');
 }
 
 export async function POST(request: NextRequest) {

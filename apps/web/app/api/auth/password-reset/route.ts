@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { adminAuth } from '@/lib/firebase-admin';
 import { sendPasswordResetLinkEmail } from '@/lib/email';
+import { getSiteOrigin } from '@/lib/seo/url';
 
 export async function POST(request: Request) {
     try {
@@ -11,7 +12,7 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Invalid email address' }, { status: 400 });
         }
 
-        const origin = request.headers.get('origin') || process.env.NEXT_PUBLIC_MENU_BASE_URL || 'https://nexresto.in';
+        const origin = getSiteOrigin();
         const continueUrl = `${origin.replace(/\/$/, '')}/setup-password`;
 
         try {

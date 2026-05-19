@@ -21,6 +21,7 @@ import { db } from '@/lib/firebase';
 import { getActiveToken as resolveActiveToken } from '@/lib/client/get-active-token';
 import { hasSubscriptionFeature } from '@/lib/subscription-features';
 import { addDoc, collection, doc, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { getSiteOrigin } from '@/lib/seo/url';
 
 const MENU_CUSTOMER_PATH = process.env.NEXT_PUBLIC_MENU_CUSTOMER_PATH ?? '/customer';
 const PRODUCTION_MENU_BASE_URL = 'https://nexresto.in';
@@ -58,11 +59,7 @@ function normalizeOriginAllowLocal(value: string): string | null {
 }
 
 function resolveMenuBaseUrl() {
-    const configuredBase =
-        normalizeOrigin(process.env.NEXT_PUBLIC_MENU_BASE_URL ?? '') ||
-        normalizeOrigin(process.env.NEXT_PUBLIC_SITE_URL ?? '') ||
-        normalizeOrigin(process.env.NEXT_PUBLIC_APP_URL ?? '');
-
+    const configuredBase = getSiteOrigin();
     return configuredBase || PRODUCTION_MENU_BASE_URL;
 }
 
@@ -2141,8 +2138,7 @@ export default function TablesQRCodesPage() {
     };
 
     const filteredTables = tables.filter(t => t.id.toLowerCase().includes(searchQuery.toLowerCase()) || t.name.toLowerCase().includes(searchQuery.toLowerCase()));
-    const localhostMenuUrl = useMemo(() => getTableMenuUrl('http://localhost:3000', 'T-XX', tenantId), [tenantId]);
-    const loopbackMenuUrl = useMemo(() => getTableMenuUrl('http://127.0.0.1:3000', 'T-XX', tenantId), [tenantId]);
+    const menuUrlPreview = useMemo(() => getTableMenuUrl(resolveMenuBaseUrl(), 'T-XX', tenantId), [tenantId]);
     const reviewCanvasHeightClass = isMobileViewport
         ? 'h-[76vh] min-h-[460px] max-h-none'
         : 'h-[68vh] min-h-[360px] max-h-[560px]';
@@ -2214,13 +2210,12 @@ export default function TablesQRCodesPage() {
                                 <div>
                                     <span className="font-medium">QR codes link to: </span>
                                     <code className="text-xs bg-blue-100 px-1.5 py-0.5 rounded font-mono">{baseUrl}{MENU_CUSTOMER_PATH}?table=T-XX</code>
-                                    <span className="ml-2 text-blue-500 text-xs">Set <code className="font-mono">NEXT_PUBLIC_MENU_BASE_URL</code> in .env.local for production</span>
+                                    <span className="ml-2 text-blue-500 text-xs">Set <code className="font-mono">NEXT_PUBLIC_MENU_BASE_URL</code> in your production environment</span>
                                 </div>
                                 <div className="text-xs text-blue-600">
-                                    <span className="font-medium">Temporary localhost links:</span>
+                                    <span className="font-medium">Resolved menu preview:</span>
                                     <div className="mt-1 space-y-1">
-                                        <code className="block bg-blue-100/80 px-1.5 py-0.5 rounded font-mono break-all">{localhostMenuUrl}</code>
-                                        <code className="block bg-blue-100/80 px-1.5 py-0.5 rounded font-mono break-all">{loopbackMenuUrl}</code>
+                                        <code className="block bg-blue-100/80 px-1.5 py-0.5 rounded font-mono break-all">{menuUrlPreview}</code>
                                     </div>
                                 </div>
                             </div>

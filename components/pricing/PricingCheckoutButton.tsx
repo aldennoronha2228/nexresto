@@ -7,6 +7,7 @@ import { useAuth } from '@/context/AuthContext';
 import { PLAN_PRICES, type UpgradablePlan } from '@/lib/pricing';
 import { isWebView } from '@/lib/isWebView';
 import { openExternalBrowser } from '@/lib/openExternalBrowser';
+import { getSiteOrigin } from '@/lib/seo/url';
 
 type RazorpayOrder = {
   id: string;
@@ -64,19 +65,13 @@ type Props = {
 const PAYMENT_CANCELLED_ERROR = 'PAYMENT_CANCELLED_BY_USER';
 
 function getAbsolutePayUrl(plan: UpgradablePlan): string {
-  const envBase = String(process.env.NEXT_PUBLIC_APP_URL || '').trim();
+  const baseUrl = getSiteOrigin().replace(/\/$/, '');
 
-  const baseUrl = (() => {
-    if (envBase.startsWith('https://')) return envBase;
-    if (typeof window !== 'undefined' && window.location.origin.startsWith('https://')) return window.location.origin;
-    return '';
-  })();
-
-  if (!baseUrl) {
-    throw new Error('Secure HTTPS app domain is required for payment redirect. Set NEXT_PUBLIC_APP_URL.');
+  if (!baseUrl.startsWith('https://') && !/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(baseUrl)) {
+    throw new Error('Secure app domain is required for payment redirect. Set NEXT_PUBLIC_APP_URL or NEXT_PUBLIC_SITE_URL.');
   }
 
-  return `${baseUrl.replace(/\/$/, '')}/pay?plan=${encodeURIComponent(plan)}`;
+  return `${baseUrl}/pay?plan=${encodeURIComponent(plan)}`;
 }
 
 export default function PricingCheckoutButton({

@@ -1,4 +1,5 @@
 import { Resend } from 'resend';
+import { getSiteOrigin } from '@/lib/seo/url';
 
 let resend: Resend | null = null;
 const DEV_FALLBACK_FROM = 'NexResto <onboarding@resend.dev>';
@@ -31,27 +32,7 @@ function resolveFromEmail(): string | null {
 }
 
 function resolvePublicSiteOrigin(): string {
-    const candidates = [
-        process.env.NEXT_PUBLIC_SITE_URL,
-        process.env.NEXT_PUBLIC_APP_URL,
-        process.env.NEXT_PUBLIC_MENU_BASE_URL,
-        'https://nexresto.in',
-    ];
-
-    for (const candidate of candidates) {
-        const raw = String(candidate || '').trim();
-        if (!raw) continue;
-
-        const normalized = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
-        try {
-            const url = new URL(normalized);
-            return url.origin;
-        } catch {
-            // try next candidate
-        }
-    }
-
-    return 'https://nexresto.in';
+    return getSiteOrigin();
 }
 
 export async function sendOtpEmail(to: string, otp: string, restaurantName: string): Promise<{ success: boolean; error?: string }> {

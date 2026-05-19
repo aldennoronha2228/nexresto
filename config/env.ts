@@ -1,14 +1,8 @@
-const isProd = process.env.NODE_ENV === 'production';
-const vercelUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL || '';
-const vercelOrigin = vercelUrl ? `https://${vercelUrl.replace(/^https?:\/\//, '')}` : '';
-const prodFallbackOrigin = 'https://nexresto.in';
+import { getSiteOrigin } from '@/lib/seo/url';
 
-const appUrl = process.env.NEXT_PUBLIC_APP_URL
-  || (isProd ? (vercelOrigin || prodFallbackOrigin) : 'http://localhost:3000');
+const appUrl = process.env.NEXT_PUBLIC_APP_URL || getSiteOrigin();
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL
-  || process.env.NEXT_PUBLIC_APP_URL
-  || (isProd ? (vercelOrigin || prodFallbackOrigin) : 'http://localhost:3000');
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || appUrl;
 
 export const env = {
   nodeEnv: process.env.NODE_ENV || 'development',

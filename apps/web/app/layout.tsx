@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import '../../../styles/globals.css';
 import Providers from './providers';
+import { validateEnv } from '@/lib/env';
 
 export const metadata: Metadata = {
     title: {
@@ -17,6 +18,8 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+    validateEnv();
+
     return (
         <html lang="en" suppressHydrationWarning>
             <head>

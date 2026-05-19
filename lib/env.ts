@@ -15,6 +15,11 @@ const REQUIRED_PUBLIC: string[] = [
     'NEXT_PUBLIC_RESTAURANT_ID',
 ];
 
+const REQUIRED_SERVER: string[] = [
+    'FIREBASE_CLIENT_EMAIL',
+    'FIREBASE_PRIVATE_KEY',
+];
+
 function assertEnv(key: string): string {
     const value = process.env[key];
     if (!value || value.trim() === '') {
@@ -26,12 +31,32 @@ function assertEnv(key: string): string {
     return value.trim();
 }
 
+function assertAnyEnv(keys: string[]): string {
+    for (const key of keys) {
+        const value = process.env[key];
+        if (value && value.trim() !== '') {
+            return value.trim();
+        }
+    }
+
+    throw new Error(
+        `[env] Missing required environment variable: one of ${keys.join(', ')}. ` +
+        `Set it in .env.local (development) or your hosting platform (production).`
+    );
+}
+
 export function validateEnv(): void {
     // Only validate on the server
     if (typeof window !== 'undefined') return;
     if (process.env.SKIP_ENV_VALIDATION === 'true') return;
 
     for (const key of REQUIRED_PUBLIC) {
+        assertEnv(key);
+    }
+
+    assertAnyEnv(['NEXT_PUBLIC_FIREBASE_PROJECT_ID', 'FIREBASE_PROJECT_ID', 'GOOGLE_CLOUD_PROJECT']);
+
+    for (const key of REQUIRED_SERVER) {
         assertEnv(key);
     }
 
