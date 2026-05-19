@@ -47,7 +47,12 @@ export async function fetchJsonWithDiagnostics<T = unknown>(input: RequestInfo |
         console.log(`[${label}] RAW TEXT:`, rawText);
 
         if (!response.ok) {
-            throw new Error(`Request failed with status ${response.status}`);
+            const error = new Error(
+                `Request failed with status ${response.status}. Raw response: ${rawText || '[empty response]'}`
+            );
+            (error as Error & { status?: number; responseHeaders?: Record<string, string> }).status = response.status;
+            (error as Error & { status?: number; responseHeaders?: Record<string, string> }).responseHeaders = Object.fromEntries(response.headers.entries());
+            throw error;
         }
 
         try {
