@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { usePathname, useRouter, useParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -157,6 +157,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const [isRestaurantTemporarilyDisabled, setIsRestaurantTemporarilyDisabled] = useState(false);
     const [restaurantDisabledReason, setRestaurantDisabledReason] = useState<string>('');
     const [isDemoMode, setIsDemoMode] = useState(false);
+    const apiDiagnosticsRef = useRef({
+        userId: '',
+        tenantId: '',
+        sessionTenantId: '',
+        userRole: '',
+        isSuperAdmin: false,
+        hasTenantSession: false,
+        hasSuperAdminSession: false,
+        loading: true,
+    });
 
     // Get Super Admin state (God Mode check)
     const {
@@ -166,6 +176,121 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     } = useSuperAdminAuth();
 
     const isGodMode = !session && superAdminSession && superAdminRole === 'super_admin';
+    apiDiagnosticsRef.current = {
+        userId: session?.user?.uid || superAdminSession?.user?.uid || '',
+        tenantId: urlStoreId,
+        sessionTenantId: sessionTenantId || '',
+        userRole: userRole || superAdminRole || '',
+        isSuperAdmin: Boolean(isGodMode || superAdminRole === 'super_admin'),
+        hasTenantSession: Boolean(session?.access_token),
+        hasSuperAdminSession: Boolean(superAdminSession?.access_token),
+        loading: Boolean(loading || superAdminLoading),
+    };
+
+    useEffect(() => {
+        const shouldLog = process.env.NODE_ENV === 'production' || process.env.NEXT_PUBLIC_API_DEBUG === 'true';
+        if (!shouldLog || typeof window === 'undefined') return;
+
+        const originalFetch = window.fetch.bind(window);
+
+        const summarizeHeaders = (headersInit?: HeadersInit): Record<string, string> => {
+            const headers = new Headers(headersInit);
+            const summary: Record<string, string> = {};
+            headers.forEach((value, key) => {
+                const lower = key.toLowerCase();
+                if (lower === 'authorization') {
+                    summary[key] = value ? `${value.slice(0, 12)}…` : '';
+                    return;
+                }
+                if (lower === 'cookie') {
+                    summary[key] = value ? '[redacted]' : '';
+                    return;
+                }
+                summary[key] = value;
+            });
+            return summary;
+        };
+
+        const getRequestUrl = (input: RequestInfo | URL): string => {
+            if (typeof input === 'string') return input;
+            if (input instanceof URL) return input.toString();
+            return input.url;
+        };
+
+        const previewBody = (body: string): string => {
+            const trimmed = body.replace(/\s+/g, ' ').trim();
+            return trimmed.length > 1200 ? `${trimmed.slice(0, 1200)}…` : trimmed;
+        };
+
+        window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+            const url = getRequestUrl(input);
+            const method = (init?.method || (input instanceof Request ? input.method : 'GET') || 'GET').toUpperCase();
+            const headers = summarizeHeaders(init?.headers || (input instanceof Request ? input.headers : undefined));
+            const diagnostics = apiDiagnosticsRef.current;
+
+            console.info('[dashboard-fetch:start]', {
+                url,
+                method,
+                headers,
+                authState: diagnostics,
+            });
+
+            try {
+                const response = await originalFetch(input, init);
+                const contentType = response.headers.get('content-type') || '';
+                const shouldCaptureBody = !response.ok || (url.includes('/api/') && !contentType.includes('application/json'));
+
+                if (shouldCaptureBody) {
+                    let bodyText = '';
+                    try {
+                        bodyText = await response.clone().text();
+                    } catch (cloneError) {
+                        console.warn('[dashboard-fetch:clone-failed]', {
+                            url,
+                            method,
+                            status: response.status,
+                            error: cloneError instanceof Error ? cloneError.message : String(cloneError),
+                        });
+                    }
+
+                    const parsedIsJson = contentType.includes('application/json');
+                    console[response.ok ? 'info' : 'error']('[dashboard-fetch:response]', {
+                        url,
+                        method,
+                        status: response.status,
+                        ok: response.ok,
+                        contentType,
+                        body: bodyText ? previewBody(bodyText) : '',
+                        authState: diagnostics,
+                        parsingHint: parsedIsJson ? 'json' : 'non-json-response',
+                    });
+                } else {
+                    console.info('[dashboard-fetch:response]', {
+                        url,
+                        method,
+                        status: response.status,
+                        ok: response.ok,
+                        contentType,
+                        authState: diagnostics,
+                    });
+                }
+
+                return response;
+            } catch (error) {
+                console.error('[dashboard-fetch:network-error]', {
+                    url,
+                    method,
+                    error: error instanceof Error ? error.message : String(error),
+                    authState: diagnostics,
+                });
+                throw error;
+            }
+        };
+
+        return () => {
+            window.fetch = originalFetch;
+        };
+    }, []);
     const currentDashboardBase = Object.keys(ROUTE_PERMISSIONS).find((basePath) => {
         const fullBase = `/${urlStoreId}${basePath}`;
         return pathname === fullBase || pathname.startsWith(`${fullBase}/`);

@@ -17,6 +17,7 @@ import { getOwnerEmailForRestaurant } from './reports';
 import { sendDemoRequestLoginUrlEmail, sendSubscriptionReminderEmail } from './email';
 import { getPlatformMaintenanceMode as getPlatformMaintenanceModeValue, setPlatformMaintenanceMode as setPlatformMaintenanceModeValue } from './platform-settings';
 import { PRICING_PLANS } from './pricing';
+import { securityLog } from './logger';
 
 const SUBSCRIPTION_TIER_SETTINGS_DOC = 'platform_settings/subscription_tiers';
 
@@ -279,44 +280,49 @@ export async function verifySuperAdmin(userId: string): Promise<boolean> {
 
 export async function getPlatformStats(): Promise<PlatformStats> {
     const restaurantsRef = adminFirestore.collection('restaurants');
-    const restaurantsSnap = await restaurantsRef.get();
-    const totalRestaurants = restaurantsSnap.size;
+    const [restaurantsSnap, activeOrdersSnap] = await Promise.allSettled([
+        restaurantsRef.get(),
+        adminFirestore.collectionGroup('orders').where('status', 'in', ['new', 'preparing']).get(),
+    ]);
 
-    // Calculate MRR from subscription tiers
+    const restaurantDocs = restaurantsSnap.status === 'fulfilled' ? restaurantsSnap.value.docs : [];
+    const totalRestaurants = restaurantDocs.length;
+
+    if (restaurantsSnap.status === 'rejected') {
+        securityLog.error('SUPER_ADMIN_STATS_RESTAURANTS_FAILED', {
+            message: restaurantsSnap.reason instanceof Error ? restaurantsSnap.reason.message : String(restaurantsSnap.reason),
+        });
+    }
+
+    if (activeOrdersSnap.status === 'rejected') {
+        securityLog.warn('SUPER_ADMIN_STATS_ACTIVE_ORDERS_FAILED', {
+            message: activeOrdersSnap.reason instanceof Error ? activeOrdersSnap.reason.message : String(activeOrdersSnap.reason),
+        });
+    }
+
     const tierPricing = await getTierPricingMap();
 
     let totalRevenue = 0;
-    let activeOrders = 0;
-
-    for (const restDoc of restaurantsSnap.docs) {
+    for (const restDoc of restaurantDocs) {
         const data = restDoc.data();
         if (data.subscription_status === 'active') {
             totalRevenue += tierPricing[data.subscription_tier] || 0;
         }
-
-        // Count active orders in this restaurant
-        const ordersSnap = await restDoc.ref
-            .collection('orders')
-            .where('status', 'in', ['new', 'preparing'])
-            .get();
-        activeOrders += ordersSnap.size;
     }
 
-    // Get new signups in last 30 days
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    let newSignups = 0;
-    restaurantsSnap.docs.forEach(doc => {
-        const data = doc.data();
+    const newSignups = restaurantDocs.reduce((count, docSnap) => {
+        const data = docSnap.data();
         const createdAt = data.created_at?.toDate?.() || new Date(data.created_at);
-        if (createdAt >= thirtyDaysAgo) newSignups++;
-    });
+        return createdAt >= thirtyDaysAgo ? count + 1 : count;
+    }, 0);
 
     return {
         total_restaurants: totalRestaurants,
         total_revenue: totalRevenue,
-        active_orders: activeOrders,
+        active_orders: activeOrdersSnap.status === 'fulfilled' ? activeOrdersSnap.value.size : 0,
         new_signups_30d: newSignups,
     };
 }

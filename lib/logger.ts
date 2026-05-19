@@ -43,7 +43,9 @@ type SecurityEventType =
     | 'TENANT_FETCH'
     | 'AUTH_TENANT_RESOLVED'
     | 'SUPER_ADMIN_AUTH_RESOLVED'
-    | 'SUPER_ADMIN_SIGN_OUT';
+    | 'SUPER_ADMIN_SIGN_OUT'
+    | 'SUPER_ADMIN_STATS_RESTAURANTS_FAILED'
+    | 'SUPER_ADMIN_STATS_ACTIVE_ORDERS_FAILED';
 
 interface SecurityEvent {
     event: SecurityEventType;
