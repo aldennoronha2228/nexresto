@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import type { PlatformStats, GlobalLog } from '@/lib/firebase-super-admin-actions';
 import { cn } from '@/lib/utils';
+import { adminAuth } from '@/lib/firebase';
 import { useSuperAdminAuth } from '@/context/SuperAdminAuthContext';
 import { fetchJsonWithDiagnostics } from '@/lib/client/fetch-json';
 
@@ -146,7 +147,9 @@ export default function SuperAdminOverview() {
         try {
             if (authLoading) return;
 
-            const token = session?.access_token;
+            const token = adminAuth.currentUser
+                ? await adminAuth.currentUser.getIdToken(true)
+                : session?.access_token;
             if (!token || userRole !== 'super_admin') {
                 throw new Error('Missing super-admin session');
             }

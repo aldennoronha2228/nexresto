@@ -25,16 +25,38 @@ async function readRequestBody(request: NextRequest): Promise<string | null> {
 async function requireSuperAdmin(request: NextRequest) {
     const authHeader = request.headers.get('authorization') || '';
     if (!authHeader.startsWith('Bearer ')) {
+        console.warn('SUPER_ADMIN_AUTH_MISSING', {
+            endpoint: '/api/super-admin/overview',
+            hasAuthorizationHeader: Boolean(authHeader),
+        });
         return NextResponse.json({ error: 'Missing authorization token' }, { status: 401 });
     }
 
-    const decoded = await adminAuth.verifyIdToken(authHeader.replace('Bearer ', '').trim());
-    const role = String(decoded.role || '').trim();
-    if (role !== 'super_admin') {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    try {
+        const decoded = await adminAuth.verifyIdToken(authHeader.replace('Bearer ', '').trim());
+        const role = String(decoded.role || '').trim();
+        if (role !== 'super_admin') {
+            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        }
 
-    return decoded;
+        return decoded;
+    } catch (error: unknown) {
+        const err = error instanceof Error ? error : new Error(String(error));
+        console.error('SUPER_ADMIN_AUTH_FAILED', {
+            endpoint: '/api/super-admin/overview',
+            message: err.message,
+            stack: err.stack,
+        });
+
+        return NextResponse.json(
+            {
+                error: true,
+                message: err.message,
+                stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
+            },
+            { status: 401, headers: { 'Content-Type': 'application/json' } }
+        );
+    }
 }
 
 export async function GET(request: NextRequest) {
