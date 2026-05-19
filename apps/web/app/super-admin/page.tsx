@@ -12,8 +12,10 @@ import {
     Building2,
     TrendingUp, RefreshCw, X, Check
 } from 'lucide-react';
-import { getPlatformStats, getPlatformStatsSafe, getGlobalLogs, type PlatformStats, type GlobalLog } from '@/lib/firebase-super-admin-actions';
+import type { PlatformStats, GlobalLog } from '@/lib/firebase-super-admin-actions';
 import { cn } from '@/lib/utils';
+import { useSuperAdminAuth } from '@/context/SuperAdminAuthContext';
+import { fetchJsonWithDiagnostics } from '@/lib/client/fetch-json';
 
 const geist = Geist({ subsets: ['latin'] });
 
@@ -79,6 +81,7 @@ export default function SuperAdminOverview() {
     const [refreshing, setRefreshing] = useState(false);
     const [loadError, setLoadError] = useState<string | null>(null);
     const [selectedTier, setSelectedTier] = useState<'starter' | 'growth' | 'pro_chain' | null>(null);
+    const { session, loading: authLoading, userRole } = useSuperAdminAuth();
 
     const tierFeatures = {
         starter: {
@@ -141,22 +144,29 @@ export default function SuperAdminOverview() {
     const loadData = async () => {
         setLoadError(null);
         try {
-            // Use safe wrappers so we surface server-side errors exactly instead of
-            // the opaque Next.js client error (E394 / "An unexpected response...").
-            const statsResp = await getPlatformStatsSafe();
-            const logsResult = await getGlobalLogs(10).catch((e) => {
-                console.error('getGlobalLogs error:', e);
-                return [] as any[];
-            });
+            if (authLoading) return;
 
-            if (statsResp && (statsResp as any).success) {
-                setStats((statsResp as any).data);
-            } else {
-                setStats(null);
-                setLoadError((prev) => prev || (statsResp as any).error || 'Failed to load platform stats');
+            const token = session?.access_token;
+            if (!token || userRole !== 'super_admin') {
+                throw new Error('Missing super-admin session');
             }
 
-            setRecentLogs(Array.isArray(logsResult) ? logsResult : []);
+            const payload = await fetchJsonWithDiagnostics<{ success: boolean; data?: { stats: PlatformStats; recentLogs: GlobalLog[] }; error?: string }>('/api/super-admin/overview', {
+                method: 'GET',
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
+                label: 'super-admin-overview',
+            });
+
+            if (!payload.success || !payload.data) {
+                setStats(null);
+                setRecentLogs([]);
+                setLoadError(payload.error || 'Failed to load platform stats');
+            } else {
+                setStats(payload.data.stats);
+                setRecentLogs(payload.data.recentLogs || []);
+            }
         } catch (error) {
             console.error('Error loading super admin data:', error);
             setLoadError((error as any)?.message || 'Failed to load super admin data');
@@ -167,11 +177,12 @@ export default function SuperAdminOverview() {
     };
 
     useEffect(() => {
+        if (authLoading) return;
         loadData();
         // Refresh every 30 seconds
         const interval = setInterval(loadData, 30000);
         return () => clearInterval(interval);
-    }, []);
+    }, [authLoading, session?.access_token, userRole]);
 
     const handleRefresh = () => {
         setRefreshing(true);
