@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { adminAuth } from '@/lib/firebase-admin';
-import { getPlatformStats, getGlobalLogs } from '@/lib/firebase-super-admin-actions';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -22,7 +20,7 @@ async function readRequestBody(request: NextRequest): Promise<string | null> {
     }
 }
 
-async function requireSuperAdmin(request: NextRequest) {
+async function requireSuperAdmin(request: NextRequest, adminAuth: typeof import('@/lib/firebase-admin').adminAuth) {
     const authHeader = request.headers.get('authorization') || '';
     if (!authHeader.startsWith('Bearer ')) {
         console.warn('SUPER_ADMIN_AUTH_MISSING', {
@@ -60,20 +58,25 @@ async function requireSuperAdmin(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
-    console.log('REQUEST RECEIVED', {
-        endpoint: '/api/super-admin/overview',
-        method: request.method,
-        url: request.url,
-        params: Object.fromEntries(new URL(request.url).searchParams.entries()),
-        envCheck: envCheck(),
-        headers: {
-            authorization: request.headers.get('authorization') ? '[present]' : '[missing]',
-            'content-type': request.headers.get('content-type') || null,
-        },
-    });
-
     try {
-        const auth = await requireSuperAdmin(request);
+        const [{ adminAuth }, { getPlatformStats, getGlobalLogs }] = await Promise.all([
+            import('@/lib/firebase-admin'),
+            import('@/lib/firebase-super-admin-actions'),
+        ]);
+
+        console.log('REQUEST RECEIVED', {
+            endpoint: '/api/super-admin/overview',
+            method: request.method,
+            url: request.url,
+            params: Object.fromEntries(new URL(request.url).searchParams.entries()),
+            envCheck: envCheck(),
+            headers: {
+                authorization: request.headers.get('authorization') ? '[present]' : '[missing]',
+                'content-type': request.headers.get('content-type') || null,
+            },
+        });
+
+        const auth = await requireSuperAdmin(request, adminAuth);
         if (auth instanceof NextResponse) {
             console.log('USER:', { endpoint: '/api/super-admin/overview', authorized: false });
             return auth;
