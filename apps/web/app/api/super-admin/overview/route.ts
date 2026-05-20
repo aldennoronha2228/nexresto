@@ -11,6 +11,24 @@ function envCheck() {
     };
 }
 
+function jsonError(status: number, message: string, err?: Error) {
+    return NextResponse.json(
+        {
+            success: false,
+            error: message,
+            name: err?.name,
+            stack: err?.stack,
+        },
+        {
+            status,
+            headers: {
+                'Content-Type': 'application/json',
+                'Cache-Control': 'no-store',
+            },
+        }
+    );
+}
+
 async function readRequestBody(request: NextRequest): Promise<string | null> {
     try {
         const text = await request.text();
@@ -27,14 +45,14 @@ async function requireSuperAdmin(request: NextRequest, adminAuth: typeof import(
             endpoint: '/api/super-admin/overview',
             hasAuthorizationHeader: Boolean(authHeader),
         });
-        return NextResponse.json({ error: 'Missing authorization token' }, { status: 401 });
+        return jsonError(401, 'Missing authorization token');
     }
 
     try {
         const decoded = await adminAuth.verifyIdToken(authHeader.replace('Bearer ', '').trim());
         const role = String(decoded.role || '').trim();
         if (role !== 'super_admin') {
-            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+            return jsonError(403, 'Forbidden');
         }
 
         return decoded;
@@ -46,14 +64,7 @@ async function requireSuperAdmin(request: NextRequest, adminAuth: typeof import(
             stack: err.stack,
         });
 
-        return NextResponse.json(
-            {
-                error: true,
-                message: err.message,
-                stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
-            },
-            { status: 401, headers: { 'Content-Type': 'application/json' } }
-        );
+        return jsonError(401, err.message, err);
     }
 }
 
@@ -100,28 +111,25 @@ export async function GET(request: NextRequest) {
         const recentLogs = await getGlobalLogs(10);
         console.log('AFTER getGlobalLogs');
 
-        return NextResponse.json({
-            success: true,
-            data: {
-                stats,
-                recentLogs,
+        return NextResponse.json(
+            {
+                success: true,
+                data: {
+                    stats,
+                    recentLogs,
+                },
             },
-        }, {
-            headers: {
-                'Content-Type': 'application/json',
-            },
-        });
+            {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Cache-Control': 'no-store',
+                },
+            }
+        );
     } catch (error: unknown) {
         const err = error instanceof Error ? error : new Error(String(error));
         console.error('FULL SERVER ERROR:', err);
         console.error(err.stack);
-        return NextResponse.json(
-            {
-                error: true,
-                message: err.message,
-                stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
-            },
-            { status: 500, headers: { 'Content-Type': 'application/json' } }
-        );
+        return jsonError(500, err.message, err);
     }
 }

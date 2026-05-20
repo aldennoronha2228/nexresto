@@ -279,53 +279,62 @@ export async function verifySuperAdmin(userId: string): Promise<boolean> {
 // ─── Get Platform Stats ──────────────────────────────────────────────────────
 
 export async function getPlatformStats(): Promise<PlatformStats> {
-    const restaurantsRef = adminFirestore.collection('restaurants');
-    const restaurantsSnap = await restaurantsRef.get();
-    const restaurantDocs = restaurantsSnap.docs;
+    try {
+        const restaurantsRef = adminFirestore.collection('restaurants');
+        const restaurantsSnap = await restaurantsRef.get();
+        const restaurantDocs = restaurantsSnap.docs;
 
-    const totalRestaurants = restaurantDocs.length;
+        const totalRestaurants = restaurantDocs.length;
 
-    const tierPricing = await getTierPricingMap();
+        const tierPricing = await getTierPricingMap();
 
-    let totalRevenue = 0;
-    for (const restDoc of restaurantDocs) {
-        const data = restDoc.data();
-        if (data.subscription_status === 'active') {
-            totalRevenue += tierPricing[data.subscription_tier] || 0;
+        let totalRevenue = 0;
+        for (const restDoc of restaurantDocs) {
+            const data = restDoc.data();
+            if (data.subscription_status === 'active') {
+                totalRevenue += tierPricing[data.subscription_tier] || 0;
+            }
         }
-    }
 
-    const activeOrderCounts = await Promise.allSettled(
-        restaurantDocs.map(async (restDoc) => {
-            const newOrders = await restDoc.ref.collection('orders').where('status', '==', 'new').get();
-            const preparingOrders = await restDoc.ref.collection('orders').where('status', '==', 'preparing').get();
-            return newOrders.size + preparingOrders.size;
-        })
-    );
+        const activeOrderCounts = await Promise.allSettled(
+            restaurantDocs.map(async (restDoc) => {
+                const newOrders = await restDoc.ref.collection('orders').where('status', '==', 'new').get();
+                const preparingOrders = await restDoc.ref.collection('orders').where('status', '==', 'preparing').get();
+                return newOrders.size + preparingOrders.size;
+            })
+        );
 
-    const activeOrders = activeOrderCounts.reduce((sum, result) => {
-        if (result.status === 'fulfilled') return sum + result.value;
-        securityLog.warn('SUPER_ADMIN_STATS_ACTIVE_ORDERS_FAILED', {
-            message: result.reason instanceof Error ? result.reason.message : String(result.reason),
+        const activeOrders = activeOrderCounts.reduce((sum, result) => {
+            if (result.status === 'fulfilled') return sum + result.value;
+            securityLog.warn('SUPER_ADMIN_STATS_ACTIVE_ORDERS_FAILED', {
+                message: result.reason instanceof Error ? result.reason.message : String(result.reason),
+            });
+            return sum;
+        }, 0);
+
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+        const newSignups = restaurantDocs.reduce((count, docSnap) => {
+            const data = docSnap.data();
+            const createdAt = data.created_at?.toDate?.() || new Date(data.created_at);
+            return createdAt >= thirtyDaysAgo ? count + 1 : count;
+        }, 0);
+
+        return {
+            total_restaurants: totalRestaurants,
+            total_revenue: totalRevenue,
+            active_orders: activeOrders,
+            new_signups_30d: newSignups,
+        };
+    } catch (error: unknown) {
+        const err = error instanceof Error ? error : new Error(String(error));
+        console.error('SUPER_ADMIN_GET_PLATFORM_STATS_FAILED', {
+            message: err.message,
+            stack: err.stack,
         });
-        return sum;
-    }, 0);
-
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-    const newSignups = restaurantDocs.reduce((count, docSnap) => {
-        const data = docSnap.data();
-        const createdAt = data.created_at?.toDate?.() || new Date(data.created_at);
-        return createdAt >= thirtyDaysAgo ? count + 1 : count;
-    }, 0);
-
-    return {
-        total_restaurants: totalRestaurants,
-        total_revenue: totalRevenue,
-        active_orders: activeOrders,
-        new_signups_30d: newSignups,
-    };
+        throw err;
+    }
 }
 
 // Safe wrapper for client/server calls: returns structured result so client code
@@ -1604,8 +1613,12 @@ export async function getGlobalLogs(
             };
         });
     } catch (error) {
-        console.error('Error fetching logs:', error);
-        return [];
+        const err = error instanceof Error ? error : new Error(String(error));
+        console.error('SUPER_ADMIN_GET_GLOBAL_LOGS_FAILED', {
+            message: err.message,
+            stack: err.stack,
+        });
+        throw err;
     }
 }
 
