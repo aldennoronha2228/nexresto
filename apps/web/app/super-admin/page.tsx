@@ -142,14 +142,34 @@ export default function SuperAdminOverview() {
         }
     };
 
+    const resolveAccessToken = async (): Promise<string | null> => {
+        if (session?.access_token) {
+            return session.access_token;
+        }
+
+        if (!adminAuth.currentUser) {
+            return null;
+        }
+
+        try {
+            return await adminAuth.currentUser.getIdToken(true);
+        } catch (error) {
+            const code = (error as { code?: string } | null)?.code;
+            if (code !== 'auth/network-request-failed') {
+                throw error;
+            }
+
+            console.warn('Falling back to session token after Firebase token refresh failed:', error);
+            return session?.access_token || null;
+        }
+    };
+
     const loadData = async () => {
         setLoadError(null);
         try {
             if (authLoading) return;
 
-            const token = adminAuth.currentUser
-                ? await adminAuth.currentUser.getIdToken(true)
-                : session?.access_token;
+            const token = await resolveAccessToken();
             if (!token || userRole !== 'super_admin') {
                 throw new Error('Missing super-admin session');
             }
